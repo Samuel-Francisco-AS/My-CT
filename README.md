@@ -4,6 +4,13 @@
 
 > **Estado em 15/10/2026 — MYCT-4/4B integradas e validadas no Fedora e Moto G06.** Core C++20 iniciado automaticamente pelo systemd e comprovado após reboot; Saúde Android funciona por túnel SSH sem início manual; PostgreSQL local é independente. App Android nativo com **Terminal | Arquivos | Saúde | Cofre** e transferências bidirecionais SFTP. A aba Cofre consulta o GNOME Keyring `login` e permite desbloqueio humano em canal SSH/PTY separado. Proprietário comprovou desbloqueio no Moto e Copilot CLI autenticado por credenciais existentes. [PR #13](https://github.com/Samuel-Francisco-AS/My-CT/pull/13) e [PR #14](https://github.com/Samuel-Francisco-AS/My-CT/pull/14) mesclados. MYCT-5A acrescenta CLI HTTP/HTTPS headless **aceita fisicamente após fechar SSH e Android, com hash correto** ([relatório](docs/MYCT-5A-DOWNLOADS-REPORT.md)); torrent e rotinas autônomas ainda não existem; lag, UX/scroll SFTP e prova em background seguem adiados na [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9). [Relatório de fechamento MYCT-4](docs/MYCT-4-FECHAMENTO-REPORT.md) · [Guia de retomada](docs/10-RETOMADA-PROJETO.md).
 
+
+**MYCT-5B em validação:** APK `0.5.0-downloads` (code 7) acrescenta a aba
+**Downloads**, com início HTTP/HTTPS, histórico/progresso do Fedora,
+cancelamento e **Ver em Arquivos** por SSH existente. Requer instalação manual
+em `~/.local/bin/myct-download`. **Aceite no Moto G06 pendente**;
+[relatório e instalação](docs/MYCT-5B-ANDROID-DOWNLOADS-REPORT.md).
+
 ## Objetivo
 
 Fazer do computador Fedora uma estação remota e um executor de tarefas úteis, acessível pelo Moto G06, com manutenção possível mesmo depois do término do acesso ao Codex.
