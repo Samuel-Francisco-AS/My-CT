@@ -8,7 +8,7 @@ import java.nio.CharBuffer
 import java.nio.charset.StandardCharsets
 
 enum class VaultPhase {
-    NO_SSH, IDLE, CHECKING, LOCKED, UNLOCKED, UNAVAILABLE, PREPARING, PASSWORD, UNLOCKING, ERROR
+    NO_SSH, IDLE, CHECKING, LOCKED, UNLOCKED, UNAVAILABLE, PREPARING, PASSWORD, UNLOCKING, INPUT_REJECTED, ERROR
 }
 
 data class VaultViewState(val phase: VaultPhase = VaultPhase.NO_SSH, val compatible: Boolean = false) {
@@ -23,6 +23,7 @@ data class VaultViewState(val phase: VaultPhase = VaultPhase.NO_SSH, val compati
         VaultPhase.PREPARING -> "Abrindo terminal SSH privado para o desbloqueio…"
         VaultPhase.PASSWORD -> "Digite a senha do cofre login."
         VaultPhase.UNLOCKING -> "Desbloqueando cofre…"
+        VaultPhase.INPUT_REJECTED -> "Senha não enviada: caracteres de controle ou mais de 4095 bytes não são aceitos neste terminal. Consulte o estado antes de tentar novamente."
         VaultPhase.ERROR -> "Não foi possível consultar ou desbloquear. Confira myct-vault no Fedora."
     }
     val busy get() = phase in setOf(VaultPhase.CHECKING, VaultPhase.PREPARING, VaultPhase.UNLOCKING)
@@ -37,14 +38,14 @@ class VaultModel internal constructor(
     private var connection: SshConnection? = null
     private var generation = 0
     private var job: Job? = null
-    @Volatile private var unlockChannel: VaultUnlockChannel? = null
+    private var unlockAttempt: VaultUnlockAttempt? = null
     var state by mutableStateOf(VaultViewState())
         private set
 
     fun attach(value: SshConnection?) {
         generation++
         job?.cancel(); job = null
-        unlockChannel?.close(); unlockChannel = null
+        unlockAttempt?.close(); unlockAttempt = null
         connection = value
         state = VaultViewState(if (value == null) VaultPhase.NO_SSH else VaultPhase.IDLE)
     }
@@ -56,8 +57,10 @@ class VaultModel internal constructor(
         state = VaultViewState(VaultPhase.CHECKING)
         job = scope.launch {
             try {
-                val status = withContext(Dispatchers.IO) { query(current) }
+                val status = withTimeout(15_000) { runInterruptible(Dispatchers.IO) { query(current) } }
                 if (id == generation) showStatus(status)
+            } catch (_: TimeoutCancellationException) {
+                if (id == generation) state = VaultViewState(VaultPhase.ERROR)
             } catch (_: CancellationException) {
             } catch (_: Exception) {
                 if (id == generation) state = VaultViewState(VaultPhase.ERROR)
@@ -78,28 +81,33 @@ class VaultModel internal constructor(
         if (state.phase != VaultPhase.LOCKED || !state.compatible) return
         val id = generation
         state = VaultViewState(VaultPhase.PREPARING)
+        val attempt = VaultUnlockAttempt()
+        unlockAttempt = attempt
         job = scope.launch {
-            var channel: VaultUnlockChannel? = null
             try {
-                val asksPassword = withContext(Dispatchers.IO) {
-                    val opened = opener(current)
-                    channel = opened
-                    unlockChannel = opened
-                    opened.awaitPasswordPrompt()
+                val asksPassword = withTimeout(15_000) {
+                    runInterruptible(Dispatchers.IO) {
+                        val opened = opener(current)
+                        attempt.register(opened)
+                        opened.awaitPasswordPrompt()
+                    }
                 }
-                if (id != generation) { channel?.close(); return@launch }
+                if (id != generation) { attempt.close(); return@launch }
                 if (asksPassword) {
                     state = VaultViewState(VaultPhase.PASSWORD)
                 } else {
-                    channel?.close()
-                    unlockChannel = null
+                    attempt.close()
+                    unlockAttempt = null
                     state = VaultViewState(VaultPhase.IDLE)
                     refresh()
                 }
+            } catch (_: TimeoutCancellationException) {
+                attempt.close()
+                if (id == generation) state = VaultViewState(VaultPhase.ERROR)
             } catch (_: CancellationException) {
-                channel?.close()
+                attempt.close()
             } catch (_: Exception) {
-                channel?.close()
+                attempt.close()
                 if (id == generation) state = VaultViewState(VaultPhase.ERROR)
             }
         }
@@ -107,52 +115,57 @@ class VaultModel internal constructor(
 
     fun submitPassword(secret: CharArray) {
         val current = connection
-        val channel = unlockChannel
+        val attempt = unlockAttempt
+        val channel = attempt?.channel()
         if (current == null || channel == null || state.phase != VaultPhase.PASSWORD) {
             secret.fill('\u0000')
             return
         }
+        // Encode and wipe the caller's buffer before launching: even a scope
+        // cancelled before the coroutine starts must not retain that CharArray.
+        val bytes = try {
+            val chars = StandardCharsets.UTF_8.encode(CharBuffer.wrap(secret))
+            ByteArray(chars.remaining()).also { chars.get(it); if (chars.hasArray()) chars.array().fill(0) }
+        } finally { secret.fill('\u0000') }
         val id = generation
         state = VaultViewState(VaultPhase.UNLOCKING)
         job = scope.launch {
             try {
-                val succeeded = withContext(Dispatchers.IO) {
-                    val chars = StandardCharsets.UTF_8.encode(CharBuffer.wrap(secret))
-                    val bytes = ByteArray(chars.remaining()).also { chars.get(it) }
-                    if (chars.hasArray()) chars.array().fill(0)
-                    secret.fill('\u0000')
-                    try {
-                        channel.submitSecret(bytes)
-                        channel.awaitCompletion()
-                    } finally {
-                        bytes.fill(0)
-                        channel.close()
+                val succeeded = withTimeout(15_000) {
+                    runInterruptible(Dispatchers.IO) {
+                        try {
+                            channel.submitSecret(bytes)
+                            channel.awaitCompletion()
+                        } finally { bytes.fill(0); attempt.close() }
                     }
                 }
                 if (id != generation) return@launch
-                unlockChannel = null
-                val status = withContext(Dispatchers.IO) { query(current) }
+                unlockAttempt = null
+                val status = withTimeout(15_000) { runInterruptible(Dispatchers.IO) { query(current) } }
                 if (id == generation) {
                     showStatus(status)
                     if (!succeeded && status.kind != VaultKind.UNLOCKED) state = VaultViewState(VaultPhase.ERROR)
                 }
+            } catch (_: VaultInputRejected) {
+                if (id == generation) state = VaultViewState(VaultPhase.INPUT_REJECTED)
+            } catch (_: TimeoutCancellationException) {
+                if (id == generation) state = VaultViewState(VaultPhase.ERROR)
             } catch (_: CancellationException) {
-                channel.close()
             } catch (_: Exception) {
-                channel.close()
                 if (id == generation) state = VaultViewState(VaultPhase.ERROR)
             } finally {
-                secret.fill('\u0000')
-                if (unlockChannel === channel) unlockChannel = null
+                bytes.fill(0)
+                attempt.close()
+                if (unlockAttempt === attempt) unlockAttempt = null
             }
-        }
+        }.also { task -> task.invokeOnCompletion { bytes.fill(0); attempt.close() } }
     }
 
     fun cancelUnlock() {
         if (state.phase !in setOf(VaultPhase.PREPARING, VaultPhase.PASSWORD, VaultPhase.UNLOCKING)) return
         generation++
         job?.cancel(); job = null
-        unlockChannel?.close(); unlockChannel = null
+        unlockAttempt?.close(); unlockAttempt = null
         state = VaultViewState(if (connection == null) VaultPhase.NO_SSH else VaultPhase.IDLE)
     }
 }

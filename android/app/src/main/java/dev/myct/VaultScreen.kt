@@ -10,11 +10,24 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 @Composable
 fun VaultScreen(model: VaultModel, modifier: Modifier = Modifier) {
     val state = model.state
     var password by remember { mutableStateOf("") }
+
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(state.phase) { if (state.phase != VaultPhase.PASSWORD) password = "" }
+    DisposableEffect(model, lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) { password = ""; model.cancelUnlock() }
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
 
     // This screen owns an ephemeral password. Never preserve it in saved state.
     DisposableEffect(model) {
@@ -39,6 +52,9 @@ fun VaultScreen(model: VaultModel, modifier: Modifier = Modifier) {
             }
         }
         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if (state.phase == VaultPhase.PREPARING || state.phase == VaultPhase.UNLOCKING) {
+            TextButton(onClick = model::cancelUnlock) { Text("Cancelar") }
+        }
         if (state.phase == VaultPhase.PASSWORD) {
             OutlinedTextField(
                 value = password,

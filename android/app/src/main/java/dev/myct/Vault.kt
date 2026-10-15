@@ -30,76 +30,109 @@ data class VaultStatus(val kind: VaultKind, val compatible: Boolean = false) {
     }
 }
 
+internal class VaultInputRejected : IllegalArgumentException("Unsupported password input")
+
 /** A separate, short-lived interactive PTY. Password bytes are never shell arguments. */
 internal class VaultUnlockChannel(
-    private val shell: ChannelShell,
-    private val onClosed: () -> Unit
+    private val input: InputStream,
+    private val output: OutputStream,
+    private val disconnect: () -> Unit,
+    private val token: String = java.util.UUID.randomUUID().toString()
 ) : AutoCloseable {
-    private val input: InputStream = shell.inputStream
-    private val output: OutputStream = shell.outputStream
-    private var started = false
-    private var finished = false
+    constructor(shell: ChannelShell, onClosed: () -> Unit) : this(
+        shell.inputStream, shell.outputStream,
+        { try { shell.disconnect() } finally { onClosed() } })
 
-    /**
-     * The existing myct-vault deliberately accepts only a DIRECT interactive SSH
-     * shell. Launch it in an independent ChannelShell, not ChannelExec/-c.
-     * The helper disables terminal echo BEFORE emitting this exact prompt.
-     */
+    private var started = false
+    private var passwordReady = false
+    private var finished = false
+    private val closed = java.util.concurrent.atomic.AtomicBoolean()
+    private val begin = "MYCT-VAULT-BEGIN:$token"
+    private val exit = Regex("(?:^|\\n)MYCT-VAULT-DONE:$token:([0-9]+)\\r?\\n$")
+
+    /** The helper checks human SSH/TTY and disables echo before this prompt. */
     fun awaitPasswordPrompt(): Boolean {
-        check(!started)
+        check(!started && !closed.get())
         started = true
-        val command = "\"\$HOME/.local/bin/myct-vault\" unlock; printf '\\nMYCT-VAULT-DONE:%d\\n' \"\$?\"\n"
+        // Ignore banners/command echo until a fresh, exact marker line. Always
+        // exit this dedicated shell when the helper ends: never interpret a late
+        // password as a new shell command after helper rejection or termination.
+        val command = "printf '\\n$begin\\n'; \"\$HOME/.local/bin/myct-vault\" unlock; " +
+            "printf '\\nMYCT-VAULT-DONE:$token:%d\\n' \"\$?\"; exit\n"
         output.write(command.toByteArray(StandardCharsets.US_ASCII))
         output.flush()
-        val text = readUntilSignal(allowPrompt = true)
+        val text = readUntilSignal(allowPrompt = true, awaitBegin = true)
         return when {
-            text.endsWith(PROMPT) -> true
+            text.endsWith(PROMPT) -> true.also { passwordReady = true }
             exitCode(text) == 0 -> false // already unlocked
             else -> error("Unlock terminal refused or helper unavailable")
         }
     }
 
-    /** Caller passes a mutable buffer and clears it immediately afterwards. */
+    /** Canonical Linux PTY: refuse control bytes and lines that could be truncated. */
     fun submitSecret(bytes: ByteArray) {
-        check(started && !finished)
-        require(bytes.isNotEmpty() && bytes.size <= 8192 && bytes.none { it == 0.toByte() || it == 10.toByte() || it == 13.toByte() })
+        check(passwordReady && !finished && !closed.get())
+        if (bytes.isEmpty() || bytes.size > 4095 || bytes.any {
+            (it.toInt() and 0xff) < 32 || it == 127.toByte()
+        }) throw VaultInputRejected()
+        passwordReady = false
+        finished = true // No retry after even a partial write.
         output.write(bytes)
         output.write(10)
         output.flush()
-        finished = true
     }
 
-    /** Only exit status leaves this object; all terminal output is discarded. */
+    /** Only exit status leaves this object; terminal output is never shown/logged. */
     fun awaitCompletion(): Boolean {
-        check(finished)
+        check(finished && !closed.get())
         return exitCode(readUntilSignal(allowPrompt = false)) == 0
     }
 
-    private fun readUntilSignal(allowPrompt: Boolean, maximum: Int = 8192): String {
+    private fun readUntilSignal(allowPrompt: Boolean, awaitBegin: Boolean = false): String {
         val chars = StringBuilder()
-        repeat(maximum) {
+        var begun = !awaitBegin
+        repeat(8192) {
+            check(!closed.get())
             val next = input.read()
             if (next < 0) error("SSH unlock terminal closed")
-            // Protocol markers are ASCII; unrelated terminal output is never shown/logged.
             chars.append(next.toChar())
-            if ((allowPrompt && chars.endsWith(PROMPT)) || EXIT_REGEX.containsMatchIn(chars)) {
+            if (!begun) {
+                if (chars.endsWith("\n$begin\r\n") || chars.endsWith("\n$begin\n")) {
+                    begun = true
+                    chars.setLength(0)
+                }
+            } else if ((allowPrompt && chars.endsWith(PROMPT)) || exit.containsMatchIn(chars)) {
                 return chars.toString()
             }
         }
         error("SSH unlock response exceeded limit")
     }
 
-    private fun exitCode(reply: String): Int? =
-        EXIT_REGEX.find(reply)?.groupValues?.get(1)?.toIntOrNull()
+    private fun exitCode(reply: String): Int? = exit.find(reply)?.groupValues?.get(1)?.toIntOrNull()
 
     override fun close() {
-        runCatching { shell.disconnect() }
-        onClosed()
+        if (closed.compareAndSet(false, true)) runCatching { disconnect() }
     }
 
     companion object {
         private const val PROMPT = "Senha do cofre login (SSH privado, sem eco): "
-        private val EXIT_REGEX = Regex("MYCT-VAULT-DONE:([0-9]+)\\r?\\n$")
+    }
+}
+
+/** A cancelled attempt rejects and closes a transport that finishes opening late. */
+internal class VaultUnlockAttempt : AutoCloseable {
+    private var cancelled = false
+    private var channel: VaultUnlockChannel? = null
+    @Synchronized fun register(value: VaultUnlockChannel) {
+        if (cancelled) { value.close(); throw kotlinx.coroutines.CancellationException() }
+        check(channel == null)
+        channel = value
+    }
+    @Synchronized fun channel(): VaultUnlockChannel? = channel
+    @Synchronized override fun close() {
+        cancelled = true
+        channel?.close()
+        channel = null
     }
 }
 

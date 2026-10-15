@@ -43,7 +43,7 @@ class SshConnection {
     }
 
     /** Separate interactive SSH shell: keeps password off the ordinary PTY and argv. */
-    fun openVaultUnlock(): VaultUnlockChannel {
+    internal fun openVaultUnlock(): VaultUnlockChannel {
         val channel = synchronized(vaultChannels) {
             check(!closed && session?.isConnected == true)
             (session!!.openChannel("shell") as ChannelShell).also { vaultChannels.add(it) }
