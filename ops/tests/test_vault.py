@@ -22,7 +22,7 @@ class VaultOfflineTest(unittest.TestCase):
     def test_unlock_rejects_noninteractive_input_before_password_access(self):
         synthetic = "synthetic-password-DO-NOT-USE"
         proc = subprocess.run(
-            ["/usr/bin/python3", str(ENTRY), "unlock"],
+            ["/usr/bin/python3", "-I", str(ENTRY), "unlock"],
             input=synthetic, capture_output=True, text=True, timeout=5)
         self.assertNotEqual(proc.returncode, 0)
         self.assertNotIn(synthetic, proc.stdout + proc.stderr)
@@ -32,7 +32,7 @@ class VaultOfflineTest(unittest.TestCase):
     def test_status_fails_closed_without_session_bus(self):
         env = dict(os.environ, DBUS_SESSION_BUS_ADDRESS="unix:path=/nonexistent-myct-test-bus")
         proc = subprocess.run(
-            ["/usr/bin/python3", str(ENTRY), "status"],
+            ["/usr/bin/python3", "-I", str(ENTRY), "status"],
             capture_output=True, text=True, env=env, timeout=5)
         self.assertNotEqual(proc.returncode, 0)
         status = json.loads(proc.stdout)
