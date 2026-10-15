@@ -283,3 +283,19 @@ Em SSH do proprietário, com cofre ainda bloqueado, sincronizar `myct-4b-android
 Abrir a aba Cofre no APK de diagnóstico já instalado e tocar **Desbloquear** uma vez. Se surgir o campo, o novo caminho chegou ao prompt seguro; então o proprietário pode inserir a senha **apenas no aplicativo** para validar o fluxo completo. Se houver novo erro, relatar **somente o código sanitizado**. Persistindo erro de classe/UID/serviço, investigar propriedades da sessão de maneira não sensível, sem remover verificações.
 
 **Estado:** fonte e testes sintéticos publicados, ainda precisam ser executados no Fedora e validados no Moto. PR #14 permanece draft e sem merge.
+
+
+## ACEITE FÍSICO — MYCT-4B CONCLUÍDA (15/10/2026)
+
+**Resultado: PASS funcional real no Moto G06, informado pelo proprietário.** Após a correção de `require_authenticated_ssh_logind` para um segundo PTY autenticado e a correção de uma asserção de teste legada (`e43ca5a`), o proprietário confirmou:
+
+- Reexecutou os testes locais da branch e **todos passaram**. Não foi fornecida nova transcrição completa; esse resultado é a confirmação do operador, distinta dos 48 testes do APK registrados anteriormente.
+- A partir da aba **Cofre** do My-CT Android, com GNOME Keyring `login` anteriormente identificado como **bloqueado**, conseguiu **desbloquear o cofre com sucesso**. Isso demonstra que a admissão SSH/logind do PTY secundário, o prompt, o envio humano da senha e a alteração efetiva do estado são operacionais nessa combinação Fedora/Moto.
+- Em seguida, iniciou o **Copilot CLI**, que conseguiu acessar suas credenciais existentes para autenticação. A consulta `gh auth status` via keyring já havia sido comprovada na fase anterior.
+- Após reboot real anterior, **Dashboard Saúde funcionou sem executar `./myct-core`** e a aba Cofre exibiu corretamente o estado bloqueado. O Core systemd tem prova física de boot.
+
+**Não foram recebidas senhas, tokens, valores de itens do cofre, dados de autenticação sensíveis ou logs de PTY.** O próprio usuário executou a operação. O desbloqueio é sob demanda, não automático, e não concede permissões granulares a agentes. A atualização GNOME Keyring pode alterar compatibilidade futura do método interno de unlock.
+
+**Escopo aceito:** fluxo de desbloqueio por botão no Android + Copilot CLI autenticando com credenciais existentes. A regressão do desbloqueio por segundo PTY foi resolvida pela correção de `logind`. Não exigir novamente teste funcional já realizado. As verificações de cancelamento, retorno do segundo plano e demais refinamentos de UX podem continuar como dívidas não bloqueantes, sem confundir com ausência do fluxo principal.
+
+**Estado Git:** PR #14 ainda está em rascunho, sem merge; como é baseado em `myct-4-boot-and-vault`, considerar ordem PR #13 → PR #14 na integração. O aceite funcional não altera automaticamente o estado dos PRs. Nenhuma nova implantação/alteração de serviço é necessária para registrar o resultado.
