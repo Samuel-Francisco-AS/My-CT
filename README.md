@@ -67,6 +67,10 @@ Estas issues são pontos de acompanhamento **revisáveis**, não marcos com data
 5. **Interfaces substituíveis.** O app Android não deve ser necessário para o backend continuar operando.
 6. **Planejamento vivo.** Reordenar, reduzir ou discutir escopo é permitido e esperado; alterações materiais devem ser documentadas.
 
+## MYCT-4 — proposta em branch, não implantada
+
+A branch `myct-4-boot-and-vault` prepara **systemd para iniciar o Core no boot** e um **comando My-CT próprio para consultar/desbloquear o GNOME Keyring login existente pelo SSH**, sem dependência de runtime da Narys. O serviço não precisa de PostgreSQL e o desbloqueio do cofre não é automático nem entregue aos agentes. **Ainda não foi instalado nem testado no Fedora do proprietário.** Comandos, limites e reversão: [MYCT-4 — operação e cofre](docs/MYCT-4-BOOT-VAULT.md).
+
 ## Ponto de partida
 
 MYCT-3C foi comprovada no Moto G06 e integrada à `main` após corrigir o contraste. Próxima conversa operacional: **serviço systemd para iniciar e manter o Core automaticamente**, somente após autorização do proprietário; manter API em loopback, acesso Android por SSH e banco independente (não iniciar PostgreSQL desnecessariamente para telemetria). Operação atual em [server/README.md](server/README.md). A questão de **acesso autorizado ao cofre sem depender da Narys** é assunto separado para discussão, ainda não projetado ou implementado. A [trilha de refinamento Android](docs/09-TRILHA-REFINAMENTO-ANDROID.md) continua adiada.
