@@ -99,7 +99,7 @@ internal class VaultUnlockChannel(
 
     companion object {
         private const val PROMPT = "Senha do cofre login (SSH privado, sem eco): "
-        private val EXIT_REGEX = Regex("MYCT-VAULT-DONE:([0-9]+)\\\\r?\\\\n$")
+        private val EXIT_REGEX = Regex("MYCT-VAULT-DONE:([0-9]+)\\r?\\n$")
     }
 }
 
