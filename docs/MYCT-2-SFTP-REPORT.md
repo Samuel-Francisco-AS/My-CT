@@ -277,8 +277,7 @@ separadamente autorizada. Não foi criado servidor de teste em porta nova.
    permanecer explícitas. Não iniciar outra etapa antes da decisão do dono.
 
 **Estado físico:** nenhuma execução MYCT-2 no Moto pelo agente; aparelho não
-presente em ADB. Solicitação de teste manual feita ao proprietário; resultado
-não fornecido até a preparação deste relatório. Não declarar FILE-01/02/03/04
+presente em ADB. O proprietário respondeu explicitamente: **registrar validação física pendente**. Não declarar FILE-01/02/03/04
 aceitos no hardware só por esta implementação.
 
 ## Arquivos e publicação
@@ -302,3 +301,18 @@ com `git log -1`; código/APK identificados pelo commit de implementação.
 - [Android SAF e comportamento de CreateDocument](https://developer.android.com/training/data-storage/shared/documents-files).
 - [InputMethodManager.restartInput](https://developer.android.com/reference/android/view/inputmethod/InputMethodManager#restartInput(android.view.View)).
 - [JSch ChannelSftp 2.28.8](https://github.com/mwiede/jsch/blob/jsch-2.28.8/src/main/java/com/jcraft/jsch/ChannelSftp.java).
+
+
+### Fechamento da publicação
+
+Implementação, testes e documentação enviados no commit
+`7bdef5123e95230a5702d654353f596f5c1e7d77`.
+[PR #7](https://github.com/Samuel-Francisco-AS/My-CT/pull/7) criado **open/draft**,
+base `myct-1-android-ssh`, dependente do PR #6. Ambos confirmados sem merge;
+PR #6 permaneceu draft na consulta. Main local preservada em
+`2cebb637a94cc73d1dbf309688070d7550a3537a`.
+
+Fechamento documental posterior registra a publicação e a decisão do
+proprietário de deixar a validação física pendente. O APK e seu checksum
+continuam os descritos acima, sem mudança de código neste fechamento.
+SHA final da branch será entregue na resposta e é recuperável por `git log -1`.
