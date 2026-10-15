@@ -32,6 +32,9 @@ data class VaultStatus(val kind: VaultKind, val compatible: Boolean = false) {
 
 internal class VaultInputRejected : IllegalArgumentException("Unsupported password input")
 
+/** Remote helper already emitted this code before requesting any password. */
+internal class VaultUnlockDenied(val safeCode: String) : IllegalStateException("Vault unlock refused")
+
 /** A separate, short-lived interactive PTY. Password bytes are never shell arguments. */
 internal class VaultUnlockChannel(
     private val input: InputStream,
@@ -65,7 +68,9 @@ internal class VaultUnlockChannel(
         return when {
             text.endsWith(PROMPT) -> true.also { passwordReady = true }
             exitCode(text) == 0 -> false // already unlocked
-            else -> error("Unlock terminal refused or helper unavailable")
+            else -> throw VaultUnlockDenied(
+                SAFE_HELPER_CODES.find(text)?.groupValues?.get(1) ?: "unlock_helper_refused"
+            )
         }
     }
 
@@ -116,6 +121,8 @@ internal class VaultUnlockChannel(
 
     companion object {
         private const val PROMPT = "Senha do cofre login (SSH privado, sem eco): "
+        // The helper prints sanitized JSON codes; never expose PTY stdout/stderr.
+        private val SAFE_HELPER_CODES = Regex("\\\"error_code\\\"\\\\s*:\\s*\\\"([a-z][a-z0-9_]{2,63})\\\"")
     }
 }
 
