@@ -13,6 +13,15 @@ class SshConnection {
     @Volatile private var shell: ChannelShell? = null
     @Volatile private var closed = false
     private val fileChannels = mutableSetOf<ChannelSftp>()
+    private val healthForwarding = HealthForwarding(open = {
+        val current = checkNotNull(session)
+        check(!closed && current.isConnected)
+        current.setPortForwardingL("127.0.0.1", 0, "127.0.0.1", 8765)
+    }, remove = { port -> session?.delPortForwardingL("127.0.0.1", port) })
+    fun health(): HealthSample {
+        check(!closed && session?.isConnected == true)
+        return fetchHealth(healthForwarding.port())
+    }
     lateinit var input: InputStream
         private set
     lateinit var output: OutputStream
@@ -85,6 +94,7 @@ class SshConnection {
     }
     fun close() {
         val channels = synchronized(fileChannels) { closed = true; fileChannels.toList().also { fileChannels.clear() } }
+        healthForwarding.close()
         channels.forEach { it.disconnect() }
         shell?.disconnect()
         session?.disconnect()

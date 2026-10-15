@@ -2,7 +2,8 @@
 
 **My-CT** é uma iniciativa de infraestrutura pessoal: um servidor Linux doméstico, administrado por um aplicativo Android nativo, capaz de executar tarefas, disponibilizar arquivos e realizar downloads sem depender de uma sessão gráfica.
 
-> **Estado em 15/10/2026 — MYCT-3A/3B integradas à main:** terminal SSH e SFTP funcionais no Moto G06 (PDF nos dois sentidos), e **Core C++20 com métricas reais e PostgreSQL local comprovados no Fedora**. PRs [#10](https://github.com/Samuel-Francisco-AS/My-CT/pull/10) e [#11](https://github.com/Samuel-Francisco-AS/My-CT/pull/11) mesclados. API HTTP somente em `127.0.0.1:8765`; banco PostgreSQL por socket Unix privado, sem TCP. **Core e banco ficaram parados após o teste**, dados preservados: ainda não há serviço systemd My-CT, Dashboard Android, downloads server-side ou automações. Permanecem dívidas de lag/UX/scroll e validação SFTP background ([issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9)). Ver [fechamento MYCT-3A/3B](docs/MYCT-3AB-FECHAMENTO-REPORT.md) e [retomada](docs/10-RETOMADA-PROJETO.md).
+> **Estado em 15/10/2026 — MYCT-3C preparada, aceite no Moto pendente:** Core C++20 e PostgreSQL já integrados/provados no Fedora; terminal SSH e SFTP já utilizados no Moto G06. Esta branch acrescenta **Terminal | Arquivos | Saúde**, com CPU/RAM/disco/uptime via túnel na sessão SSH autenticada, sem polling. APK debug disponível localmente, mesma assinatura da MYCT-2R. Build/testes não substituem a prova física: ainda falta instalar e comparar métricas no Moto, alternar abas e comprovar desconexão/reconexão. Core e banco ficaram **parados**, dados preservados. Ver [relatório/roteiro MYCT-3C](docs/MYCT-3C-DASHBOARD-REPORT.md) e [retomada](docs/10-RETOMADA-PROJETO.md). Refinamento da [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9) continua adiado.
+
 
 ## Objetivo
 
@@ -44,6 +45,7 @@ As escolhas específicas de bibliotecas, contratos e divisão de entregas são *
 | [Guia de retomada](docs/10-RETOMADA-PROJETO.md) | Ponto de partida atualizado: MYCT-3C, saúde real no Moto |
 | [Core/PostgreSQL MYCT-3B](docs/MYCT-3B-POSTGRES-REPORT.md) | Evidência Fedora: build, banco, isolamento, consumo e recuperação |
 | [Fechamento MYCT-3A/3B](docs/MYCT-3AB-FECHAMENTO-REPORT.md) | PRs #10/#11, SHAs, provas e pendências |
+| [Dashboard MYCT-3C](docs/MYCT-3C-DASHBOARD-REPORT.md) | Implementação, testes, APK e roteiro físico pendente |
 | [Build e instalação Android](android/README.md) | CLI, transferência manual e uso do terminal |
 | [Orientações para agentes](AGENTS.md) | Regras de colaboração para Codex e outros agentes |
 
@@ -68,5 +70,4 @@ Estas issues são pontos de acompanhamento **revisáveis**, não marcos com data
 
 ## Ponto de partida
 
-MYCT-3A e MYCT-3B foram integradas e validadas no Fedora (Core C++20 + HTTP local + PostgreSQL por socket Unix). **Próxima entrega sugerida: MYCT-3C**, uma tela Android enxuta exibindo dados reais da API via túnel autenticado pela sessão SSH existente, com comprovação no Moto G06. Sem abrir API na rede ou exigir serviços gráficos. O [guia de retomada](docs/10-RETOMADA-PROJETO.md) e o [guia do Core](server/README.md) trazem os pontos de partida. O refinamento Android continua adiado na [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9).
-
+MYCT-3C tem implementação Android e APK preparados nesta branch, com validação física pendente. O próximo passo é executar o [roteiro no Moto G06](docs/MYCT-3C-DASHBOARD-REPORT.md), confirmar telemetria real pelo SSH e preservar Terminal/Arquivos. A API permanece local, sem PostgreSQL necessário para saúde. Não iniciar outra frente antes dessa prova. Consulte o [guia de retomada](docs/10-RETOMADA-PROJETO.md) e o [guia do Core](server/README.md).
