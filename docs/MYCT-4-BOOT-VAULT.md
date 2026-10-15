@@ -1,12 +1,12 @@
 # MYCT-4 — operações do Core e cofre GNOME Keyring
 
-**Estado: implementado no Git, pendente de prova no Fedora real.** As duas capacidades são independentes. Não mexer nos dados do PostgreSQL nem nos serviços da Narys.
+**Estado: cofre aprovado no Fedora real; systemd instalado mas em correção após erro `203/EXEC`.** As duas capacidades são independentes. Não mexer nos dados do PostgreSQL nem nos serviços da Narys.
 
 ## A. Core automático pelo systemd
 
-Unidade systemd de sistema: `ops/systemd/myct-core.service`. Executa **somente o Core** como `sam` a partir de `/home/sam/Projetos/My-CT/server/myct-core`, sem sudo no processo, com `Restart=on-failure`. Inicia no boot (`multi-user.target`) sem precisar manter SSH, Termux ou My-CT Android abertos. **Não inicia PostgreSQL**; `/v1/health` não depende do banco. API continua bind apenas em `127.0.0.1:8765` por código.
+Unidade systemd de sistema: `ops/systemd/myct-core.service`. Executa **somente o Core** como `sam` a partir do binário **instalado em `/usr/local/bin/myct-core`** (não diretamente do checkout sob `/home`), sem sudo no processo, com `Restart=on-failure`. Inicia no boot (`multi-user.target`) sem precisar manter SSH, Termux ou My-CT Android abertos. **Não inicia PostgreSQL**; `/v1/health` não depende do banco. API continua bind apenas em `127.0.0.1:8765` por código.
 
-Os caminhos/usuário da unidade são específicos do Fedora de desenvolvimento; conferir antes de instalar. **Não instalar/ativar automaticamente durante o desenvolvimento**. O proprietário autorizou a configuração; a instalação privilegiada será feita por ele no SSH interativo.
+Os caminhos/usuário da unidade são específicos do Fedora de desenvolvimento; conferir antes de instalar. O proprietário autorizou a configuração e já tentou a instalação inicial, mas ela falhou por `Permission denied`/`203/EXEC` após apontar para o binário em `/home`, com SELinux Enforcing. A hipótese mais forte é bloqueio SELinux, ainda sem AVC confirmado. A versão corrigida usa `/usr/local/bin`, aplica `restorecon` e evita o loop em falhas `203/EXEC`. O proprietário executa os comandos privilegiados apenas pelo terminal pessoal.
 
 1. Atualize a branch no Fedora e **termine com Ctrl-C o Core manual** que estiver escutando a porta 8765. Confira `ss -lntp 'sport = :8765'` antes de iniciar um segundo processo.
 2. Compile e rode os testes existentes antes de ativar (não instalar nada automaticamente):
@@ -17,17 +17,26 @@ make -C server
 make -C server test
 ```
 
-3. Com autorização do proprietário, em terminal SSH direto (senha sudo somente no próprio Fedora):
+3. Em terminal SSH direto, se o serviço antigo estiver no loop de falhas, **pare-o primeiro**. Atualize a branch, instale o **binário compilado e a unidade corrigida** fora do `/home`; aplique o contexto SELinux conforme a política do Fedora (sem desativá-la). A senha sudo é digitada somente pelo proprietário:
 
 ```sh
+sudo systemctl stop myct-core.service
+cd ~/Projetos/My-CT
+git pull --ff-only origin myct-4-boot-and-vault
+sudo install -m 0755 server/myct-core /usr/local/bin/myct-core
+sudo restorecon -v /usr/local/bin/myct-core
 sudo install -m 0644 ops/systemd/myct-core.service /etc/systemd/system/myct-core.service
+sudo restorecon -v /etc/systemd/system/myct-core.service
 sudo systemctl daemon-reload
-sudo systemctl enable --now myct-core.service
+sudo systemctl reset-failed myct-core.service
+sudo systemctl restart myct-core.service
 systemctl is-enabled myct-core.service
 systemctl is-active myct-core.service
 curl -fsS http://127.0.0.1:8765/v1/health
 ss -lntp 'sport = :8765'
 ```
+
+A versão instalada não é automaticamente substituída quando se compila dentro do checkout. Para atualizar o Core depois, compilar, parar serviço, instalar binário novo com `install`, `restorecon` e reiniciar o serviço. Uma unidade habilitada que está falhando **não equivale a serviço funcional**. Se persistir `203/EXEC`, consultar `systemctl status`, `journalctl -u myct-core.service` e os AVCs SELinux antes de alterar algo mais.
 
 Depois de desconectar/reconectar o SSH, consultar o endpoint sem iniciar manualmente o Core. Verificar logs com `journalctl -u myct-core.service -n 30 --no-pager`. Para comprovar **reboot** posteriormente, o proprietário decide quando reiniciar o Fedora; não reiniciar remotamente sem coordenação. O serviço deve continuar após logout pela unidade **de sistema**, sem usar `loginctl enable-linger`.
 
@@ -92,3 +101,12 @@ O desbloqueio não acontece no boot automaticamente: precisa de ação humana ap
 - Core inicia via systemd como `sam`, acessível pelo Dashboard sem `./myct-core`; permanece depois de desconectar SSH; bind somente `127.0.0.1`. Prova de reboot se/quando executada.
 - Testes offline do `myct-vault` e `status` no Fedora; `unlock` humano pessoal **somente pelo proprietário**, sem registro de senha. Estado consultado pós-unlock. `gh auth status` e tentativa Copilot para aferir necessidade real.
 - Registrar o que foi comprovado, não alegar instalação pelo merge/PR. Banco existente e credenciais não são alterados.
+
+
+## Testes reais recebidos do Fedora — 15/10/2026
+
+- `make -C server test`: **3/3 PASS**; `python3 -m unittest discover -s ops/tests -v`: **3/3 PASS**.
+- `myct-vault status` pré-unlock: `service_available=true, state=locked, unlock_backend_compatible=true`.
+- `myct-vault unlock` executado pelo proprietário em SSH privado: desbloqueio confirmado; status posterior `state=unlocked`.
+- `gh auth status`: autenticado via `keyring`; saída mascarou token. Ainda não há prova específica do **Copilot CLI**.
+- Unidade systemd original instalada/habilitada, mas `systemctl is-active` foi `activating`, `curl` recusou conexão; journal repetiu `status=203/EXEC` e `Permission denied` ao tentar executar `/home/sam/Projetos/My-CT/server/myct-core`. `ls -l` mostrou executável com bit +x, SELinux Enforcing. Houve aproximadamente 70 reinícios. **Corrigido no Git**, substituindo ExecStart por `/usr/local/bin/myct-core` e `RestartPreventExitStatus=203`; ainda precisa de prova no Fedora. Não declarar boot/autostart aprovado antes da prova.
