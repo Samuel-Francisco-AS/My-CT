@@ -70,12 +70,18 @@ class SshConnection {
             synchronized(fileChannels) { fileChannels.remove(channel) }
         }
         try {
-            control.track(store) // Cancels an in-flight channel connect without closing the PTY.
+            control.trackTransport(store) // Cancels an in-flight channel connect without closing the PTY.
             control.check()
             channel.connect(10_000)
             control.check()
             return store
-        } catch (e: Exception) { store.close(); throw e }
+        } catch (e: Exception) {
+            // Cancellation may close a not-yet-connected channel. If connect won that race,
+            // disconnect again here: an idempotent store release alone cannot close it.
+            runCatching { channel.disconnect() }
+            store.close()
+            throw e
+        }
     }
     fun close() {
         val channels = synchronized(fileChannels) { closed = true; fileChannels.toList().also { fileChannels.clear() } }

@@ -66,8 +66,12 @@ class MainActivity : ComponentActivity() {
         startService(Intent(this, SshForegroundService::class.java).setAction(SshForegroundService.DISCONNECT))
     }
     override fun onDestroy() {
-        if (!isChangingConfigurations && !model.backgroundEnabled) model.disconnect("Tela encerrada sem modo persistente; reconecte manualmente.")
+        if (isFinishing && !isChangingConfigurations && !model.backgroundEnabled && !model.files.transferKeepsConnection) model.disconnect("Tela encerrada sem modo persistente; reconecte manualmente.")
         super.onDestroy()
+    }
+    override fun onStart() {
+        super.onStart()
+        model.files.onForeground()
     }
     override fun onStop() {
         if (!isChangingConfigurations) model.files.onBackground()

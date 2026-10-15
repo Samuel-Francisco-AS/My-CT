@@ -1,5 +1,8 @@
 package dev.myct
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.app.Activity
 import android.content.Context
 import android.net.Uri
@@ -36,6 +39,13 @@ private class CreateRemoteDocument : ActivityResultContract<String, Uri?>() {
 @Composable
 fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    var notificationsGranted by remember { mutableStateOf(Build.VERSION.SDK_INT < 33 ||
+        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        notificationsGranted = it
+        Toast.makeText(context, if (it) "Notificações permitidas para as próximas transferências."
+            else "Mantenha o app visível durante a transferência.", Toast.LENGTH_LONG).show()
+    }
     val upload = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { model.pickedUpload(it) }
     val download = rememberLauncherForActivityResult(CreateRemoteDocument()) { model.pickedDownload(it) }
     var link by remember { mutableStateOf<RemoteEntry?>(null) }
@@ -43,81 +53,88 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
     val status = model.status
     val dateFormat = remember { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT) }
     LaunchedEffect(model) { if (model.listing == null && !model.busy) model.load(null) }
-    Column(modifier.padding(horizontal = 8.dp)) {
-        Text("Arquivos · SFTP", style = MaterialTheme.typography.titleMedium)
-        if (model.recoveryNotice.isNotEmpty()) {
-            Text(model.recoveryNotice, style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = { model.dismissRecoveryNotice() }) { Text("Entendi") }
-        }
-        Text(listing?.path ?: "Diretório inicial", maxLines = 3, overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 6.dp))
-        Row {
-            TextButton(enabled = !model.busy && listing != null && listing.path != "/",
-                onClick = { listing?.let { model.load(RemotePath.parent(it.path)) } }) { Text("↑ Pai") }
-            TextButton(enabled = !model.busy, onClick = { model.load() }) { Text("Atualizar") }
-            TextButton(enabled = !model.busy && listing != null, onClick = {
-                if (model.beginUploadSelection()) upload.launch(arrayOf("*/*"))
-            }) { Text("Enviar…") }
-        }
-        Text("Transferências acompanhadas nesta tela. Sair do app cancela; girar ou alternar abas mantém a operação.",
-            style = MaterialTheme.typography.labelSmall)
-        if (model.busy) {
-            if (status.phase == FilePhase.TRANSFERRING && status.total != null && status.total > 0)
-                LinearProgressIndicator(progress = { (status.bytes.toFloat() / status.total).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
-            else LinearProgressIndicator(Modifier.fillMaxWidth())
-            TextButton(enabled = status.phase != FilePhase.CANCELLING, onClick = { model.cancel() }) { Text("Cancelar operação") }
-        }
-        Text(status.message, style = MaterialTheme.typography.bodySmall,
-            color = if (status.phase == FilePhase.ERROR) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.heightIn(max = 110.dp).verticalScroll(rememberScrollState()).padding(vertical = 4.dp))
-        if (status.name.isNotEmpty()) Text("${status.name} · ${status.bytes} / ${status.total?.toString() ?: "?"} bytes", maxLines = 2,
-            overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall)
-        model.completedDownload?.let { uri ->
-            TextButton(onClick = {
-                try {
-                    val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
-                    context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime)
-                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
-                } catch (_: Exception) { Toast.makeText(context, "Nenhum aplicativo/provedor pôde abrir este documento. Use o gerenciador de arquivos Android.", Toast.LENGTH_LONG).show() }
-            }) { Text("Abrir arquivo baixado") }
-        }
-        LazyColumn(Modifier.weight(1f)) {
-            items(listing?.entries ?: emptyList(), key = { it.name }) { entry ->
-                ListItem(headlineContent = { Text(entry.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-                    supportingContent = {
-                        Text("${when (entry.kind) { RemoteKind.DIRECTORY -> "Pasta"; RemoteKind.LINK -> "Link simbólico"; RemoteKind.FILE -> "Arquivo · ${entry.size} bytes"; RemoteKind.OTHER -> "Tipo especial (sem transferência)" }} · ${dateFormat.format(Date(entry.modified * 1000))}", style = MaterialTheme.typography.labelSmall)
-                    }, modifier = Modifier.clickable(enabled = !model.busy) {
-                        when (entry.kind) {
-                            RemoteKind.DIRECTORY -> listing?.let { model.load(RemotePath.child(it.path, entry.name)) }
-                            RemoteKind.FILE -> model.selectDownload(entry)
-                            RemoteKind.LINK -> link = entry
-                            RemoteKind.OTHER -> Unit
-                        }
-                    })
-                HorizontalDivider()
+    CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+        Column(modifier.padding(horizontal = 8.dp)) {
+            Text("Arquivos · SFTP", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            if (model.recoveryNotice.isNotEmpty()) {
+                Text(model.recoveryNotice, style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = { model.dismissRecoveryNotice() }) { Text("Entendi") }
+            }
+            Text(listing?.path ?: "Diretório inicial", maxLines = 3, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 6.dp))
+            Row {
+                TextButton(enabled = !model.busy && listing != null && listing.path != "/",
+                    onClick = { listing?.let { model.load(RemotePath.parent(it.path)) } }) { Text("↑ Pai") }
+                TextButton(enabled = !model.busy, onClick = { model.load() }) { Text("Atualizar") }
+                TextButton(enabled = !model.busy && listing != null, onClick = {
+                    if (model.beginUploadSelection()) upload.launch(arrayOf("*/*"))
+                }) { Text("Enviar…") }
+            }
+            Text("Com notificações permitidas, a transferência continua em segundo plano enquanto o serviço e a rede permanecerem ativos. Sem serviço, mantenha o app visível. Sem retomada automática.",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!notificationsGranted && Build.VERSION.SDK_INT >= 33) TextButton(onClick = {
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }) { Text("Permitir notificações de transferência") }
+            if (model.busy) {
+                if (status.phase == FilePhase.TRANSFERRING && status.total != null && status.total > 0)
+                    LinearProgressIndicator(progress = { (status.bytes.toFloat() / status.total).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+                else LinearProgressIndicator(Modifier.fillMaxWidth())
+                TextButton(enabled = status.phase != FilePhase.CANCELLING, onClick = { model.cancel() }) { Text("Cancelar operação") }
+            }
+            Text(status.message, style = MaterialTheme.typography.bodySmall,
+                color = if (status.phase == FilePhase.ERROR) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.heightIn(max = 110.dp).verticalScroll(rememberScrollState()).padding(vertical = 4.dp))
+            if (status.name.isNotEmpty()) Text("${status.name} · ${formatFileSize(status.bytes)} / ${status.total?.let(::formatFileSize) ?: "?"}", maxLines = 2,
+                overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            model.completedDownload?.let { uri ->
+                TextButton(onClick = {
+                    try {
+                        val reported = context.contentResolver.getType(uri)
+                        val inferred = MimeTypeMap.getSingleton().getMimeTypeFromExtension(status.name.substringAfterLast('.', "").lowercase())
+                        val mime = reported?.takeUnless { it == "application/octet-stream" } ?: inferred ?: "application/octet-stream"
+                        context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime)
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                    } catch (_: Exception) { Toast.makeText(context, "Download concluído, mas o visualizador/provedor não abriu o documento. Isso não comprova corrupção. Tente pelo gerenciador Android.", Toast.LENGTH_LONG).show() }
+                }) { Text("Abrir arquivo baixado") }
+            }
+            LazyColumn(Modifier.weight(1f)) {
+                items(listing?.entries ?: emptyList(), key = { it.name }) { entry ->
+                    ListItem(headlineContent = { Text(entry.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                        supportingContent = {
+                            Text("${when (entry.kind) { RemoteKind.DIRECTORY -> "Pasta"; RemoteKind.LINK -> "Link simbólico"; RemoteKind.FILE -> "Arquivo · ${formatFileSize(entry.size)}"; RemoteKind.OTHER -> "Tipo especial (sem transferência)" }} · ${dateFormat.format(Date(entry.modified * 1000))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }, modifier = Modifier.clickable(enabled = !model.busy) {
+                            when (entry.kind) {
+                                RemoteKind.DIRECTORY -> listing?.let { model.load(RemotePath.child(it.path, entry.name)) }
+                                RemoteKind.FILE -> model.selectDownload(entry)
+                                RemoteKind.LINK -> link = entry
+                                RemoteKind.OTHER -> Unit
+                            }
+                        })
+                    HorizontalDivider()
+                }
             }
         }
-    }
-    model.uploadChoice?.let { choice ->
-        var name by remember(choice) { mutableStateOf(choice.name) }
-        AlertDialog(onDismissRequest = { model.dismissUpload() }, title = { Text("Enviar arquivo") },
-            text = { Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text("Destino: ${choice.directory}")
-                Text("${choice.size?.toString() ?: "Tamanho desconhecido"}${if (choice.size != null) " bytes" else ""}. Existentes não serão substituídos.")
-                OutlinedTextField(name, { if (it.length <= 512) name = it }, label = { Text("Nome no Fedora") }, singleLine = true)
-            } }, confirmButton = { TextButton(onClick = { model.upload(name) }) { Text("Enviar") } },
-            dismissButton = { TextButton(onClick = { model.dismissUpload() }) { Text("Cancelar") } })
-    }
-    model.downloadChoice?.let { choice ->
-        AlertDialog(onDismissRequest = { model.dismissDownload() }, title = { Text("Baixar arquivo") },
-            text = { Text("${choice.entry.name} · ${choice.entry.size} bytes\nEscolha um novo documento no Android. Nomes existentes são tratados pelo seletor SAF. Se interrompido, o provedor pode manter um arquivo parcial.") },
-            confirmButton = { TextButton(onClick = { download.launch(choice.entry.name) }) { Text("Escolher destino…") } },
-            dismissButton = { TextButton(onClick = { model.dismissDownload() }) { Text("Cancelar") } })
-    }
-    link?.let { entry ->
-        AlertDialog(onDismissRequest = { link = null }, title = { Text("Link simbólico") },
-            text = { Text("${entry.name}\nAbrir seguirá o link somente para navegar, se o destino for um diretório acessível. Links não são baixados nem modificados por esta tela.") },
-            confirmButton = { TextButton(onClick = { listing?.let { model.load(RemotePath.child(it.path, entry.name)) }; link = null }) { Text("Abrir diretório") } },
-            dismissButton = { TextButton(onClick = { link = null }) { Text("Cancelar") } })
+        model.uploadChoice?.let { choice ->
+            var name by remember(choice) { mutableStateOf(choice.name) }
+            AlertDialog(onDismissRequest = { model.dismissUpload() }, title = { Text("Enviar arquivo") },
+                text = { Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text("Destino: ${choice.directory}")
+                    Text("${choice.size?.let(::formatFileSize) ?: "Tamanho desconhecido"}${choice.size?.let { " ($it bytes)" } ?: ""}. Existentes não serão substituídos.")
+                    OutlinedTextField(name, { if (it.length <= 512) name = it }, label = { Text("Nome no Fedora") }, singleLine = true)
+                } }, confirmButton = { TextButton(onClick = { model.upload(name) }) { Text("Enviar") } },
+                dismissButton = { TextButton(onClick = { model.dismissUpload() }) { Text("Cancelar") } })
+        }
+        model.downloadChoice?.let { choice ->
+            AlertDialog(onDismissRequest = { model.dismissDownload() }, title = { Text("Baixar arquivo") },
+                text = { Text("${choice.entry.name} · ${formatFileSize(choice.entry.size)} (${choice.entry.size} bytes)\nEscolha um novo documento no Android. Nomes existentes são tratados pelo seletor SAF. Se interrompido, o provedor pode manter um arquivo parcial.") },
+                confirmButton = { TextButton(onClick = { download.launch(choice.entry.name) }) { Text("Escolher destino…") } },
+                dismissButton = { TextButton(onClick = { model.dismissDownload() }) { Text("Cancelar") } })
+        }
+        link?.let { entry ->
+            AlertDialog(onDismissRequest = { link = null }, title = { Text("Link simbólico") },
+                text = { Text("${entry.name}\nAbrir seguirá o link somente para navegar, se o destino for um diretório acessível. Links não são baixados nem modificados por esta tela.") },
+                confirmButton = { TextButton(onClick = { listing?.let { model.load(RemotePath.child(it.path, entry.name)) }; link = null }) { Text("Abrir diretório") } },
+                dismissButton = { TextButton(onClick = { link = null }) { Text("Cancelar") } })
+        }
     }
 }
