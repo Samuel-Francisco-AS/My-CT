@@ -1,9 +1,10 @@
 # MYCT-5A — downloads HTTP/HTTPS headless
 
 15/10/2026. Base `main` em `71ca4d7528facfe75fc44a49a092f035cef227b8`;
-branch `myct-5a-http-downloads`. Implementação e testes Fedora entregues para
-revisão, **sem merge, instalação ou substituição de binários ativos**.
-**Aceite de desconexão SSH/Moto G06 pendente**, conforme procedimento abaixo.
+branch `myct-5a-http-downloads`. Implementação e testes Fedora entregues para revisão, sem instalação ou
+substituição de binários ativos. **Aceite real no Moto G06 confirmado pelo
+proprietário em 15/10/2026**: continuidade após encerrar SSH/app e SHA-256 correto.
+PR #15 pronto para integração na `main` após esse aceite.
 Relacionado à issue #4; torrent, automações e interface Android continuam fora.
 
 ## Comportamento e decisão
@@ -148,15 +149,16 @@ mesma ativação `2026-10-15 14:30:54 -03` antes/depois. GET
 Core usam outra porta efêmera, nunca segunda instância na 8765. Banco e aceite
 físico anterior do app/cofre não foram repetidos nem alterados.
 
-## Prova SSH/Moto — pendente para o proprietário
+## Prova SSH/Moto — aceite funcional confirmado
 
 A identidade local do servidor foi verificada com a chave pública
 `/etc/ssh/ssh_host_ed25519_key.pub`, em known_hosts temporário e
 `StrictHostKeyChecking=yes`. A tentativa batch real foi recusada com
 `Permission denied (publickey,gssapi-keyex,gssapi-with-mic,password)`; não havia
 agente SSH disponível. Nenhuma chave privada/credencial foi lida ou alterada,
-nenhuma configuração SSH foi modificada. **Não houve SSH autenticado nem teste
-real de fechar o Android nesta entrega. Gate 6 permanece pendente.**
+nenhuma configuração SSH foi modificada. **Na execução original do Codex** não houve SSH autenticado nem fechamento
+do Android; a evidência física foi fornecida posteriormente pelo proprietário,
+conforme o aceite abaixo.
 
 Procedimento (aproximadamente 1 minuto de transferência, só 256 KiB, loopback):
 
@@ -186,6 +188,35 @@ de que o app foi fechado. Se falhar, preservar `.part`/metadados e relatar o est
 não modificar SSHD/systemd/Core para forçar aprovação. A fixture só serve bytes
 controlados em loopback; não é API de controle nem componente instalado.
 
+### Resultado físico registrado em 15/10/2026
+
+O proprietário iniciou o download de prova pelo Terminal SSH do Moto G06,
+encerrou a conexão e fechou o aplicativo. Na reconexão ao Fedora, o comando
+`./server/myct-download list` confirmou dois IDs:
+
+- `3b3df8b5-d8ed-4948-aeb0-c205dc973570` — `failed`, 0 bytes,
+  `curl 7` (falha de conexão à origem), sem arquivo final publicado.
+  Ocorrência registrada, causa específica não demonstrada.
+- `158ab86e-1fbe-4d6f-b337-65c96b3c353a` — `completed`,
+  **262144/262144 bytes**, arquivo final
+  `~/Downloads/My-CT/158ab86e-1fbe-4d6f-b337-65c96b3c353a/prova.bin`.
+  Consulta `status` confirmou novamente `completed`.
+
+A execução real de `sha256sum` pelo proprietário retornou:
+
+```text
+2312394bd99545d9de131c24efb781e765ac1aec243f2ed9347597a793a415e9
+```
+
+O valor **coincide exatamente** com o esperado pela fixture controlada,
+confirmando a integridade da transferência independente de SSH/app.
+**Gate físico MYCT-5A aprovado**; a primeira falha isolada não invalida a
+segunda transferência íntegra. Não há demonstração de persistência após
+reinicialização do Fedora, que permanece explicitamente fora do escopo.
+
+Importante: `ID` nos exemplos deste documento é um *placeholder*,
+não um identificador literal; substituir pelo UUID obtido em `start` ou `list`.
+
 ## Arquivos e retomada
 
 - `server/download.cpp`: CLI, worker, supervisão e persistência mínima.
@@ -193,6 +224,7 @@ controlados em loopback; não é API de controle nem componente instalado.
 - `server/tests/test_download.py`: integração e fixture para prova SSH.
 - README, server/README, AGENTS, docs/05 e docs/10: estado e acesso a este relatório.
 
-Para retomar: checkout desta branch/PR, `make -C server test`, executar o roteiro
-SSH acima e anexar evidência antes de declarar MYCT-5A fisicamente aceita.
-Nenhuma instalação privilegiada, deploy do Core ou merge é parte desta entrega.
+Para retomar: partir da `main` após integração do PR #15, compilar com
+`make -C server myct-download` e usar a CLI pelo Terminal SSH do app.
+Não refazer o gate físico já aprovado sem razão; preservar registros existentes.
+Nenhuma instalação privilegiada ou deploy do Core foi feita nesta fase.
