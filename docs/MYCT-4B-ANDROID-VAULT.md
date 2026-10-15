@@ -262,3 +262,24 @@ PR #14 permanece em draft, sem merge e com a mesma base.
 Desbloqueio pela UI permanece **com falha física registrada, causa ainda pendente
 do diagnóstico do aparelho e sem aceite**. Boot/telemetria e consulta real do
 estado do cofre já informados pelo proprietário permanecem como provas anteriores.
+
+
+## Diagnóstico real após APK 7150d10 — 15/10/2026
+
+O proprietário instalou APK de diagnóstico após build **48 testes PASS/1 ignorado**, e tocou **Desbloquear** com o cofre naturalmente bloqueado após reboot. A aba mostrou, **antes de qualquer senha**:
+
+`authenticated_ssh_session_required`.
+
+Isso prova que o `myct-vault` foi invocado e chegou à validação composta das propriedades da sessão `logind` (`Remote, Service, Type, Class, User, TTY`). Não prova isoladamente qual dessas propriedades diferiu; porém o caminho por **segundo canal SSH shell/PT Y** torna particularmente provável a divergência `Session.TTY` (PTY registrada no login versus PTY secundária atual).
+
+**Correção candidata na branch (não instalada no Fedora):** extração de `require_authenticated_ssh_logind()` no `ops/myct-vault`. Continua exigindo `Remote=True, Service=sshd, Type=tty, Class=user, User=UID atual`. Quando o TTY do `logind` difere do TTY atual, o helper só aceita se o kernel comprovar que `/proc/<shell pai>/fd/0` e `fd 0` do helper são **o mesmo dispositivo de caracteres** (`st_rdev`), além das verificações já existentes (TTY privado do mesmo UID, terminal em foreground, shell interativo direto, origem SSH real, backend GNOME verificado). Não usa sinais fornecidos pelo cliente SSH, headers ou variáveis para substituir identidade `logind`. Continua recusando pipes/agentes sem sessão SSH, sessão de outro UID, sessões não remotas, outros serviços e PTYs sem vínculo com o shell pai.
+
+**Limite declarado:** isso aceita legitimamente PTYs adicionais dentro da mesma sessão remota `sshd`; não equivale a atestação criptográfica de um humano contra software malicioso com o mesmo UID Linux. A interface ainda exige toque e senha do operador no Android; não existe endpoint para autounlock e a senha continua ausente de argv/env/API/logs. Como a fonte foi atualizada, **não confundir o arquivo remoto instalado anteriormente com a versão atual da branch**.
+
+### Próxima prova sem recompilar o APK
+
+Em SSH do proprietário, com cofre ainda bloqueado, sincronizar `myct-4b-android-vault`, executar os testes `python3 -m unittest discover -s ops/tests -v`, instalar `ops/myct-vault` com modo `0700` em `$HOME/.local/bin/myct-vault` e consultar `myct-vault status`. Não usar `sudo`, não reiniciar, não reconfigurar GNOME/SSH, não abrir cofre por CLI antes do teste Android.
+
+Abrir a aba Cofre no APK de diagnóstico já instalado e tocar **Desbloquear** uma vez. Se surgir o campo, o novo caminho chegou ao prompt seguro; então o proprietário pode inserir a senha **apenas no aplicativo** para validar o fluxo completo. Se houver novo erro, relatar **somente o código sanitizado**. Persistindo erro de classe/UID/serviço, investigar propriedades da sessão de maneira não sensível, sem remover verificações.
+
+**Estado:** fonte e testes sintéticos publicados, ainda precisam ser executados no Fedora e validados no Moto. PR #14 permanece draft e sem merge.
