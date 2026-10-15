@@ -49,3 +49,8 @@ Outro assunto aberto para discussão, distinto do systemd: mecanismo nativo My-C
 - **Regras:** sem segredos no Git/log, sem `sudo`, SSH/firewall/Narys/outros clusters alterados sem autorização, sem force push/rebase destrutivo nem merge automático; custo proporcional à utilidade. O servidor não deve depender de agentes/LLMs para operar.
 
 Documento histórico da fase Android: [08](08-FECHAMENTO-CICLO-ANDROID.md); limites de UX: [09](09-TRILHA-REFINAMENTO-ANDROID.md). Mudanças futuras devem preservar a sequência de decisões, mas este guia descreve **o que existe agora**.
+
+
+## MYCT-4 — implementação proposta (não validada no Fedora)
+
+Branch `myct-4-boot-and-vault`: unidade systemd **de sistema** para Core iniciar no boot como usuário `sam` sem SSH, e CLI **`myct-vault status|unlock`** para GNOME Keyring `login` existente, independente da Narys. Código e instruções no [MYCT-4-BOOT-VAULT.md](MYCT-4-BOOT-VAULT.md). O serviço Core não requer iniciar o PostgreSQL; cofre exige desbloqueio humano via SSH interativo, sem ser endpoint HTTP/ação de agente. Esses arquivos ainda não foram instalados/ativados/testados no Fedora, e a interface GNOME usada é interna/versão fixada. Após prova local, atualizar o estado e só então considerar merge na main. Não modificar dados existentes, sshd ou firewall.
