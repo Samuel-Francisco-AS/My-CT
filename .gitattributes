@@ -2,3 +2,4 @@
 android/gradlew.bat -text whitespace=cr-at-eol
 android/app/src/main/assets/THIRD_PARTY_LICENSES.txt whitespace=-blank-at-eol,-blank-at-eof
 android/terminal/src/main/java/com/termux/view/textselection/TextSelectionCursorController.java whitespace=-blank-at-eol
+android/terminal/upstream/*.patch whitespace=-blank-at-eol

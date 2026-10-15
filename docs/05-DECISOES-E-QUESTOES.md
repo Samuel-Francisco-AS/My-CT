@@ -70,3 +70,24 @@ Kotlin 2.2.20, Compose UI/Foundation 1.9.3 e Material3 1.4.0 compõem a prova.
 
 A arquitetura e a ordem do planejamento inaugural não foram modificadas.
 Critérios, evidências, limites e retomada: [relatório MYCT-1](MYCT-1-ANDROID-SSH-REPORT.md).
+
+## 2026-10-14 — MYCT-1R: continuidade e correções (revisáveis)
+
+**Estado:** implementação corretiva, pendente de aceite físico do novo APK.
+A prova física da MYCT-1 confirmou login/shell e PTY; não confirmou continuidade.
+O motor passa a escopo de processo compartilhado por Activity e serviço opt-in,
+sem credenciais em Intent/armazenamento e sem reconexão ou comandos automáticos.
+Foreground service `specialUse` descreve terminal SSH interativo na propriedade
+de subtipo. Não foram pedidos CHANGE_NETWORK_STATE/CHANGE_WIFI_STATE sem uso
+real para enquadrar connectedDevice, nem usado dataSync/remoteMessaging como
+atalho. Escolha justificada documentalmente; compatibilidade real e política
+Play Store não são declaradas aprovadas. Notificação exigida por esta UX,
+parada explícita, START_NOT_STICKY e ausência de boot/wakelock são limites.
+
+Clipboard manual usa entrada distinta de OSC; captura protegida torna-se
+preferência local. Dois patches mínimos da view upstream estão registrados
+com hashes, sem reimplementar ANSI. tmux 3.7c existente recebe procedimento
+manual de criação/attach no namespace myct; o app apenas exibe/copia comando,
+não o executa ao conectar. Processo remoto e conexão Android são camadas
+separadas. Evidências, limites e retomada no relatório MYCT-1R; plano inaugural
+preservado.

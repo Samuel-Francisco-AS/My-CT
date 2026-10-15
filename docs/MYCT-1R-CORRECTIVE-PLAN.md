@@ -1,7 +1,12 @@
 # MYCT-1R — correção de terminal Android após prova física
 
-**Criado:** 14/10/2026 · **Base observada:** PR #6, commit `8a17bf9` · **Estado:** PLANEJADO, sem código corretivo executado neste registro.
+**Criado:** 14/10/2026 · **Base observada:** PR #6, commit `8a17bf9` · **Estado do registro original:** PLANEJADO, sem código corretivo executado naquele momento.
 **Natureza:** continuação corretiva da MYCT-1; revisável mediante discussão e evidências, sem marco de calendário rígido.
+
+> **Atualização de execução:** correções MYCT-1R implementadas, com build/testes
+> e lint registrados no [relatório corretivo](MYCT-1R-CORRECTION-REPORT.md).
+> Gates físicos permanecem pendentes até execução no Moto G06. O plano e as
+> evidências inaugurais abaixo continuam como histórico e referência revisável.
 
 ## Decisão de escopo
 

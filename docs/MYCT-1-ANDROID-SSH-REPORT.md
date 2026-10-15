@@ -1,5 +1,11 @@
 # MYCT-1 — APK Android e terminal SSH real
 
+> **Registro histórico da MYCT-1. Atualização MYCT-1R:** o proprietário validou
+> no Moto G06 login SSH, ls/cd/pwd, PTY `/dev/pts/3` e `stty size=17 51` com IME
+> aberta. Relatou falhas de layout/clipboard, captura bloqueada e perda de conexão
+> em background. As evidências e limites originais abaixo são preservados;
+> correções e novo APK estão no [relatório MYCT-1R](MYCT-1R-CORRECTION-REPORT.md).
+
 ## Critérios de aceite definidos antes da implementação
 
 1. Build Kotlin/Compose reproduzível pela CLI com Wrapper fixado, Java/SDK existentes e sem emulador.
@@ -121,3 +127,15 @@ Os testes de emulação são JVM, sem renderer/IME Android em execução; não s
 **Retomada mínima:** instalar o APK no Moto G06 por método manual descrito, obter fingerprint por canal confiável e executar o checklist de android/README.md. Registrar resultados físicos no diário antes de aprovar SSH-01/02/03 e AND-01. Confirmar `tty` e `stty size`, `pwd`, `uname -a`, `top`/vi, Ctrl-C/Tab/Esc/setas, teclado/orientação, chave incorreta e desconexão/reconexão. Não ampliar para SFTP ou Core antes de corrigir eventuais falhas centrais do terminal.
 
 O planejamento inaugural não foi reescrito. Branch publicada: `myct-1-android-ssh`. Commit da implementação/testes: `19289c90e7f04c3b63aa1b4d59a7331a15fa7c22`. [PR #6](https://github.com/Samuel-Francisco-AS/My-CT/pull/6) aberto para main em **draft**, com validação física pendente e sem merge automático. O registro desta publicação é um commit documental posterior, sem alteração do APK.
+
+## Continuação corretiva MYCT-1R
+
+O gate físico da MYCT-1 não foi aprovado integralmente. MYCT-1R corrige o fluxo
+manual de clipboard separado de OSC, torna captura uma preferência protegida
+por padrão, ajusta layout/IME/fonte e adiciona foreground service opt-in para
+uma sessão já autenticada. O motor passou do ViewModel para escopo de processo
+compartilhado com o serviço; retorno da UI não cria nova conexão. tmux tem
+procedimento explícito com namespace dedicado e prova local de continuidade
+após fechar PTY. Efeito no Moto, FGS em 5/15 minutos e recuperação após queda
+SSH autenticada continuam sujeitos ao checklist corretivo; não são PASS por
+compilação. Consultar o relatório MYCT-1R para APK/SHA256, testes e publicação.

@@ -3,10 +3,9 @@ package dev.myct
 import android.app.Application
 import androidx.core.content.edit
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
 import com.termux.terminal.KeyHandler
 import com.termux.terminal.TerminalSession
 import kotlinx.coroutines.*
@@ -14,7 +13,12 @@ import kotlinx.coroutines.channels.Channel
 import java.nio.CharBuffer
 import java.nio.charset.StandardCharsets
 
-class TerminalModel(application: Application) : AndroidViewModel(application) {
+/** Process-scoped SSH owner shared by Activity and the opt-in foreground service. */
+class TerminalModel(application: Application) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    var onConnectionStateChanged: (() -> Unit)? = null
+    var backgroundEnabled by mutableStateOf(false)
+        internal set
     enum class Phase { IDLE, CONNECTING, CONNECTED, ENDED, ERROR }
     var phase by mutableStateOf(Phase.IDLE)
         private set
@@ -29,12 +33,25 @@ class TerminalModel(application: Application) : AndroidViewModel(application) {
     var host by mutableStateOf(prefs.getString("last-host", "") ?: "")
     var port by mutableStateOf(prefs.getString("last-port", "22") ?: "22")
     var user by mutableStateOf(prefs.getString("last-user", "") ?: "")
+    var protectScreenshots by mutableStateOf(prefs.getBoolean("protect-capture", true))
+        private set
+    var fontSizeSp by mutableIntStateOf(prefs.getInt("font-size-sp", 12).coerceIn(10, 20))
+        private set
+    val diagnostics = TerminalDiagnostics()
+    fun setCaptureProtection(enabled: Boolean) {
+        protectScreenshots = enabled
+        prefs.edit { putBoolean("protect-capture", enabled) }
+    }
+    fun changeFont(delta: Int) {
+        fontSizeSp = (fontSizeSp + delta).coerceIn(10, 20)
+        prefs.edit { putInt("font-size-sp", fontSizeSp) }
+    }
     private var generation = 0
     private var connection: SshConnection? = null
     private var job: Job? = null
     private var pending: Channel<Action>? = null
     private sealed interface Action {
-        data class Write(val bytes: ByteArray) : Action
+        data class Write(val bytes: ByteArray, val queuedAt: Long = System.nanoTime()) : Action
         data class Resize(val cols: Int, val rows: Int, val width: Int, val height: Int) : Action
     }
     fun pinForHost(): String? = prefs.getString("pin:${host.trim()}:${port.toIntOrNull()}", null)
@@ -53,6 +70,8 @@ class TerminalModel(application: Application) : AndroidViewModel(application) {
     fun sendCtrlC() { ctrl = false; terminal?.write("\u0003") }
 
     fun connect(password: CharArray, newPin: String) {
+        // Reattaching UI or rapid duplicate taps must never create another connection.
+        if (phase == Phase.CONNECTED || phase == Phase.CONNECTING) { password.fill('\u0000'); return }
         val hostname = host.trim()
         val username = user.trim()
         val sshPort = port.toIntOrNull()
@@ -61,7 +80,7 @@ class TerminalModel(application: Application) : AndroidViewModel(application) {
             username.isBlank() || sshPort == null || sshPort !in 1..65535 ||
             !PinnedHostKeys.validFingerprint(expected) || password.isEmpty()) {
             password.fill('\u0000')
-            phase = Phase.ERROR
+            updatePhase(Phase.ERROR)
             message = "Confira endereço, porta (1–65535), usuário, senha e fingerprint SHA256."
             return
         }
@@ -89,9 +108,9 @@ class TerminalModel(application: Application) : AndroidViewModel(application) {
             }
         }, callbacks)
         terminal = screen
-        phase = Phase.CONNECTING
+        updatePhase(Phase.CONNECTING)
         message = "Verificando host e autenticando…"
-        job = viewModelScope.launch {
+        job = scope.launch {
             try {
                 withContext(Dispatchers.IO) { current.connect(hostname, sshPort, username, secret, pins, 80, 24) }
                 if (id != generation) return@launch
@@ -100,16 +119,15 @@ class TerminalModel(application: Application) : AndroidViewModel(application) {
                     putString("last-host", hostname); putString("last-port", "$sshPort")
                     putString("last-user", username)
                 }
-                phase = Phase.CONNECTED
+                updatePhase(Phase.CONNECTED)
                 message = "SSH conectado · host verificado · PTY real"
                 // Apply actual view dimensions even if they were measured before channel.connect().
-                val emulator = screen.emulator
-                queue.trySend(Action.Resize(emulator.mColumns, emulator.mRows, 0, 0))
+                screen.requestPtyResize()
                 coroutineScope {
                     val writer = launch(Dispatchers.IO) {
                         try {
                             for (action in queue) when (action) {
-                                is Action.Write -> { current.output.write(action.bytes); current.output.flush() }
+                                is Action.Write -> { diagnostics.wrote(action.queuedAt); current.output.write(action.bytes); current.output.flush() }
                                 is Action.Resize -> current.resize(action.cols, action.rows, action.width, action.height)
                             }
                         } catch (error: Exception) {
@@ -126,18 +144,22 @@ class TerminalModel(application: Application) : AndroidViewModel(application) {
                                 if (count < 0) break
                                 if (count > 0) {
                                     val chunk = bytes.copyOf(count)
-                                    withContext(Dispatchers.Main) { if (id == generation) screen.append(chunk) }
+                                    val queuedAt = System.nanoTime()
+                                    withContext(Dispatchers.Main) {
+                                        diagnostics.delivered(queuedAt)
+                                        if (id == generation) screen.append(chunk)
+                                    }
                                 }
                             }
                         }
                     } finally { queue.close(); writer.cancel() }
                 }
-                if (id == generation) { phase = Phase.ENDED; message = "Sessão encerrada pelo servidor. Reconecte quando desejar." }
+                if (id == generation) { updatePhase(Phase.ENDED); message = "Sessão encerrada pelo servidor. Reconecte quando desejar." }
             } catch (_: CancellationException) {
                 // Explicit disconnect already supplies the UI state; stale attempts cannot overwrite it.
             } catch (_: Exception) {
                 if (id == generation) {
-                    phase = Phase.ERROR
+                    updatePhase(Phase.ERROR)
                     message = if (pins.rejected) "Chave do host divergente. Conexão recusada antes da autenticação."
                     else if (!pins.verified) "Falha de conexão ou negociação SSH. Confira endereço, rede e fingerprint."
                     else "Falha de autenticação ou conexão interrompida. Confira a senha e reconecte."
@@ -158,14 +180,12 @@ class TerminalModel(application: Application) : AndroidViewModel(application) {
         job?.cancel(); job = null
         terminal?.finish()
         ctrl = false
-        phase = Phase.ENDED
+        updatePhase(Phase.ENDED)
         message = reason
-        if (old != null) viewModelScope.launch(Dispatchers.IO) { old.close() }
+        if (old != null) scope.launch(Dispatchers.IO) { old.close() }
     }
-    override fun onCleared() {
-        // The close task must survive cancellation of viewModelScope.
-        val old = connection
-        if (old != null) Thread({ old.close() }, "myct-ssh-close").start()
-        super.onCleared()
+    private fun updatePhase(value: Phase) {
+        phase = value
+        onConnectionStateChanged?.invoke()
     }
 }

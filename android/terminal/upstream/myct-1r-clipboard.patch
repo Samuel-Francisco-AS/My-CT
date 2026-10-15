@@ -1,0 +1,41 @@
+diff --git a/android/terminal/src/main/java/com/termux/view/TerminalView.java b/android/terminal/src/main/java/com/termux/view/TerminalView.java
+index 351f47a..76da0cf 100644
+--- a/android/terminal/src/main/java/com/termux/view/TerminalView.java
++++ b/android/terminal/src/main/java/com/termux/view/TerminalView.java
+@@ -600,15 +600,8 @@ public final class TerminalView extends View {
+                 if (action == MotionEvent.ACTION_DOWN) showContextMenu();
+                 return true;
+             } else if (event.isButtonPressed(MotionEvent.BUTTON_TERTIARY)) {
+-                ClipboardManager clipboardManager = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+-                ClipData clipData = clipboardManager.getPrimaryClip();
+-                if (clipData != null) {
+-                    ClipData.Item clipItem = clipData.getItemAt(0);
+-                    if (clipItem != null) {
+-                        CharSequence text = clipItem.coerceToText(getContext());
+-                        if (!TextUtils.isEmpty(text)) mEmulator.paste(text.toString());
+-                    }
+-                }
++                // My-CT: explicit mouse paste follows the same confirmation as toolbar paste.
++                if (action == MotionEvent.ACTION_DOWN) mTermSession.requestUserPaste();
+             } else if (mEmulator.isMouseTrackingActive()) { // BUTTON_PRIMARY.
+                 switch (event.getAction()) {
+                     case MotionEvent.ACTION_DOWN:
+diff --git a/android/terminal/src/main/java/com/termux/view/textselection/TextSelectionCursorController.java b/android/terminal/src/main/java/com/termux/view/textselection/TextSelectionCursorController.java
+index 714d56e..6a8c840 100644
+--- a/android/terminal/src/main/java/com/termux/view/textselection/TextSelectionCursorController.java
++++ b/android/terminal/src/main/java/com/termux/view/textselection/TextSelectionCursorController.java
+@@ -136,12 +136,12 @@ public class TextSelectionCursorController implements CursorController {
+                 switch (item.getItemId()) {
+                     case ACTION_COPY:
+                         String selectedText = getSelectedText();
+-                        terminalView.mTermSession.onCopyTextToClipboard(selectedText);
++                        terminalView.mTermSession.copySelectionToClipboard(selectedText);
+                         terminalView.stopTextSelectionMode();
+                         break;
+                     case ACTION_PASTE:
+                         terminalView.stopTextSelectionMode();
+-                        terminalView.mTermSession.onPasteTextFromClipboard();
++                        terminalView.mTermSession.requestUserPaste();
+                         break;
+                     case ACTION_MORE:
+                         // We first store the selected text in case TerminalViewClient needs the

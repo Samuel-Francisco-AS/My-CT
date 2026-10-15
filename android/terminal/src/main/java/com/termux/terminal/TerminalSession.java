@@ -6,6 +6,23 @@ public final class TerminalSession extends TerminalOutput {
         void send(byte[] data);
         void resize(int columns, int rows, int widthPixels, int heightPixels);
     }
+    /** Only explicit Android UI actions may call these methods, never TerminalOutput OSC. */
+    public interface UserClipboard {
+        void copy(String text);
+        void requestPaste();
+    }
+    private UserClipboard userClipboard;
+    public void setUserClipboard(UserClipboard clipboard) { userClipboard = clipboard; }
+    public void clearUserClipboard(UserClipboard expected) {
+        if (userClipboard == expected) userClipboard = null;
+    }
+    public void copySelectionToClipboard(String text) {
+        if (userClipboard != null) userClipboard.copy(text);
+    }
+    public void requestUserPaste() {
+        if (userClipboard != null) userClipboard.requestPaste();
+    }
+    private int columns = 80, rows = 24, cellWidth, cellHeight;
     private final Transport transport;
     private final TerminalSessionClient client;
     private TerminalEmulator emulator;
@@ -17,7 +34,13 @@ public final class TerminalSession extends TerminalOutput {
         emulator = new TerminalEmulator(this, 80, 24, 0, 0, 2000, client);
     }
     public void updateSize(int columns, int rows, int cellWidth, int cellHeight) {
+        if (columns == this.columns && rows == this.rows && cellWidth == this.cellWidth && cellHeight == this.cellHeight) return;
+        this.columns = columns; this.rows = rows;
+        this.cellWidth = cellWidth; this.cellHeight = cellHeight;
         emulator.resize(columns, rows, cellWidth, cellHeight);
+        if (running) transport.resize(columns, rows, columns * cellWidth, rows * cellHeight);
+    }
+    public void requestPtyResize() {
         if (running) transport.resize(columns, rows, columns * cellWidth, rows * cellHeight);
     }
     public void append(byte[] data) {

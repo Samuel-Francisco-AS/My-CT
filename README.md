@@ -2,7 +2,7 @@
 
 **My-CT** é uma iniciativa de infraestrutura pessoal: um servidor Linux doméstico, administrado por um aplicativo Android nativo, capaz de executar tarefas, disponibilizar arquivos e realizar downloads sem depender de uma sessão gráfica.
 
-> **Estado atual (14/10/2026):** inventário registrado e primeira prova Android SSH implementada, com APK debug compilado e validação parcial. Instalação, terminal/teclado e reconexão no Moto G06 ainda exigem evidência física; backend C++, banco, SFTP e downloads permanecem não implementados.
+> **Estado atual (14/10/2026):** inventário registrado, login/shell/PTY do APK SSH comprovados pelo proprietário no Moto G06 e correções MYCT-1R implementadas com novo APK debug. Layout/clipboard, capturas e continuidade Android ainda exigem aceite físico corretivo; backend C++, banco, SFTP e downloads permanecem não implementados.
 
 ## Objetivo
 
@@ -36,6 +36,7 @@ As escolhas específicas de bibliotecas, contratos e divisão de entregas são *
 | [Diário de bordo](docs/07-DIARIO-DE-BORDO.md) | Registro cronológico de decisões, evidências e progresso |
 | [Inventário MYCT-0](docs/MYCT-0-INVENTORY-REPORT.md) | Ambiente observado e bloqueadores |
 | [Prova SSH MYCT-1](docs/MYCT-1-ANDROID-SSH-REPORT.md) | APK, build, testes e validação física pendente |
+| [Correção MYCT-1R](docs/MYCT-1R-CORRECTION-REPORT.md) | IME, clipboard, foreground service e recuperação via tmux |
 | [Build e instalação Android](android/README.md) | CLI, transferência manual e uso do terminal |
 | [Orientações para agentes](AGENTS.md) | Regras de colaboração para Codex e outros agentes |
 
@@ -59,6 +60,6 @@ Estas issues são pontos de acompanhamento **revisáveis**, não marcos com data
 
 ## Ponto de partida
 
-O inventário Fedora foi registrado em MYCT-0. A prova SSH do APK está em MYCT-1; o próximo gate é instalar e validar o terminal no Moto G06. Consultar o [planejamento inaugural](docs/04-PLANEJAMENTO-INAUGURAL.md) antes de abrir frentes adicionais.
+O inventário Fedora foi registrado em MYCT-0. A prova SSH do APK está em MYCT-1; o próximo gate é validar as correções MYCT-1R no Moto G06. Consultar o [planejamento inaugural](docs/04-PLANEJAMENTO-INAUGURAL.md) antes de abrir frentes adicionais.
 
 Os comandos de build e instalação do APK estão em [android/README.md](android/README.md). Preparação e deploy do servidor serão tratados em missões específicas após revisão de dependências e configuração.
