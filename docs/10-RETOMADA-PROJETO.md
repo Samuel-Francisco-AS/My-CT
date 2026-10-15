@@ -1,6 +1,6 @@
-# My-CT — guia de retomada após MYCT-4/4B
+# My-CT — guia de retomada após MYCT-5A
 
-**Atualizado:** 15/10/2026 · **Fonte de verdade MYCT-4:** `main`. MYCT-5A nesta branch/PR permanece em revisão. PRs #10/#11/#12 (MYCT-3) e #13/#14 (MYCT-4/4B) **mesclados**, com aceite físico Fedora/Moto G06.
+**Atualizado:** 15/10/2026 · **Fonte de verdade:** `main` após integração do PR #15. PRs #10–#14 integrados anteriormente; MYCT-5A aceita fisicamente no Fedora/Moto G06.
 **Relatório de fechamento:** [MYCT-4-FECHAMENTO-REPORT.md](MYCT-4-FECHAMENTO-REPORT.md).
 
 ## O que funciona agora
@@ -10,7 +10,7 @@
 - **PostgreSQL:** persistência libpq via cluster dedicado/sockets Unix sem TCP validada na MYCT-3B, mas independente do Dashboard e não iniciada pelo serviço Core. Preservar `~/.local/share/myct/postgres`.
 - **Android:** quatro abas **Terminal | Arquivos | Saúde | Cofre**. O Cofre mostra locked/unlocked/unavailable do GNOME Keyring `login`, solicita desbloqueio humano via PTY SSH secundário privado (a senha não passa pelo Core). Proprietário comprovou desbloqueio real via Moto e **Copilot CLI autenticando** depois com credenciais existentes. `gh auth status` também confirmou acesso via keyring. `myct-vault status|unlock` funciona independentemente da Narys.
 - **Build/testes:** Core 3/3 testes, helper cofre 6/6 após ajuste final (confirmação do proprietário), APK de diagnóstico 48 testes PASS/1 opcional ignorado, lint 0 erros/6 avisos de versões, build assinado compatível com MYCT-3C. Teste real do fluxo de Cofre prevalece sobre simulação.
-- **MYCT-5A (em revisão):** CLI C++20 `myct-download` para HTTP/HTTPS, curl existente, unidades transitórias de usuário e metadados locais sem PostgreSQL. Testes Fedora aprovados; **prova de desconexão SSH/fechamento do app pendente**. Não há binário instalado deste fluxo. [Uso, limites e roteiro de aceite](MYCT-5A-DOWNLOADS-REPORT.md). BitTorrent/magnet e rotinas autônomas continuam não implementados.
+- **MYCT-5A aceita:** CLI C++20 `myct-download` para HTTP/HTTPS, curl existente, unidades transitórias do systemd de usuário e metadados locais sem PostgreSQL. O proprietário confirmou transferência de 262144 bytes após desconectar SSH e fechar o app, com SHA-256 idêntico à fixture. O binário pode ser compilado no checkout; instalação estável no PATH é opcional e não foi feita pelo agente. [Uso e evidências](MYCT-5A-DOWNLOADS-REPORT.md). Torrent/magnet, interface Android dedicada e automações continuam não implementados.
 - **Dívidas Android adiadas:** lag do terminal, fluidez de interface, scroll SFTP que retorna ao topo e teste de transferência em segundo plano — [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9). Não iniciar refinamento sem solicitação.
 
 ## Verificação rápida no Fedora
@@ -56,6 +56,7 @@ Para parar **somente** esse cluster, se ele tiver sido iniciado manualmente: `pg
 
 ## Documentos e histórico
 
+- [MYCT-5A Downloads](MYCT-5A-DOWNLOADS-REPORT.md) — CLI headless, resultados e aceite físico após saída do Android.
 - [MYCT-4 Fechamento](MYCT-4-FECHAMENTO-REPORT.md) — estado conclusivo e evidências.
 - [MYCT-4 Core e helper](MYCT-4-BOOT-VAULT.md) — implementação, correção 203/EXEC e suporte.
 - [MYCT-4B Aba Cofre](MYCT-4B-ANDROID-VAULT.md) — protocolo, diagnóstico `logind`, testes e aceite.
