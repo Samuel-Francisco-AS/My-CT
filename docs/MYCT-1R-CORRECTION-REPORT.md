@@ -250,3 +250,14 @@ registrar hipótese/teste mínimo antes de corrigir; não ampliar para SFTP/Core
 **Publicação:** branch `myct-1-android-ssh`, PR #6 mantido em draft e sem merge.
 Commit da implementação e confirmação de publicação registrados no fechamento
 Git abaixo; SHA documental final também entregue na resposta ao proprietário.
+
+### Fechamento Git
+
+Implementação, testes e documentação corretiva publicados em
+`4e9e1a2532f8f9dba39bba1eed40271ae8ca06a4` na branch `myct-1-android-ssh`.
+[PR #6](https://github.com/Samuel-Francisco-AS/My-CT/pull/6) teve descrição
+atualizada para MYCT-1/1R; conector confirmou **draft=true, merged=false**.
+Este fechamento é commit documental posterior, sem alteração de código/APK;
+o SHA final da branch é informado na entrega e pode ser consultado com
+`git rev-parse HEAD` ou no histórico do PR. Main e planejamento inaugural
+não foram modificados. Aceite físico corretivo continua pendente.
