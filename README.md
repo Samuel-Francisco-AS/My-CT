@@ -36,6 +36,15 @@ As escolhas específicas de bibliotecas, contratos e divisão de entregas são *
 | [Diário de bordo](docs/07-DIARIO-DE-BORDO.md) | Registro cronológico de decisões, evidências e progresso |
 | [Orientações para agentes](AGENTS.md) | Regras de colaboração para Codex e outros agentes |
 
+## Acompanhamento no GitHub
+
+- [#1 — Discussões abertas e revisão de prioridades](https://github.com/Samuel-Francisco-AS/My-CT/issues/1)
+- [#2 — Marco A: inventário Fedora e Core C++/PostgreSQL](https://github.com/Samuel-Francisco-AS/My-CT/issues/2)
+- [#3 — Marco B: APK com SSH real e SFTP](https://github.com/Samuel-Francisco-AS/My-CT/issues/3)
+- [#4 — Marco C: downloads e primeira automação](https://github.com/Samuel-Francisco-AS/My-CT/issues/4)
+
+Estas issues são pontos de acompanhamento **revisáveis**, não marcos com datas imutáveis.
+
 ## Princípios do projeto
 
 1. **Utilidade comprovada antes de complexidade.** A primeira entrega real deve funcionar no Fedora e no aparelho físico.
