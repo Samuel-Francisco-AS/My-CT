@@ -1,61 +1,66 @@
-# My-CT — retomada após MYCT-3C aceita no Moto G06
+# My-CT — guia de retomada após MYCT-4/4B
 
-**Atualizado:** 15/10/2026 · **Fonte de verdade:** `main`; PRs #10, #11 e #12 mesclados.
-Leia [README](../README.md), [relatório MYCT-3C](MYCT-3C-DASHBOARD-REPORT.md), [relatório MYCT-3B](MYCT-3B-POSTGRES-REPORT.md), [operação Core](../server/README.md) e [AGENTS](../AGENTS.md).
+**Atualizado:** 15/10/2026 · **Fonte de verdade:** `main`. PRs #10/#11/#12 (MYCT-3) e #13/#14 (MYCT-4/4B) **mesclados**, com aceite físico Fedora/Moto G06.  
+**Relatório de fechamento:** [MYCT-4-FECHAMENTO-REPORT.md](MYCT-4-FECHAMENTO-REPORT.md).
 
-## Resumo e estado real
+## O que funciona agora
 
-- My-CT é **independente da Narys**. Fedora 44 headless e Moto G06 com app nativo Kotlin/Compose.
-- Android: terminal SSH/PT Y com host verificado, arquivos SFTP/SAF, Dashboard Saúde (CPU/RAM/disco/uptime por túnel SSH, sem polling). A MYCT-3C passou nos testes Android (34 PASS, 1 opcional ignorado), build e lint (0 erros). O proprietário enviou captura do Dashboard real no Moto, confirmou o fluxo e os testes físicos. Hotfix de contraste incluído; [PR #12](https://github.com/Samuel-Francisco-AS/My-CT/pull/12) merge `fd8076321cd32300e2c6305954adc1b134e26d77`.
-- Core C++20: `GET /v1/health` em `127.0.0.1:8765`, comprovado no Fedora; operações CLI libpq registram e consultam eventos no banco PostgreSQL exclusivo por socket Unix privado, sem TCP. PRs #10/#11 também integrados, [relatório de fechamento](MYCT-3AB-FECHAMENTO-REPORT.md).
-- **Core não é serviço permanente:** atualmente `./myct-core` é iniciado manualmente e pode parar com Ctrl-C ou ao encerrar a sessão. **Não há systemd/autostart configurado**. PostgreSQL não é necessário para Saúde; o cluster 3B foi deixado parado ao final do teste, dados preservados. Durante a prova do dashboard o Core foi iniciado manualmente no terminal.
-- Dívidas Android separadas: lag no terminal, UX rígida, scroll SFTP que volta ao topo e validação SFTP em background. [Issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9), não iniciar refinamento por conta própria.
-- Descarga HTTP/torrent executada no servidor e rotinas autônomas ainda não existem.
+- **Independente da Narys:** Fedora 44 headless + Moto G06 com aplicativo Android Kotlin/Compose, sessão SSH real (identidade do host verificada), navegação/transfers SFTP/SAF bidirecionais.
+- **Core C++20 automático:** `myct-core.service` instalado como serviço systemd de sistema, executando `/usr/local/bin/myct-core` como `sam`; GET `127.0.0.1:8765/v1/health` com CPU, RAM, disco e uptime. **Autostart comprovado após `sudo systemctl reboot`**: Dashboard Saúde funcionou sem `./myct-core`. Android acessa endpoint local apenas por túnel SSH, não por API pública.
+- **PostgreSQL:** persistência libpq via cluster dedicado/sockets Unix sem TCP validada na MYCT-3B, mas independente do Dashboard e não iniciada pelo serviço Core. Preservar `~/.local/share/myct/postgres`.
+- **Android:** quatro abas **Terminal | Arquivos | Saúde | Cofre**. O Cofre mostra locked/unlocked/unavailable do GNOME Keyring `login`, solicita desbloqueio humano via PTY SSH secundário privado (a senha não passa pelo Core). Proprietário comprovou desbloqueio real via Moto e **Copilot CLI autenticando** depois com credenciais existentes. `gh auth status` também confirmou acesso via keyring. `myct-vault status|unlock` funciona independentemente da Narys.
+- **Build/testes:** Core 3/3 testes, helper cofre 6/6 após ajuste final (confirmação do proprietário), APK de diagnóstico 48 testes PASS/1 opcional ignorado, lint 0 erros/6 avisos de versões, build assinado compatível com MYCT-3C. Teste real do fluxo de Cofre prevalece sobre simulação.
+- **Não entregues:** downloads HTTP(S), BitTorrent/magnet e rotinas autônomas. Não assumir implementados.
+- **Dívidas Android adiadas:** lag do terminal, fluidez de interface, scroll SFTP que retorna ao topo e teste de transferência em segundo plano — [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9). Não iniciar refinamento sem solicitação.
 
-## Como verificar no Fedora (sem reinicializar o banco)
+## Verificação rápida no Fedora
 
 ```sh
 cd ~/Projetos/My-CT
 git switch main
 git pull --ff-only origin main
-cd server
-make test
-./myct-core --once
+make -C server test
+python3 -m unittest discover -s ops/tests -v
+systemctl is-enabled myct-core.service
+systemctl is-active myct-core.service
+curl -fsS http://127.0.0.1:8765/v1/health
+~/.local/bin/myct-vault status
 ```
 
-Para consultar o registro preservado, **somente se necessário** iniciar o cluster dedicado, já inicializado, sem `initdb`, `createdb` nem executar novamente a migração:
+`status` do cofre depois do reboot pode retornar `locked`: isso é **esperado** e não impede a Saúde. Para desbloquear, o proprietário usa a **aba Cofre** no Android conectado via SSH, ou `~/.local/bin/myct-vault unlock` manualmente em SSH interativo privado. Não pedir senha por chat, logs ou agentes. O GNOME Keyring não é desbloqueado no boot.
+
+**Importante:** o binário em `server/myct-core` do checkout **não** é o binário instalado em `/usr/local/bin/myct-core`. Se for compilada atualização futura, é necessário planejar instalação controlada e restart do systemd; não iniciar `./myct-core` em paralelo com o serviço ativo (porta 8765). O helper instalado em `~/.local/bin/myct-vault` também é cópia separada, que só muda com `install -m 0700`. Instalação original e correção SELinux: [MYCT-4](MYCT-4-BOOT-VAULT.md).
+
+## Banco PostgreSQL preservado
+
+Para consultar registro histórico **somente se necessário**, iniciar o cluster dedicado já existente, sem `initdb`, `createdb` ou reaplicar migrations:
 
 ```sh
 export MYCT_PGROOT="$HOME/.local/share/myct/postgres"
 export MYCT_PGSOCKET="$MYCT_PGROOT/run"
-pg_ctl -D "$MYCT_PGROOT/data" -l "$MYCT_PGROOT/postgres.log" \
+pg_ctl -D "$MYCT_PGROOT/data" -l "$MYCT_PGROOT/postgres.log" \\
   -o "-k '$MYCT_PGSOCKET'" -w start
+cd ~/Projetos/My-CT/server
 ./myct-core --get-event 2
 ```
 
-Para API local em teste manual, executar `./myct-core` e em outra sessão SSH `curl -fsS http://127.0.0.1:8765/v1/health`; sair com Ctrl-C. Para parar **somente** o cluster deste projeto: `pg_ctl -D "$MYCT_PGROOT/data" -m fast -w stop`. Procedimentos completos (instalação, build, backup, recuperação, variáveis) em [server/README.md](../server/README.md). Não apagar, reinicializar nem reaplicar migração no diretório existente.
+Para parar **somente** esse cluster, se ele tiver sido iniciado manualmente: `pg_ctl -D "$MYCT_PGROOT/data" -m fast -w stop`. Os arquivos e operações de banco devem ser preservados e seguir [server/README.md](../server/README.md).
 
-## Próxima necessidade operacional: systemd para o Core
+## Limites de operação e segurança
 
-O proprietário perguntou por que precisa executar `./myct-core`: não há serviço gerenciado nem início automático. **Próximo recorte sugerido**: configurar unidade systemd proporcional (de usuário, se adequadamente persistente, ou de sistema com usuário não privilegiado), inicialização no boot, restart controlado, logs simples, bind somente loopback e procedimento de stop/rollback. **Solicitar autorização explícita antes de modificar serviços/configurações do Fedora**; não iniciar PostgreSQL automaticamente apenas para Dashboard. Validar reboot no Fedora real antes de declarar operação contínua aprovada.
+- O helper usa a interface interna **não suportada** do GNOME Keyring com verificação do daemon/hash compatível. Atualizações do Fedora/GNOME podem requerer nova análise. Não apagar cofre, contornar hash ou reinicializar coleção para corrigir compatibilidade.
+- O desbloqueio da coleção `login` **não concede acesso seletivo por agente**; processos do mesmo usuário Linux compartilham o domínio de acesso do Secret Service. Senha não é persistida pelo My-CT e não é passada ao serviço Core.
+- Evitar alterar SSHD, firewall, SELinux, contas, banco, GNOME Keyring ou Narys sem autorização. API Saúde continua em loopback; acessos remotos via SSH. Não forçar testes destrutivos ou refazer aceitações físicas sem motivo.
+- Limite de hardware: Fedora headless, i7-3770, cerca de 8 GiB RAM e sem GPU dedicada. Propor implementações proporcionais ao objetivo de uso pessoal/portfólio, não padrões comerciais sem demanda.
+- Interfaces devem permanecer responsivas e suportar retorno ao aparelho; dívidas UX estão documentadas, mas não confundidas com a entrega MYCT-4.
 
-Outro assunto aberto para discussão, distinto do systemd: mecanismo nativo My-CT para desbloquear/usar credenciais do cofre sem depender de Narys. Ainda não há requisitos aprovados ou implementação; distinguir desbloqueio do cofre de autorização de acesso a segredos pelos agentes.
+## Documentos e histórico
 
-## Fases posteriores e limites
+- [MYCT-4 Fechamento](MYCT-4-FECHAMENTO-REPORT.md) — estado conclusivo e evidências.
+- [MYCT-4 Core e helper](MYCT-4-BOOT-VAULT.md) — implementação, correção 203/EXEC e suporte.
+- [MYCT-4B Aba Cofre](MYCT-4B-ANDROID-VAULT.md) — protocolo, diagnóstico `logind`, testes e aceite.
+- [MYCT-3A/3B Fechamento](MYCT-3AB-FECHAMENTO-REPORT.md), [MYCT-3C Dashboard](MYCT-3C-DASHBOARD-REPORT.md) — implementações anteriores.
+- [Trilha refinamento Android](09-TRILHA-REFINAMENTO-ANDROID.md), [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9).
+- [README](../README.md) e [AGENTS.md](../AGENTS.md).
 
-- **Após 3C:** operação/autostart por systemd somente com autorização; downloads HTTP(S) Fedora, depois torrent/magnet legal, tarefas independentes, ainda não implementados.
-- **Refinamento da UI Android:** adiado, uma dívida por vez, [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9).
-- **Hardware:** Fedora 44 headless, i7-3770, 7,6 GiB RAM, SSD 223,6 GiB, Moto G06, sem monitor; preservar recursos. Dados de RAM/disco do inventário original são snapshots.
-- **Regras:** sem segredos no Git/log, sem `sudo`, SSH/firewall/Narys/outros clusters alterados sem autorização, sem force push/rebase destrutivo nem merge automático; custo proporcional à utilidade. O servidor não deve depender de agentes/LLMs para operar.
-
-Documento histórico da fase Android: [08](08-FECHAMENTO-CICLO-ANDROID.md); limites de UX: [09](09-TRILHA-REFINAMENTO-ANDROID.md). Mudanças futuras devem preservar a sequência de decisões, mas este guia descreve **o que existe agora**.
-
-
-## MYCT-4 — implementação proposta (não validada no Fedora)
-
-Branch `myct-4-boot-and-vault`: unidade systemd **de sistema** para Core iniciar no boot como usuário `sam` sem SSH, e CLI **`myct-vault status|unlock`** para GNOME Keyring `login` existente, independente da Narys. Código e instruções no [MYCT-4-BOOT-VAULT.md](MYCT-4-BOOT-VAULT.md). O serviço Core não requer iniciar o PostgreSQL; cofre exige desbloqueio humano via SSH interativo, sem ser endpoint HTTP/ação de agente. Esses arquivos ainda não foram instalados/ativados/testados no Fedora, e a interface GNOME usada é interna/versão fixada. Após prova local, atualizar o estado e só então considerar merge na main. Não modificar dados existentes, sshd ou firewall.
-
-
-## MYCT-4B — UI Cofre candidata
-
-Branch `myct-4b-android-vault` derivada de `myct-4-boot-and-vault`. Adiciona aba Cofre no Android por canais SSH autenticados, status e desbloqueio com senha efêmera digitada pelo humano em um PTY privado; não expõe segredos. **Sem build/aceite físico até agora, sem merge.** Consultar [MYCT-4B](MYCT-4B-ANDROID-VAULT.md) e validar dependência de `myct-vault` instalado no Fedora. O PR MYCT-4 #13 permanece pré-requisito; a implementação Android não comprova esse unlock em celular sem teste físico.
+O trabalho das branches `myct-4-boot-and-vault` e `myct-4b-android-vault` está integrado à `main`. A exclusão das branches Git não remove o serviço Fedora instalado, o APK, o banco ou o cofre.
