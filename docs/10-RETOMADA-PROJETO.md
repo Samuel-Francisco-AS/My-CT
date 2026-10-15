@@ -48,3 +48,8 @@
 - Nenhum token/senha/chave privada no Git; não mexer em Narys, outros serviços, SSH/firewall/postgres global ou pastas pessoais sem autorização.
 - Padrão de engenharia acordado: **prova funcional primeiro, mínimo de arquitetura**, testes/controles proporcionais, sem transformar portfólio/servidor pessoal em sistema comercial de alto tráfego.
 - Histórico e critérios: `docs/MYCT-*.md`, `docs/07-DIARIO-DE-BORDO.md`, [decisões](05-DECISOES-E-QUESTOES.md), [AGENTS.md](../AGENTS.md).
+
+
+## Integração final verificada (15/10/2026)
+
+Todos os PRs do ciclo foram mesclados em `main`: #6 → `ebe0773`, #7 → `58fcf7a`, #8 → `e031998`. Histórico preservado; [relatório de fechamento com SHAs integrais](08-FECHAMENTO-CICLO-ANDROID.md). Este registro documental posterior foi feito diretamente na `main`. As branches `myct-1-android-ssh`, `myct-2-sftp`, `myct-2r-sftp-stability` podem ser excluídas após sincronização local, sem apagar a implementação já mesclada. O refinamento continua registrado na issue #9 e não está implementado.

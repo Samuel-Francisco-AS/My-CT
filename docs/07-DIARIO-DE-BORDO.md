@@ -135,3 +135,12 @@
 - **Artefatos documentais:** `docs/08-FECHAMENTO-CICLO-ANDROID.md`, `docs/09-TRILHA-REFINAMENTO-ANDROID.md`, `docs/10-RETOMADA-PROJETO.md`; [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9). Próxima conversa pode retomar a partir da main sem depender desta conversa.
 - **Próxima frente recomendada:** Core C++20/PostgreSQL + saúde real no servidor; pesquisar dependências atuais, obter aprovação para instalar/configurar serviços, entregar um fluxo vertical mínimo. O refinamento permanece backlog, sem datas e sem implementação neste fechamento.
 - **SHAs dos merges:** registrar na seção de integração do fechamento após retorno efetivo do GitHub, sem inventar resultados.
+
+
+### 2026-10-15 — confirmação dos merges na main e encerramento administrativo
+- **PR #6 (SSH/terminal)**: merge confirmado `ebe077307ae788d62d99ef0192922d86182232bf`.
+- **PR #7 (SFTP/SAF)**: retargetado de `myct-1-android-ssh` para `main` após #6; merge confirmado `58fcf7a574d624125f9933999e7c55f965ac4521`.
+- **PR #8 (MYCT-2R + relatórios)**: retargetado de `myct-2-sftp` para `main` após #7; merge confirmado `e031998116c65ab722c4a633d62574fc778571a9`.
+- **Documentação incorporada:** relatório de fechamento, backlog de refinamento, handoff, README/requisitos/decisões/planejamento/diário e instruções Android revisadas. [Issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9) mantém as dívidas conscientemente adiadas.
+- **Validade do aceite:** fluxo feliz PDF nos dois sentidos e terminal/SFTP reais no Moto; background de transferências, cancelamento/conflitos adversos e UX/lag/scroll permanecem pendentes. Merge não é aprovação desses cenários.
+- **Reinício do trabalho:** criar branch nova de `origin/main`; consultar `docs/10-RETOMADA-PROJETO.md`. Remoção de branches remotas é operação posterior, mediante comandos entregues ao proprietário.

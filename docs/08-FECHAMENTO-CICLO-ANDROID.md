@@ -112,4 +112,13 @@ O relatório MYCT-0 observou CMake/PostgreSQL e ferramentas de desenvolvimento a
 
 ## 8. Registro de integração na main
 
-*A preencher com SHAs efetivamente retornados pelo GitHub ao integrar #6, #7 e #8; não presumir merge bem-sucedido antes da confirmação.*
+**Integração confirmada pelo GitHub em 15/10/2026**, por commits de merge não-squash, mantendo os históricos:
+
+| Ordem | PR original | Base de merge | SHA confirmado | Resultado |
+| --- | --- | --- | --- | --- |
+| 1 | [#6 — SSH/terminal](https://github.com/Samuel-Francisco-AS/My-CT/pull/6) | `main` | `ebe077307ae788d62d99ef0192922d86182232bf` | **merged=true** |
+| 2 | [#7 — SFTP/SAF](https://github.com/Samuel-Francisco-AS/My-CT/pull/7) | PR retargetado de `myct-1-android-ssh` para `main` após #6 | `58fcf7a574d624125f9933999e7c55f965ac4521` | **merged=true** |
+| 3 | [#8 — MYCT-2R + fechamento](https://github.com/Samuel-Francisco-AS/My-CT/pull/8) | PR retargetado de `myct-2-sftp` para `main` após #7 | `e031998116c65ab722c4a633d62574fc778571a9` | **merged=true** |
+
+O conteúdo das três etapas está na **branch `main`**, cujo HEAD era `e031998116c65ab722c4a633d62574fc778571a9` imediatamente após os merges. Este próprio registro final foi adicionado em commit documental posterior na `main` (consultar `git log -1`). Não houve rebase forçado, deploy ou mudança do serviço Fedora. Branches antigas podem ser removidas depois que o proprietário sincronizar seu ambiente local, **mas não são necessárias para retomar o projeto**.
+
