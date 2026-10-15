@@ -2,7 +2,7 @@
 
 **My-CT** é uma iniciativa de infraestrutura pessoal: um servidor Linux doméstico, administrado por um aplicativo Android nativo, capaz de executar tarefas, disponibilizar arquivos e realizar downloads sem depender de uma sessão gráfica.
 
-> **Estado em 15/10/2026 — MYCT-3A/3B/3C integradas e comprovadas no Fedora/Moto G06:** Core C++20 fornece CPU/RAM/disco/uptime em `127.0.0.1:8765`; PostgreSQL local/libpq comprovou persistência. App Android nativo possui **Terminal | Arquivos | Saúde**, com métricas reais via túnel da sessão SSH autenticada. A MYCT-3C recebeu correção de contraste e foi aprovada fisicamente pelo proprietário; [PR #12](https://github.com/Samuel-Francisco-AS/My-CT/pull/12) integrada à main. **Core ainda iniciado manualmente por `./myct-core`**, sem systemd/autostart; banco independente da saúde. Downloads e automações não implementados. Lag, UX/scroll SFTP e prova background continuam adiados na [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9). [Relatório 3C](docs/MYCT-3C-DASHBOARD-REPORT.md) · [Retomada](docs/10-RETOMADA-PROJETO.md).
+> **Estado em 15/10/2026 — MYCT-4/4B integradas e validadas no Fedora e Moto G06.** Core C++20 iniciado automaticamente pelo systemd e comprovado após reboot; Saúde Android funciona por túnel SSH sem início manual; PostgreSQL local é independente. App Android nativo com **Terminal | Arquivos | Saúde | Cofre** e transferências bidirecionais SFTP. A aba Cofre consulta o GNOME Keyring `login` e permite desbloqueio humano em canal SSH/PTY separado. Proprietário comprovou desbloqueio no Moto e Copilot CLI autenticado por credenciais existentes. [PR #13](https://github.com/Samuel-Francisco-AS/My-CT/pull/13) e [PR #14](https://github.com/Samuel-Francisco-AS/My-CT/pull/14) mesclados. Downloads/rotinas autônomas ainda não existem; lag, UX/scroll SFTP e prova em background seguem adiados na [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9). [Relatório de fechamento MYCT-4](docs/MYCT-4-FECHAMENTO-REPORT.md) · [Guia de retomada](docs/10-RETOMADA-PROJETO.md).
 
 ## Objetivo
 
@@ -41,10 +41,13 @@ As escolhas específicas de bibliotecas, contratos e divisão de entregas são *
 | [Correção MYCT-2R](docs/MYCT-2R-CORRECTION-REPORT.md) | Isolamento SFTP, conclusão, background dataSync, tamanhos e testes |
 | [Fechamento do ciclo Android](docs/08-FECHAMENTO-CICLO-ANDROID.md) | Histórico, evidências físicas, limitações e estado de aceite |
 | [Trilha de refinamento](docs/09-TRILHA-REFINAMENTO-ANDROID.md) | Lag, scroll SFTP, UX, validações em background e demais dívidas adiadas |
-| [Guia de retomada](docs/10-RETOMADA-PROJETO.md) | Ponto de partida atualizado: MYCT-3C, saúde real no Moto |
+| [Guia de retomada](docs/10-RETOMADA-PROJETO.md) | Estado atual do Core systemd, Cofre Android e continuidade |
 | [Core/PostgreSQL MYCT-3B](docs/MYCT-3B-POSTGRES-REPORT.md) | Evidência Fedora: build, banco, isolamento, consumo e recuperação |
 | [Fechamento MYCT-3A/3B](docs/MYCT-3AB-FECHAMENTO-REPORT.md) | PRs #10/#11, SHAs, provas e pendências |
 | [Dashboard MYCT-3C](docs/MYCT-3C-DASHBOARD-REPORT.md) | Implementação, testes, APK e roteiro físico pendente |
+| [Fechamento MYCT-4/4B](docs/MYCT-4-FECHAMENTO-REPORT.md) | Prova de reboot, cofre pelo Moto e Copilot CLI, integrações e dívidas |
+| [MYCT-4 Core e cofre](docs/MYCT-4-BOOT-VAULT.md) | Serviço systemd, helper e instalação local |
+| [MYCT-4B Android](docs/MYCT-4B-ANDROID-VAULT.md) | Protocolo SSH PTY, testes, diagnósticos e aceite físico |
 | [Build e instalação Android](android/README.md) | CLI, transferência manual e uso do terminal |
 | [Orientações para agentes](AGENTS.md) | Regras de colaboração para Codex e outros agentes |
 
@@ -67,10 +70,14 @@ Estas issues são pontos de acompanhamento **revisáveis**, não marcos com data
 5. **Interfaces substituíveis.** O app Android não deve ser necessário para o backend continuar operando.
 6. **Planejamento vivo.** Reordenar, reduzir ou discutir escopo é permitido e esperado; alterações materiais devem ser documentadas.
 
-## MYCT-4 — proposta em branch, não implantada
+## MYCT-4/4B — Core autostart e cofre Android aceitos
 
-A branch `myct-4-boot-and-vault` prepara **systemd para iniciar o Core no boot** e um **comando My-CT próprio para consultar/desbloquear o GNOME Keyring login existente pelo SSH**, sem dependência de runtime da Narys. O serviço não precisa de PostgreSQL e o desbloqueio do cofre não é automático nem entregue aos agentes. **Ainda não foi instalado nem testado no Fedora do proprietário.** Comandos, limites e reversão: [MYCT-4 — operação e cofre](docs/MYCT-4-BOOT-VAULT.md).
+O Core roda como `myct-core.service` em `/usr/local/bin/myct-core`; o proprietário comprovou o Dashboard Saúde funcionando após reboot real do Fedora. O GNOME Keyring `login` é desbloqueado manualmente pela aba Cofre, com senha digitada apenas pelo usuário no Moto G06 e autenticação SSH/PTY privada. O Copilot CLI conseguiu utilizar credenciais existentes depois do desbloqueio. Nenhum código do My-CT depende da Narys.
+
+**Operação:** conectar Android via SSH, abrir Saúde ou Cofre. O Core **não** precisa ser iniciado manualmente. O cofre **não** é desbloqueado automaticamente. O banco PostgreSQL permanece independente.
+
+Os PRs #13 e #14 foram mesclados à `main`. [Relatório final](docs/MYCT-4-FECHAMENTO-REPORT.md) · [Instruções de retomada](docs/10-RETOMADA-PROJETO.md).
 
 ## Ponto de partida
 
-MYCT-3C foi comprovada no Moto G06 e integrada à `main` após corrigir o contraste. Próxima conversa operacional: **serviço systemd para iniciar e manter o Core automaticamente**, somente após autorização do proprietário; manter API em loopback, acesso Android por SSH e banco independente (não iniciar PostgreSQL desnecessariamente para telemetria). Operação atual em [server/README.md](server/README.md). A questão de **acesso autorizado ao cofre sem depender da Narys** é assunto separado para discussão, ainda não projetado ou implementado. A [trilha de refinamento Android](docs/09-TRILHA-REFINAMENTO-ANDROID.md) continua adiada.
+As próximas funcionalidades de downloads HTTP(S), torrent/magnet e rotinas servidor-side continuam **não implementadas**. O refinamento Android (lag, navegação, scroll SFTP e transferência em segundo plano) é uma trilha separada, adiada na [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9); não iniciar por conta própria. Priorizar um fluxo útil por vez e preservar serviços, dados e credenciais existentes.
