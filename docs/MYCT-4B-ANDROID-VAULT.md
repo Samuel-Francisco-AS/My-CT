@@ -181,3 +181,16 @@ Conferir cancelamento antes de digitar, retorno do segundo plano com campo
 vazio e senha ausente do histórico do terminal principal. Não capturar a senha
 em screenshots/logs nem compartilhá-la com agentes. Falha de TTY/logind é
 bloqueio a diagnosticar, não autorização para enfraquecer o helper.
+
+
+## Prova física pós-reboot e diagnóstico de desbloqueio — 15/10/2026
+
+O proprietário instalou `myct-4b-debug.apk` e executou `sudo systemctl reboot` no Fedora. **Comprovou Core systemd após boot:** a aba Saúde voltou a consultar telemetria sem precisar executar `./myct-core`. **Comprovou a consulta GNOME real pelo Android:** a aba Cofre identificou corretamente a coleção `login` bloqueada após o boot.
+
+**Bloqueio atual:** ao tocar **Desbloquear**, o Android exibiu a mensagem genérica de erro antes de qualquer sucesso. Não houve comprovação de que a senha foi solicitada, escrita ou rejeitada. A hipótese é recusa do terminal SSH secundário pelas regras TTY/logind de `myct-vault`, mas falha de protocolo/abertura do canal também é possível. Não afrouxar o helper, nem pedir senha/log PTY à IA.
+
+**Hotfix de diagnóstico publicado na branch após o APK 1429ece:** `VaultUnlockChannel` extrai exclusivamente o campo `error_code` do JSON de recusa já sanitizado pelo `myct-vault`, e `VaultModel` mostra código seguro na aba. Erros de timeout e de canal/protocolo ganham códigos distintos. Nenhum stdout/stderr bruto, senha ou item do cofre aparece na interface. Um teste sintético verifica a recusa antes do prompt e que nenhum byte de senha é escrito.
+
+**Status:** hotfix apenas em fonte. O APK instalado no Moto é anterior ao diagnóstico. Necessário o Codex sincronizar esta branch, rodar `assembleDebug/testDebugUnitTest/lintDebug` (sem substituir testes existentes), gerar **novo** `artifacts/myct-4b-debug.apk` e checksum, conferir assinatura, publicar PR draft **sem merge**. Reinstalar como atualização, conectar SSH e tocar Desbloquear **uma vez sem digitar senha**; anotar exclusivamente o código mostrado. Se for `authenticated_ssh_session_required`, `interactive_ssh_shell_required` ou outro, corrigir a causa concreta sem desativar verificações do cofre. Se for `ssh_channel_or_protocol_error` ou `ssh_prompt_timeout`, examinar especificamente protocolo/PTY, ainda sem lidar com senha.
+
+Não é necessário reiniciar Fedora novamente para o diagnóstico enquanto o cofre continuar bloqueado.
