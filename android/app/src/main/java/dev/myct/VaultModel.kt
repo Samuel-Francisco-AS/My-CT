@@ -8,10 +8,11 @@ import java.nio.CharBuffer
 import java.nio.charset.StandardCharsets
 
 enum class VaultPhase {
-    NO_SSH, IDLE, CHECKING, LOCKED, UNLOCKED, UNAVAILABLE, PREPARING, PASSWORD, UNLOCKING, INPUT_REJECTED, ERROR
+    NO_SSH, IDLE, CHECKING, LOCKED, UNLOCKED, UNAVAILABLE, PREPARING, PASSWORD, UNLOCKING, INPUT_REJECTED, DENIED, ERROR
 }
 
-data class VaultViewState(val phase: VaultPhase = VaultPhase.NO_SSH, val compatible: Boolean = false) {
+data class VaultViewState(val phase: VaultPhase = VaultPhase.NO_SSH, val compatible: Boolean = false,
+                          val diagnostic: String? = null) {
     val message: String get() = when (phase) {
         VaultPhase.NO_SSH -> "Conecte ao Fedora pela aba Terminal para consultar o cofre."
         VaultPhase.IDLE -> "SSH conectado. Consulte o estado do cofre."
@@ -24,6 +25,7 @@ data class VaultViewState(val phase: VaultPhase = VaultPhase.NO_SSH, val compati
         VaultPhase.PASSWORD -> "Digite a senha do cofre login."
         VaultPhase.UNLOCKING -> "Desbloqueando cofre…"
         VaultPhase.INPUT_REJECTED -> "Senha não enviada: caracteres de controle ou mais de 4095 bytes não são aceitos neste terminal. Consulte o estado antes de tentar novamente."
+        VaultPhase.DENIED -> "Desbloqueio recusado antes da senha. Código: ${diagnostic ?: "unlock_helper_refused"}. Nenhuma senha foi enviada."
         VaultPhase.ERROR -> "Não foi possível consultar ou desbloquear. Confira myct-vault no Fedora."
     }
     val busy get() = phase in setOf(VaultPhase.CHECKING, VaultPhase.PREPARING, VaultPhase.UNLOCKING)
@@ -101,6 +103,9 @@ class VaultModel internal constructor(
                     state = VaultViewState(VaultPhase.IDLE)
                     refresh()
                 }
+            } catch (denial: VaultUnlockDenied) {
+                attempt.close()
+                if (id == generation) state = VaultViewState(VaultPhase.DENIED, diagnostic = denial.safeCode)
             } catch (_: TimeoutCancellationException) {
                 attempt.close()
                 if (id == generation) state = VaultViewState(VaultPhase.ERROR)
