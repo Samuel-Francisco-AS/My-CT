@@ -297,6 +297,10 @@ Prova de subsistema OpenSSH local, sem autenticação/porta, na raiz:
 `python android/diagnostics/sftp-subsystem-proof.py` (gera só temporários próprios).
 
 
-## MYCT-4B — aba Cofre (em desenvolvimento)
+## MYCT-4B — aba Cofre (aceita no Moto G06)
 
-A branch `myct-4b-android-vault` acrescenta a aba **Cofre** ao lado de Terminal, Arquivos e Saúde. Após conectar SSH, apresenta o estado do GNOME Keyring `login`; se bloqueado e compatível, o usuário pode solicitar desbloqueio e digitar a senha em campo temporário. A operação utiliza um canal PTY SSH separado, com as verificações humanas já existentes no `myct-vault`; nenhuma senha é enviada ao Core ou a agentes. **Ainda não foi compilada/testada no Moto nesta branch**. Validação e riscos: [MYCT-4B](../docs/MYCT-4B-ANDROID-VAULT.md). 
+O aplicativo possui **Terminal | Arquivos | Saúde | Cofre**. Com SSH conectado, a aba Cofre consulta se a coleção `login` do GNOME Keyring está bloqueada ou desbloqueada; se estiver bloqueada e compatível, o botão **Desbloquear** abre um canal PTY SSH separado e solicita senha temporária somente após o prompt seguro do `myct-vault`. O helper preserva verificação humana de sessão remota `sshd` e reconhecimento controlado do PTY secundário; nenhuma senha passa pelo Core ou por agentes.
+
+**Aceite físico em 15/10/2026:** proprietário instalou o APK atualizado sobre MYCT-3C, comprovou consulta de estado locked após reboot do Fedora, desbloqueou com sucesso pelo Moto G06 e utilizou credenciais do cofre para autenticar o Copilot CLI. PRs #13 e #14 mesclados à `main`. Não é necessário recompilar/instalar APK para consultas normais.
+
+O desbloqueio **não** é automático depois do reboot. Para operar, conectar Android via SSH, abrir Cofre, consultar estado e desbloquear quando for necessário. [Fechamento MYCT-4/4B](../docs/MYCT-4-FECHAMENTO-REPORT.md) · [Detalhes do protocolo e limites](../docs/MYCT-4B-ANDROID-VAULT.md).
