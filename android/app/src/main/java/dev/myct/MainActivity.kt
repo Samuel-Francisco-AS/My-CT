@@ -81,7 +81,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         applyCaptureProtection(model.protectScreenshots)
-        setContent { MaterialTheme(colorScheme = darkColorScheme()) { TerminalApp(model) } }
+        setContent {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                // Surface supplies the correct onBackground content color to plain Text components.
+                Surface(color = MaterialTheme.colorScheme.background) { TerminalApp(model) }
+            }
+        }
     }
     fun applyCaptureProtection(enabled: Boolean) {
         if (enabled) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
