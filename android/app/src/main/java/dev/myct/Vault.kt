@@ -114,5 +114,5 @@ internal fun readVaultStatus(input: InputStream, maximum: Int = 4096): VaultStat
         require(bytes.size() + count <= maximum) { "Vault metadata too large" }
         bytes.write(buffer, 0, count)
     }
-    return VaultStatus.parse(bytes.toString(StandardCharsets.UTF_8))
+    return VaultStatus.parse(String(bytes.toByteArray(), StandardCharsets.UTF_8))
 }
