@@ -1,6 +1,5 @@
 package dev.myct
 
-import com.jcraft.jsch.ChannelExec
 import com.jcraft.jsch.ChannelShell
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -52,13 +51,10 @@ internal class VaultUnlockChannel(
         val command = "\"\$HOME/.local/bin/myct-vault\" unlock; printf '\\nMYCT-VAULT-DONE:%d\\n' \"\$?\"\n"
         output.write(command.toByteArray(StandardCharsets.US_ASCII))
         output.flush()
-        val text = readUntilAny(
-            listOf(PROMPT, "MYCT-VAULT-DONE:0", "MYCT-VAULT-DONE:1"),
-            8192
-        )
+        val text = readUntilSignal(allowPrompt = true)
         return when {
-            PROMPT in text -> true
-            "MYCT-VAULT-DONE:0" in text -> false // already unlocked
+            text.endsWith(PROMPT) -> true
+            exitCode(text) == 0 -> false // already unlocked
             else -> error("Unlock terminal refused or helper unavailable")
         }
     }
@@ -76,21 +72,25 @@ internal class VaultUnlockChannel(
     /** Only exit status leaves this object; all terminal output is discarded. */
     fun awaitCompletion(): Boolean {
         check(finished)
-        val text = readUntilAny(listOf("MYCT-VAULT-DONE:0", "MYCT-VAULT-DONE:1"), 8192)
-        return "MYCT-VAULT-DONE:0" in text
+        return exitCode(readUntilSignal(allowPrompt = false)) == 0
     }
 
-    private fun readUntilAny(markers: List<String>, maximum: Int): String {
+    private fun readUntilSignal(allowPrompt: Boolean, maximum: Int = 8192): String {
         val chars = StringBuilder()
         repeat(maximum) {
             val next = input.read()
             if (next < 0) error("SSH unlock terminal closed")
-            // All protocol markers are ASCII, irrespective of locale/output text.
+            // Protocol markers are ASCII; unrelated terminal output is never shown/logged.
             chars.append(next.toChar())
-            if (markers.any { chars.endsWith(it) }) return chars.toString()
+            if ((allowPrompt && chars.endsWith(PROMPT)) || EXIT_REGEX.containsMatchIn(chars)) {
+                return chars.toString()
+            }
         }
-        error("SSH unlock prompt exceeded limit")
+        error("SSH unlock response exceeded limit")
     }
+
+    private fun exitCode(reply: String): Int? =
+        EXIT_REGEX.find(reply)?.groupValues?.get(1)?.toIntOrNull()
 
     override fun close() {
         runCatching { shell.disconnect() }
@@ -99,6 +99,7 @@ internal class VaultUnlockChannel(
 
     companion object {
         private const val PROMPT = "Senha do cofre login (SSH privado, sem eco): "
+        private val EXIT_REGEX = Regex("MYCT-VAULT-DONE:([0-9]+)\\\\r?\\\\n$")
     }
 }
 
