@@ -40,3 +40,14 @@
 - **Riscos e pendências:** terminal SSH/PTTY Android exige prova física; toolchain de backend e Gradle incompletas; configuração de segurança de SSH/firewall não inspecionada; medir pressão de RAM/disco e política de armazenamento/backup.
 - **Decisões alteradas:** nenhuma. Planejamento inaugural não foi reescrito; recomendações permanecem não vinculantes.
 - **Próximo menor passo útil:** MYCT-1, prova de build Android CLI e SSH/PTTY real no Moto G06, conforme critérios no relatório.
+
+### 2026-10-14 — MYCT-1 APK e terminal SSH (validação parcial)
+- **Objetivo:** entregar a primeira prova Android Kotlin/Compose de terminal SSH real, sem backend ou alterações de serviços do Fedora.
+- **Alterações/commits/issues:** branch `myct-1-android-ssh` baseada em MYCT-0; novo projeto `android/`, Wrapper, testes, módulos de terminal/licenças, relatório MYCT-1 e instruções de build/instalação. README e escolhas experimentais em docs/05 atualizados; planejamento inaugural preservado.
+- **Ambiente e versões:** JDK 21.0.10; distribuição Gradle 8.14.3 all descoberta no cache; AGP 8.13.0, Kotlin 2.2.20, Compose 1.9.3/Material3 1.4.0, mwiede/JSch 2.28.8, BC 1.86; Termux terminal v0.118.3 fixado por commit. MinSdk 26, target 36.
+- **Comandos e testes executados:** Wrapper gerado offline e hash oficial conferido; build debug, cinco testes JVM (pins, ANSI/UTF-8/resize, handshake real localhost), lint final sem problemas, clean build offline e assinatura APK v2 verificada. Após ajuste final do caminho de falha de escrita SSH, build/testes/lint offline novamente aprovados.
+- **Evidências observadas:** APK em `artifacts/myct-1-debug.apk` (~13.3 MB). Teste SSH real aceitou fingerprint autoritativo e rejeitou pin incorreto, sem login/shell. Primeiro build 194.38s; clean offline 41.51s. Pico Java amostrado ~2.36 GiB; aumento de artefatos de cache ~47.7 MB após aprovação de até 200 MB. Não houve download de SDK/Gradle ou emulador.
+- **Dispositivo físico:** ADB sem dispositivos; proprietário informou que a validação física ficará pendente. `pwd`, `uname -a`, programas interativos, IME/teclas/resize e reconexão no Moto G06 NÃO foram validados. Resultado parcialmente validado, sem aprovação da missão no aparelho.
+- **Riscos e pendências:** autenticação somente password/host Ed25519; testar política real do servidor sem alterá-la, UI/IME, rede e lifecycle Android. Não há foreground service. APK debug com assinatura local; transferência manual por USB/SFTP descrita em android/README.md.
+- **Decisões alteradas:** nenhuma direção arquitetural; bibliotecas e recorte são escolhas experimentais revisáveis em docs/05. SSH/firewall/serviços existentes preservados.
+- **Próximo menor passo útil:** instalar APK no Moto G06, conferir host key e executar checklist físico antes de ampliar para SFTP/Core.

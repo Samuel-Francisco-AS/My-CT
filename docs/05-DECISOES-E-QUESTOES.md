@@ -47,3 +47,26 @@
 
 ## Como registrar novas decisões
 Acrescentar **ADR-NNN** com data, contexto, opções, escolha, trade-offs e consequências. Uma decisão pode ser revisada explicitamente; não apagar histórico nem reclassificar um protótipo como produto pronto. Manter links para issues/commits quando existirem.
+
+## 2026-10-14 — escolhas experimentais MYCT-1 (revisáveis)
+
+**Estado: PROPOSTO / parcialmente validado, pendente de Moto G06.** Para a prova
+SSH, foram fixados mwiede/JSch 2.28.8 (BSD), Bouncy Castle 1.86 (MIT) para
+algoritmos modernos no Android e os módulos Apache 2.0 `terminal-emulator` e
+`terminal-view` do Termux v0.118.3, commit `5b657c6adf4304e5198951ce815fe0205dcac29c`.
+JSch foi preferido ao JSch original sem manutenção; SSHJ permanece alternativa
+se o comportamento físico exigir troca. Termux foi preferido a um renderer
+ANSI próprio, reutilizando IME, seleção, buffers e teclas. Apenas fontes Java
+e recursos dos módulos foram importados; a sessão local/JNI foi substituída
+por adaptador de transporte SSH, sem incorporar o aplicativo Termux GPL.
+
+A primeira prova limita autenticação a senha efêmera e host key Ed25519,
+exige fingerprint SHA256 obtido por canal confiável e fixa o pin por
+endereço/porta. Importação de chave privada/MFA e serviço Android em background
+ficam pendentes de necessidade concreta. Não alterar sshd para acomodar essas
+limitações. MinSdk 26 é um limite de build, ainda sem prova de compatibilidade
+no aparelho. Gradle 8.14.3 `all` reutiliza distribuição já existente; AGP 8.13.0,
+Kotlin 2.2.20, Compose UI/Foundation 1.9.3 e Material3 1.4.0 compõem a prova.
+
+A arquitetura e a ordem do planejamento inaugural não foram modificadas.
+Critérios, evidências, limites e retomada: [relatório MYCT-1](MYCT-1-ANDROID-SSH-REPORT.md).
