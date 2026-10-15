@@ -1,0 +1,301 @@
+# MYCT-4B — aba Cofre no Android (implementação candidata)
+
+**Estado (15/10/2026):** implementação publicada na branch `myct-4b-android-vault`, baseada em `myct-4-boot-and-vault` (PR #13). **Build/testes/lint Android executados na revisão abaixo; execução física no Moto G06 ainda pendente.** Não declarar aceite físico nem fazer merge até validar. PostgreSQL e Core não precisam ser modificados.
+
+## Experiência desejada
+
+Após conectar o My-CT pelo SSH autenticado, a quarta aba **Cofre** exibe o estado da coleção GNOME Keyring `login`: Bloqueado, Desbloqueado, Indisponível ou Incompatível. Não lista nomes de credenciais ou valores. O usuário toca **Desbloquear**, espera o prompt seguro e digita a senha no campo temporário da tela; ao confirmar, o aplicativo consulta novamente o estado.
+
+Consulta ao entrar na aba e por **Consultar estado**. Sem polling. Senha não é salva em preferências, arquivos, logs, mensagens de terminal comum ou argumentos de comandos; tampouco é acessível por uma API do Core ou agente. O texto digitado reside transitoriamente em memória do processo Android, que não oferece zeroização forense de `String`/teclado. O campo é apagado imediatamente após confirmação e ao sair da tela; buffer mutável codificado é zerado. A aba mantém `FLAG_SECURE` mesmo se o usuário tiver permitido capturas no restante do app.
+
+## Comunicação
+
+1. `SshConnection.vaultStatus()` abre um canal `exec` temporário na sessão JSch existente e chama somente `$HOME/.local/bin/myct-vault status` (metadados JSON sem itens).
+2. `SshConnection.openVaultUnlock()` cria **outro canal SSH shell/PT Y exclusivo e temporário**, com o mesmo host verificado e a mesma sessão autenticada. Não injeta comandos no terminal principal.
+3. O canal shell executa um comando fixo `myct-vault unlock` e aguarda o prompt literal emitido depois que o helper remoto desativa o eco do TTY. O campo de senha **só é habilitado depois desse prompt**.
+4. A senha digitada pelo humano é enviada apenas à entrada do PTY temporário pelo transporte SSH, seguida de uma quebra de linha. Não passa pela linha de comando, argumento remoto, variável de ambiente, SFTP, API HTTP nem Core. O resultado do helper é interpretado por marcador de término; saída textual do PTY não é exibida nem logada.
+5. O canal é fechado ao terminar ou cancelar, e quando SSH é desconectado/trocado. Depois de um resultado, o app consulta `status` novamente; não presume sucesso só porque escreveu a senha.
+
+**Importante:** o helper remoto preserva sua exigência de sessão SSH com terminal interativo e shell de usuário. Se o `ChannelShell` criado pelo JSch não satisfizer os critérios logind/TTY, **a operação deve falhar**, sem relaxar esses critérios ou recorrer a pipe/password argv. Isso é um gate físico específico desta fase.
+
+O usuário já validou `myct-vault status/unlock` em SSH direto pelo Termux/Fedora e `gh auth status` via keyring. Isso **não é a mesma coisa** que validar o novo desbloqueio pela UI do My-CT.
+
+## Arquivos
+
+- `android/app/src/main/java/dev/myct/Vault.kt`: contrato de estado, transporte de dados e sessão shell temporária.
+- `android/app/src/main/java/dev/myct/VaultModel.kt`: fases, atualização manual, cancelamento e ciclo SSH.
+- `android/app/src/main/java/dev/myct/VaultScreen.kt`: quarta aba, senha efêmera e feedback.
+- `SshConnection.kt`, `TerminalModel.kt`, `MainActivity.kt`: reutilizam SSH, preservam Terminal/Arquivos/Saúde, ativam `FLAG_SECURE` na aba Cofre.
+- `android/app/src/test/java/dev/myct/VaultTest.kt`: parsing sintético de metadados inválidos/validos.
+- `android/app/build.gradle.kts`: versão `0.4.0-vault`, `versionCode=6`.
+
+## Instruções ao agente implementador/validador
+
+- Sincronizar branch `myct-4b-android-vault` sem reverter commits da Luna.
+- Verificar compilação e lint com Android SDK/Java existentes: `./android/gradlew -p android :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --offline --console=plain`; corrigir apenas erros reais. Não introduzir dependências novas.
+- Acrescentar, se necessário, teste sintético pequeno de protocolo/fechamento de PTY e de reconexão, sem acessar credenciais pessoais.
+- Gerar `artifacts/myct-4b-debug.apk`, checksum SHA-256 e validar que a assinatura coincide com o APK 3C instalado, para atualizar sem desinstalar. A assinatura e APK não devem ser versionados.
+- Reportar limitações e código final, sem alegar `unlock` físico sem teste no Moto.
+
+## Roteiro físico mínimo no Moto G06
+
+1. Confirmar `myct-vault` instalado em `~/.local/bin/myct-vault` no Fedora. O Core systemd e banco não participam da operação. Preparar o cofre **bloqueado** de forma normal (por exemplo, primeiro teste após reiniciar o Fedora); **não forçar logout, lock, daemon --replace ou recriação de coleção apenas para simular estado**.
+2. Instalar o APK sobre o 3C (mesma assinatura). Conectar ao SSH, abrir Cofre, conferir **Bloqueado** ou **Desbloqueado** conforme estado verdadeiro. Estado indisponível deve gerar mensagem clara; a tela de Saúde permanece funcional.
+3. Se estiver bloqueado/compatível, tocar Desbloquear e verificar que o campo aparece apenas após o prompt seguro. Digitar a senha correta no aparelho, tocar Confirmar e verificar **Desbloqueado** por consulta real. **Nunca compartilhar senha, screen recording ou logs de PTY com IA**.
+4. Alternar Terminal (executar `pwd`), Arquivos (navegar) e Saúde, preservando conexão; desconectar SSH e confirmar que o Cofre mostra ausência de conexão. Reconectar e consultar novamente.
+5. Conferir no Fedora com `~/.local/bin/myct-vault status` se desejado. Não testar senha errada no cofre pessoal para satisfazer números de testes; simular erros nos testes JVM.
+6. Se o app mostrar erro de admissão TTY/logind, registrar **somente um código seguro de erro**, sem capturar senha/PTY, e interromper. Não enfraquecer o `myct-vault` para forçar o sucesso.
+
+## Pendências e riscos assumidos
+
+- API GNOME interna previamente auditada e pinada a versão específica: alterações do GNOME podem interromper compatibilidade; não substituir cofre.
+- Um processo com o mesmo UID Linux pode acessar itens desbloqueados conforme regras da coleção; o desbloqueio não cria permissões por agente.
+- Não existe bloqueio remoto do cofre neste recorte. Não implementar auto-unlock, exportação de segredos, listagem ou intermediário para Copilot CLI.
+- Validar consumo do APK no Moto apenas se houver problema perceptível. Refinamento antigo de lag/UI/SFTP continua adiado na issue #9.
+
+
+## Revisão Codex — 15/10/2026
+
+Branch sincronizada de `origin/myct-4b-android-vault` em
+`4ef3faedf0f110485c7ca8b1a7029706ccf74b6a`, preservando a implementação da Luna.
+Base conferida: `myct-4-boot-and-vault`, merge-base
+`e46a0d4e2fb3c92033891e8b9bdc992a559241d6`. PR #14 aberto em draft, sem merge.
+
+### Revisão de segurança e correções identificadas
+
+Revisados `Vault.kt`, `VaultModel.kt`, `VaultScreen.kt`, `SshConnection.kt`,
+`TerminalModel.kt`, `MainActivity.kt` e o contrato de `ops/myct-vault`.
+A autenticação/pin SSH não foi alterada; Cofre usa a mesma sessão autenticada.
+Consulta permanece `exec` somente para `status`; desbloqueio permanece
+`ChannelShell` com PTY próprio. Não escreve no `TerminalModel`/PTY principal,
+não transporta senha por argv, variável de ambiente, HTTP ou SFTP.
+
+Correções limitadas aos problemas encontrados:
+
+1. **Guarda do prompt:** `submitSecret` agora exige ter observado o prompt exato,
+   em vez de apenas uma tentativa iniciada. Um marcador aleatório por tentativa
+   delimita a execução, ignorando prompt antigo em banner/eco do comando. O
+   marcador de término usa o mesmo identificador. O comando continua fixo e não
+   contém senha. Isso evita confusão acidental de saída; o servidor/helper remoto
+   autenticado continua sendo parte da confiança, não uma prova criptográfica de
+   presença humana independente do SSH.
+2. **Shell após término:** o shell temporário sai após emitir o marcador de
+   término do helper, inclusive em recusa. Uma senha enviada tarde não deve ser
+   interpretada como um comando seguinte nesse shell. Não há nova tentativa
+   automática após escrita parcial.
+3. **Entrada PTY:** o helper usa modo canônico; a versão candidata aceitava
+   controles (incluindo Ctrl-C/EOF/DEL) e até 8192 bytes, sujeitos a sinais,
+   edição/truncamento. Agora o Android recusa controles C0/DEL e mais de **4095
+   bytes UTF-8** antes de escrever, sem transformar a senha, com mensagem própria
+   na tela. Senhas afetadas exigem diagnóstico humano no terminal privado;
+   não tentar contornar a recusa pelo app. Caracteres UTF-8 imprimíveis continuam
+   aceitos. Referência: [Linux termios](https://man7.org/linux/man-pages/man3/termios.3.html).
+4. **Cancelamento:** uma tentativa cancelada fecha um canal que termine de abrir
+   tarde; não publica esse canal numa sessão nova. Leitura/conexão em IO é
+   interrompível, com limite de 15 s por consulta/preparação/conclusão. A espera
+   por digitação humana não tem envio nem repetição automáticos. Cancelar aparece
+   também na preparação/conclusão. Cancelar/fechar o PTY **não relocka** o cofre
+   nem desfaz um desbloqueio que já ocorreu.
+5. **Senha efêmera:** limpar campo ao mudar de fase, desconectar, sair da aba ou
+   receber ON_STOP; cancelar tentativa ao ocultar a tela. Codificar/zerar o
+   `CharArray` antes de lançar o worker, e zerar bytes mesmo se o escopo já estiver
+   cancelado antes de executar. Strings da UI/IME e buffers internos de SSH/JVM
+   não permitem garantia de zeroização forense de todas as cópias.
+6. **Build:** primeira compilação detectou função pública expondo retorno
+   `internal VaultUnlockChannel`. `openVaultUnlock()` passou a ser `internal`;
+   nenhuma alteração na autenticação ou nos outros canais.
+
+Nenhuma alteração em `ops/myct-vault`: preservados `require_human_tty`, admissão
+logind/SSH, shell direto/foreground, permissões TTY, checagem do daemon/interface,
+memória protegida, leitura sem eco e ausência de leitura/exportação de itens.
+Também não foram modificados systemd, SSHD, GNOME Keyring, PostgreSQL ou Core.
+
+### Hipóteses, testes mínimos e limites
+
+- Hipótese: linha canônica pode editar/truncar o segredo antes do helper.
+  Prova local **somente com PTY e dados sintéticos**, sem executar myct-vault ou
+  acessar D-Bus/Keyring: `abc + DEL + def + newline` entregou `abdef + newline`;
+  4096 bytes mais newline entregaram apenas 4096 bytes (4095 de payload).
+- Protocolo testado por streams sintéticos: senha ausente antes do prompt,
+  prompt antigo/marker incorreto, helper já desbloqueado/recusado, resultado
+  ausente/incorreto, escrita única e recusa de controles/tamanho sem escrita.
+- Ciclo testado com IO sintético bloqueado: desconexão durante leitura,
+  canal retornando tarde após cancelamento, reconexão sem resultado antigo,
+  consulta posterior ao sucesso e buffers apagados mesmo com escopo cancelado.
+- `adb devices -l`: **lista vazia**. Nenhum APK instalado, senha pessoal acessada,
+  comando `unlock` real executado ou cofre pessoal alterado nesta revisão.
+- `python android/terminal/upstream/verify.py`: **21 arquivos verificados,
+  2 patches documentados**. `git diff --check` sem erros.
+- Java 21.0.10, SDK/Build Tools 36 existentes; sem instalações ou dependências
+  novas. RAM/CPU do APK e legibilidade no Moto ainda não medidas.
+
+O gate do segundo PTY JSch satisfazer logind/TTY do helper continua **pendente**.
+Se houver recusa, a interface mostra erro sem enviar senha antes do prompt; não
+relaxar o helper para obter sucesso. O estado consultado via GNOME real e a
+coexistência das quatro abas também dependem do teste do proprietário.
+
+- Falha proporcional adicional: o teste já existente de Saúde falhou uma vez em
+  rebind imediato (`BindException`) após remover o encaminhamento, sem alteração
+  do transporte Saúde. Hipótese registrada: liberação do socket pode coincidir
+  com término da thread de accept JSch. Prova isolada com o jar existente, sem
+  autenticação/rede remota/Keyring: 50 ciclos iniciais sem falha; 200 ciclos com
+  leitura de `/proc/net/tcp6` reproduziram 5 atrasos de bind, todos liberados na
+  checagem seguinte após 50 ms. Ajustado **somente o teste** `HealthTest.kt` para
+  exigir reocupação efetiva em até 1 s, a cada 10 ms, mantendo as verificações de
+  bind loopback e remoção do registro. Sem mudança no código de Saúde.
+
+
+### Resultado final Android e APK para o proprietário
+
+```sh
+ANDROID_HOME=/home/sam/Android/Sdk ./android/gradlew -p android \
+  :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --offline --console=plain
+```
+
+**BUILD SUCCESSFUL**, última execução em **35 s**. **48 testes: 47 aprovados,
+0 falhas/erros e 1 ignorado** (handshake SSH opcional sem
+`MYCT_TEST_LOCAL_SSH=1`). Cofre: 3 testes de parsing existentes e 10 novos de
+protocolo/modelo, todos aprovados. Lint: **0 erros e 6 avisos de versões de
+Gradle/dependências**; não foram atualizados pacotes. Uma execução anterior
+emitiu aviso de metaspace do daemon; build concluído, limites mantidos.
+Relatórios locais: `android/app/build/reports/tests/testDebugUnitTest/` e
+`android/app/build/reports/lint-results-debug.html`.
+
+APK: `artifacts/myct-4b-debug.apk` (**13,404,141 bytes**),
+versão **0.4.0-vault**, code **6**. SHA-256:
+`971f3c8b2644c93a83f4bc78fa4aaebacc7d4dea56aecdf6a624a01e91fa6597`.
+Checksum ao lado: `artifacts/myct-4b-debug.apk.sha256`.
+Artefatos fora do Git, sem keystore versionada.
+
+`apksigner verify --print-certs` validou os APKs MYCT-4B e MYCT-3C e confirmou
+certificado SHA-256 idêntico:
+`b788958be4c919889fc30813f13f1aceb5b6b69670514c82e16288f4b60b83b3`.
+Pode atualizar o 3C sem desinstalar ou limpar pins/dados. Instalação permanece
+manual; exemplo somente com ADB autorizado:
+`adb install -r artifacts/myct-4b-debug.apk`.
+
+**Retomada:** seguir o roteiro físico acima no Moto. Se a coleção já estiver
+desbloqueada, validar a consulta, mas manter o envio de senha pendente até um
+estado bloqueado natural; não forçar lock/reboot/logout para fabricar evidência.
+Conferir cancelamento antes de digitar, retorno do segundo plano com campo
+vazio e senha ausente do histórico do terminal principal. Não capturar a senha
+em screenshots/logs nem compartilhá-la com agentes. Falha de TTY/logind é
+bloqueio a diagnosticar, não autorização para enfraquecer o helper.
+
+
+## Prova física pós-reboot e diagnóstico de desbloqueio — 15/10/2026
+
+O proprietário instalou `myct-4b-debug.apk` e executou `sudo systemctl reboot` no Fedora. **Comprovou Core systemd após boot:** a aba Saúde voltou a consultar telemetria sem precisar executar `./myct-core`. **Comprovou a consulta GNOME real pelo Android:** a aba Cofre identificou corretamente a coleção `login` bloqueada após o boot.
+
+**Bloqueio atual:** ao tocar **Desbloquear**, o Android exibiu a mensagem genérica de erro antes de qualquer sucesso. Não houve comprovação de que a senha foi solicitada, escrita ou rejeitada. A hipótese é recusa do terminal SSH secundário pelas regras TTY/logind de `myct-vault`, mas falha de protocolo/abertura do canal também é possível. Não afrouxar o helper, nem pedir senha/log PTY à IA.
+
+**Hotfix de diagnóstico publicado na branch após o APK 1429ece:** `VaultUnlockChannel` extrai exclusivamente o campo `error_code` do JSON de recusa já sanitizado pelo `myct-vault`, e `VaultModel` mostra código seguro na aba. Erros de timeout e de canal/protocolo ganham códigos distintos. Nenhum stdout/stderr bruto, senha ou item do cofre aparece na interface. Um teste sintético verifica a recusa antes do prompt e que nenhum byte de senha é escrito.
+
+**Status na publicação do commit `3697454`:** hotfix apenas em fonte. O APK instalado no Moto é anterior ao diagnóstico. Necessário o Codex sincronizar esta branch, rodar `assembleDebug/testDebugUnitTest/lintDebug` (sem substituir testes existentes), gerar **novo** `artifacts/myct-4b-debug.apk` e checksum, conferir assinatura, publicar PR draft **sem merge**. Reinstalar como atualização, conectar SSH e tocar Desbloquear **uma vez sem digitar senha**; anotar exclusivamente o código mostrado. Se for `authenticated_ssh_session_required`, `interactive_ssh_shell_required` ou outro, corrigir a causa concreta sem desativar verificações do cofre. Se for `ssh_channel_or_protocol_error` ou `ssh_prompt_timeout`, examinar especificamente protocolo/PTY, ainda sem lidar com senha.
+
+Não é necessário reiniciar Fedora novamente para o diagnóstico enquanto o cofre continuar bloqueado.
+
+
+## Validação do hotfix de diagnóstico — Codex, 15/10/2026
+
+Sincronização por fast-forward até
+`369745445310747783eb9e427c1af37c4e32f2b9`, preservando os sete commits publicados
+pela Luna após `1429ece`. Revisados o diff de `Vault.kt`, `VaultModel.kt` e o novo
+teste de `VaultProtocolTest.kt`, incluindo sua integração com o protocolo existente.
+**Nenhum problema adicional comprovado: código e testes do hotfix mantidos sem
+alterações nesta rodada.**
+
+O código de recusa só é extraído depois do marcador da tentativa e do término
+não zero, sem prompt recebido. A extração limita caracteres/tamanho do campo
+`error_code` (`[a-z][a-z0-9_]{2,63}`), usa fallback `unlock_helper_refused` e não
+expõe stdout/stderr ou mensagens arbitrárias de exceção. `VaultModel` distingue
+recusa anterior à senha, `ssh_prompt_timeout` e `ssh_channel_or_protocol_error`.
+Recusa fecha o canal e mantém a guarda de senha: o teste sintético confirma que
+`authenticated_ssh_session_required` aparece como código, sem permitir escrever
+senha. O diagnóstico não conclui que esse foi o código real do Moto.
+
+Comando executado no Fedora, Java 21.0.10 e SDK/Build Tools 36 existentes:
+
+```sh
+ANDROID_HOME=/home/sam/Android/Sdk ./android/gradlew -p android \
+  :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --offline --console=plain
+```
+
+**BUILD SUCCESSFUL em 1 min 22 s**. **49 testes: 48 aprovados, 0 falhas/erros e
+1 ignorado** (handshake SSH opcional, sem `MYCT_TEST_LOCAL_SSH=1`). Lint: **0 erros,
+6 avisos de versões de Gradle/dependências**. Aviso de metaspace ao encerrar o
+daemon não impediu conclusão; nenhuma configuração/dependência foi modificada.
+Resultados locais em `android/app/build/reports/tests/testDebugUnitTest/` e
+`android/app/build/reports/lint-results-debug.html`.
+
+APK regenerado: `artifacts/myct-4b-debug.apk`, **13,613,562 bytes**,
+mesma versão **0.4.0-vault/code 6**, artefato fora do Git.
+SHA-256 atual: `7f1d77af8cd74930284b8dde885332e7e41c580d7e2ed7a9b6dc019f2408d531`.
+Checksum atualizado em `artifacts/myct-4b-debug.apk.sha256`, conferido com
+`sha256sum --check`. APK anterior: `971f3c8b2644c93a83f4bc78fa4aaebacc7d4dea56aecdf6a624a01e91fa6597`.
+Antes da substituição, `apksigner verify --print-certs` validou ambos e confirmou
+o mesmo certificado SHA-256:
+`b788958be4c919889fc30813f13f1aceb5b6b69670514c82e16288f4b60b83b3`.
+Atualizar sem desinstalar/limpar dados ou pins. `git diff --check` sem erros.
+
+**Limites:** `adb devices -l` retornou lista vazia. Nenhum APK foi instalado nesta
+rodada, nenhum desbloqueio real foi executado e nenhuma senha pessoal foi
+solicitada, recebida ou registrada. Sem alterações em `myct-vault`, verificações
+SSH/TTY/logind, autenticação, systemd, GNOME Keyring, Core ou PostgreSQL. O teste
+sintético comprova tratamento do código, **não identifica a causa real da recusa
+no Moto**. Consumo/legibilidade do novo APK no aparelho continuam sem medição.
+PR #14 permanece em draft, sem merge e com a mesma base.
+
+### Próxima prova no Moto — sem digitar senha
+
+1. Instalar o APK atualizado sobre a instalação anterior e conectar SSH.
+2. Abrir Cofre, consultar o estado e, se bloqueado/compatível, tocar
+   **Desbloquear uma única vez, sem digitar senha**.
+3. Anotar exclusivamente o código exibido. Se o campo de senha aparecer, tocar
+   **Cancelar**: isso confirma chegada ao prompt, sem precisar enviar senha.
+4. `ssh_prompt_timeout` indica espera pelo protocolo; `ssh_channel_or_protocol_error`
+   indica abertura/leitura/protocolo. Um código do helper identifica a verificação
+   recusada; ainda será necessário analisar sua causa concreta. Não enviar logs
+   de PTY, conteúdo do cofre ou senhas. Não reiniciar ou alterar proteções para
+   obter um resultado diferente.
+
+Desbloqueio pela UI permanece **com falha física registrada, causa ainda pendente
+do diagnóstico do aparelho e sem aceite**. Boot/telemetria e consulta real do
+estado do cofre já informados pelo proprietário permanecem como provas anteriores.
+
+
+## Diagnóstico real após APK 7150d10 — 15/10/2026
+
+O proprietário instalou APK de diagnóstico após build **48 testes PASS/1 ignorado**, e tocou **Desbloquear** com o cofre naturalmente bloqueado após reboot. A aba mostrou, **antes de qualquer senha**:
+
+`authenticated_ssh_session_required`.
+
+Isso prova que o `myct-vault` foi invocado e chegou à validação composta das propriedades da sessão `logind` (`Remote, Service, Type, Class, User, TTY`). Não prova isoladamente qual dessas propriedades diferiu; porém o caminho por **segundo canal SSH shell/PT Y** torna particularmente provável a divergência `Session.TTY` (PTY registrada no login versus PTY secundária atual).
+
+**Correção candidata na branch (não instalada no Fedora):** extração de `require_authenticated_ssh_logind()` no `ops/myct-vault`. Continua exigindo `Remote=True, Service=sshd, Type=tty, Class=user, User=UID atual`. Quando o TTY do `logind` difere do TTY atual, o helper só aceita se o kernel comprovar que `/proc/<shell pai>/fd/0` e `fd 0` do helper são **o mesmo dispositivo de caracteres** (`st_rdev`), além das verificações já existentes (TTY privado do mesmo UID, terminal em foreground, shell interativo direto, origem SSH real, backend GNOME verificado). Não usa sinais fornecidos pelo cliente SSH, headers ou variáveis para substituir identidade `logind`. Continua recusando pipes/agentes sem sessão SSH, sessão de outro UID, sessões não remotas, outros serviços e PTYs sem vínculo com o shell pai.
+
+**Limite declarado:** isso aceita legitimamente PTYs adicionais dentro da mesma sessão remota `sshd`; não equivale a atestação criptográfica de um humano contra software malicioso com o mesmo UID Linux. A interface ainda exige toque e senha do operador no Android; não existe endpoint para autounlock e a senha continua ausente de argv/env/API/logs. Como a fonte foi atualizada, **não confundir o arquivo remoto instalado anteriormente com a versão atual da branch**.
+
+### Próxima prova sem recompilar o APK
+
+Em SSH do proprietário, com cofre ainda bloqueado, sincronizar `myct-4b-android-vault`, executar os testes `python3 -m unittest discover -s ops/tests -v`, instalar `ops/myct-vault` com modo `0700` em `$HOME/.local/bin/myct-vault` e consultar `myct-vault status`. Não usar `sudo`, não reiniciar, não reconfigurar GNOME/SSH, não abrir cofre por CLI antes do teste Android.
+
+Abrir a aba Cofre no APK de diagnóstico já instalado e tocar **Desbloquear** uma vez. Se surgir o campo, o novo caminho chegou ao prompt seguro; então o proprietário pode inserir a senha **apenas no aplicativo** para validar o fluxo completo. Se houver novo erro, relatar **somente o código sanitizado**. Persistindo erro de classe/UID/serviço, investigar propriedades da sessão de maneira não sensível, sem remover verificações.
+
+**Estado:** fonte e testes sintéticos publicados, ainda precisam ser executados no Fedora e validados no Moto. PR #14 permanece draft e sem merge.
+
+
+## ACEITE FÍSICO — MYCT-4B CONCLUÍDA (15/10/2026)
+
+**Resultado: PASS funcional real no Moto G06, informado pelo proprietário.** Após a correção de `require_authenticated_ssh_logind` para um segundo PTY autenticado e a correção de uma asserção de teste legada (`e43ca5a`), o proprietário confirmou:
+
+- Reexecutou os testes locais da branch e **todos passaram**. Não foi fornecida nova transcrição completa; esse resultado é a confirmação do operador, distinta dos 48 testes do APK registrados anteriormente.
+- A partir da aba **Cofre** do My-CT Android, com GNOME Keyring `login` anteriormente identificado como **bloqueado**, conseguiu **desbloquear o cofre com sucesso**. Isso demonstra que a admissão SSH/logind do PTY secundário, o prompt, o envio humano da senha e a alteração efetiva do estado são operacionais nessa combinação Fedora/Moto.
+- Em seguida, iniciou o **Copilot CLI**, que conseguiu acessar suas credenciais existentes para autenticação. A consulta `gh auth status` via keyring já havia sido comprovada na fase anterior.
+- Após reboot real anterior, **Dashboard Saúde funcionou sem executar `./myct-core`** e a aba Cofre exibiu corretamente o estado bloqueado. O Core systemd tem prova física de boot.
+
+**Não foram recebidas senhas, tokens, valores de itens do cofre, dados de autenticação sensíveis ou logs de PTY.** O próprio usuário executou a operação. O desbloqueio é sob demanda, não automático, e não concede permissões granulares a agentes. A atualização GNOME Keyring pode alterar compatibilidade futura do método interno de unlock.
+
+**Escopo aceito:** fluxo de desbloqueio por botão no Android + Copilot CLI autenticando com credenciais existentes. A regressão do desbloqueio por segundo PTY foi resolvida pela correção de `logind`. Não exigir novamente teste funcional já realizado. As verificações de cancelamento, retorno do segundo plano e demais refinamentos de UX podem continuar como dívidas não bloqueantes, sem confundir com ausência do fluxo principal.
+
+**Estado Git:** PR #14 ainda está em rascunho, sem merge; como é baseado em `myct-4-boot-and-vault`, considerar ordem PR #13 → PR #14 na integração. O aceite funcional não altera automaticamente o estado dos PRs. Nenhuma nova implantação/alteração de serviço é necessária para registrar o resultado.

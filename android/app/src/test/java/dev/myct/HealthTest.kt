@@ -78,7 +78,19 @@ class HealthTest {
             assertTrue(runCatching { ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1")).close() }.isFailure)
             tunnel.close()
             assertTrue(session.portForwardingL.isEmpty())
-            ServerSocket(allocated, 1, java.net.InetAddress.getByName("127.0.0.1")).close()
+            // Closing while JSch's accept worker exits can defer OS port release.
+            // Still require actual release within a bounded interval, not merely
+            // removal from JSch's forwarding registry.
+            val deadline = System.nanoTime() + 1_000_000_000L
+            while (true) {
+                try {
+                    ServerSocket(allocated, 1, java.net.InetAddress.getByName("127.0.0.1")).close()
+                    break
+                } catch (e: java.net.BindException) {
+                    if (System.nanoTime() >= deadline) throw e
+                    Thread.sleep(10)
+                }
+            }
         } finally { tunnel.close(); session.disconnect() }
     }
     private fun response(status: String, body: String): Result<HealthSample> = ServerSocket(0, 1, java.net.InetAddress.getByName("127.0.0.1")).use { server ->

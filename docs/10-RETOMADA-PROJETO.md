@@ -54,3 +54,8 @@ Documento histórico da fase Android: [08](08-FECHAMENTO-CICLO-ANDROID.md); limi
 ## MYCT-4 — implementação proposta (não validada no Fedora)
 
 Branch `myct-4-boot-and-vault`: unidade systemd **de sistema** para Core iniciar no boot como usuário `sam` sem SSH, e CLI **`myct-vault status|unlock`** para GNOME Keyring `login` existente, independente da Narys. Código e instruções no [MYCT-4-BOOT-VAULT.md](MYCT-4-BOOT-VAULT.md). O serviço Core não requer iniciar o PostgreSQL; cofre exige desbloqueio humano via SSH interativo, sem ser endpoint HTTP/ação de agente. Esses arquivos ainda não foram instalados/ativados/testados no Fedora, e a interface GNOME usada é interna/versão fixada. Após prova local, atualizar o estado e só então considerar merge na main. Não modificar dados existentes, sshd ou firewall.
+
+
+## MYCT-4B — UI Cofre candidata
+
+Branch `myct-4b-android-vault` derivada de `myct-4-boot-and-vault`. Adiciona aba Cofre no Android por canais SSH autenticados, status e desbloqueio com senha efêmera digitada pelo humano em um PTY privado; não expõe segredos. **Sem build/aceite físico até agora, sem merge.** Consultar [MYCT-4B](MYCT-4B-ANDROID-VAULT.md) e validar dependência de `myct-vault` instalado no Fedora. O PR MYCT-4 #13 permanece pré-requisito; a implementação Android não comprova esse unlock em celular sem teste físico.

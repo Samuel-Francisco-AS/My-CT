@@ -295,3 +295,8 @@ Histórico: [MYCT-2](../docs/MYCT-2-SFTP-REPORT.md).
 Testes sem rede: `./gradlew :app:testDebugUnitTest --offline`.
 Prova de subsistema OpenSSH local, sem autenticação/porta, na raiz:
 `python android/diagnostics/sftp-subsystem-proof.py` (gera só temporários próprios).
+
+
+## MYCT-4B — aba Cofre (em desenvolvimento)
+
+A branch `myct-4b-android-vault` acrescenta a aba **Cofre** ao lado de Terminal, Arquivos e Saúde. Após conectar SSH, apresenta o estado do GNOME Keyring `login`; se bloqueado e compatível, o usuário pode solicitar desbloqueio e digitar a senha em campo temporário. A operação utiliza um canal PTY SSH separado, com as verificações humanas já existentes no `myct-vault`; nenhuma senha é enviada ao Core ou a agentes. **Ainda não foi compilada/testada no Moto nesta branch**. Validação e riscos: [MYCT-4B](../docs/MYCT-4B-ANDROID-VAULT.md). 

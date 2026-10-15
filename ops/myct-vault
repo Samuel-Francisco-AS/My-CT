@@ -155,6 +155,36 @@ def proc_fields(pid):
     fields = (p / 'stat').read_text().rsplit(')', 1)[1].split()
     return p, int(fields[1])  # parent PID
 
+def require_authenticated_ssh_logind(props, tty, shell):
+    """Validate a real SSH logind session, including a sibling SSH PTY.
+
+    logind Session.TTY is the *login* terminal, not necessarily the PTY allocated
+    by a second SSH shell channel. Require SSH/logind identity and verify that
+    the direct interactive shell still owns the current private TTY.
+    This is not isolation against another process with the same Linux UID.
+    """
+    require(props.get('Remote') is True, 'ssh_logind_not_remote')
+    require(props.get('Service') == 'sshd', 'ssh_logind_service_invalid')
+    require(props.get('Type') == 'tty' and props.get('Class') == 'user',
+            'ssh_logind_session_class_invalid')
+    require(props.get('User', (None,))[0] == os.getuid(),
+            'ssh_logind_user_invalid')
+    if props.get('TTY') == tty.removeprefix('/dev/'):
+        return
+    # SSH can allocate a sibling PTY on an already authenticated transport;
+    # the original login TTY stays recorded in logind. Match the kernel's
+    # actual character device for both the foreground helper and its parent
+    # direct interactive shell, not caller-supplied strings or environment.
+    try:
+        parent_fd = os.stat(shell / 'fd/0')
+        child_fd = os.fstat(0)
+        require(stat.S_ISCHR(parent_fd.st_mode) and
+                stat.S_ISCHR(child_fd.st_mode) and
+                parent_fd.st_rdev == child_fd.st_rdev,
+                'ssh_secondary_tty_unverified')
+    except OSError:
+        raise Blocked('ssh_secondary_tty_unverified') from None
+
 def require_human_tty():
     require(all(os.isatty(fd) for fd in (0, 1, 2)), 'human_private_ssh_terminal_required')
     tty = os.ttyname(0)
@@ -191,10 +221,7 @@ def require_human_tty():
     props = system.call_sync('org.freedesktop.login1', path, 'org.freedesktop.DBus.Properties',
         'GetAll', GLib.Variant('(s)', ('org.freedesktop.login1.Session',)),
         None, flags, 3000, None).unpack()[0]
-    require(props.get('Remote') is True and props.get('Service') == 'sshd' and
-        props.get('Type') == 'tty' and props.get('Class') == 'user' and
-        props.get('User', (None,))[0] == os.getuid() and
-        props.get('TTY') == tty.removeprefix('/dev/'), 'authenticated_ssh_session_required')
+    require_authenticated_ssh_logind(props, tty, shell)
 
 class HumanPassword:
     def __init__(self):
