@@ -110,3 +110,17 @@ O desbloqueio não acontece no boot automaticamente: precisa de ação humana ap
 - `myct-vault unlock` executado pelo proprietário em SSH privado: desbloqueio confirmado; status posterior `state=unlocked`.
 - `gh auth status`: autenticado via `keyring`; saída mascarou token. Ainda não há prova específica do **Copilot CLI**.
 - Unidade systemd original instalada/habilitada, mas `systemctl is-active` foi `activating`, `curl` recusou conexão; journal repetiu `status=203/EXEC` e `Permission denied` ao tentar executar `/home/sam/Projetos/My-CT/server/myct-core`. `ls -l` mostrou executável com bit +x, SELinux Enforcing. Houve aproximadamente 70 reinícios. **Corrigido no Git**, substituindo ExecStart por `/usr/local/bin/myct-core` e `RestartPreventExitStatus=203`; ainda precisa de prova no Fedora. Não declarar boot/autostart aprovado antes da prova.
+
+
+## Aceite funcional posterior — 15/10/2026
+
+**PASS informado pelo proprietário no Fedora real/Moto G06:**
+
+- Após instalação do Core em `/usr/local/bin/myct-core`, atualização da unidade systemd e ajuste do contexto SELinux, o Dashboard Saúde respondeu sem iniciar o executável manualmente.
+- O usuário executou **reboot real do Fedora** com `sudo systemctl reboot` e, após religar, a aba Saúde voltou a funcionar. Isto comprova o início automático do Core no boot.
+- O `myct-vault` independente da Narys já havia desbloqueado com sucesso a coleção `login` em terminal SSH privado; `gh auth status` confirmou autenticação via keyring.
+- Na extensão **MYCT-4B**, com correção do reconhecimento de PTY SSH secundário na branch `myct-4b-android-vault`, o usuário também comprovou **desbloqueio real pelo botão do Android** e posterior autenticação do **Copilot CLI** usando credenciais do cofre.
+
+O fluxo Android da MYCT-4B integra a correção do helper na sua própria branch e PR #14; **o código dessa extensão não faz parte deste PR #13 até a integração das branches**. Os PRs continuam separados e não foram mesclados automaticamente pela confirmação. Nenhuma senha ou item do cofre foi solicitado/registrado no GitHub.
+
+Limite preservado: o GNOME Keyring precisa de desbloqueio humano após reboot; não há autounlock, nova coleção nem concessões por agente.
