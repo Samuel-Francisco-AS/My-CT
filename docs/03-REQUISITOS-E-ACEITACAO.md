@@ -49,7 +49,7 @@ Reiniciar Fedora; serviço necessário volta, SSH continua acessível; verificar
 
 ## Matriz mínima de testes
 - **Unitários:** parsing de entradas, estados de tarefa/download, validação de caminhos e respostas HTTP.
-- **Integração:** libpqxx/Postgres, API↔daemon, SSH/SFTP com Fedora.
+- **Integração:** libpq/Postgres, API↔daemon, SSH/SFTP com Fedora.
 - **Android instrumental/físico:** permissões SAF, host key, PTY, teclado, vida útil da sessão, compartilhamento de links.
 - **Operação:** serviços systemd, baixa memória, disco quase cheio, desconexão e restart.
 - **Segurança:** origem não autorizada, tokens/credenciais ausentes, caminho malicioso, endpoints expostos por engano, exclusão com confirmação.
@@ -72,8 +72,19 @@ Este checkpoint complementa a tabela de requisitos inicial, **sem reescrever seu
 | FILE-03 | **Fluxo real comprovado** | Duas imagens e PDF baixados e abertos no Moto. Primeiro incidente MYCT-2 não teve causa exata identificada. |
 | FILE-04 | **Parcial: implementado, teste físico incompleto** | Progresso, cancelamento, conflito sem sobrescrita e tratamento de parcial testados por código/JVM; cenários adversos e background dataSync não certificados no Moto. |
 | UX-01 | **Parcial / dívida** | Interface ainda rígida, scroll reinicia ao voltar da pasta e lag perceptível. `shouldEnforceCharBasedInput=false` melhorou subjetivamente. |
-| INF-01, INF-02, INF-03, DASH-01 | **Não implementado/validado para My-CT** | Inventário/headless/SSH não significam Core+PostgreSQL, API nem serviço systemd próprios. |
+| INF-01 | **Parcial** | Fedora headless com SSH funcional; reinicialização automática do Core e do cluster My-CT por systemd não implementada. |
+| INF-02 | **Comprovado no Fedora** | MYCT-3A/3B: binário C++20 compilou e foi executado no hardware; 2/2 (3A), 3/3 (3B) testes locais PASS. |
+| INF-03 | **Comprovado no Fedora (persistência mínima)** | libpq/CLI, PostgreSQL 18.6 exclusivo com socket Unix privado; registro persistiu após reiniciar Core e banco; 1/1 integração PASS. |
+| DASH-01 | **Parcial** | API HTTP de CPU/RAM/disco e uptime responde com dados reais no Fedora; **não existe tela Android** nem supervisão de serviços. |
 | DL-01/02/03, AUTO-01 | **Não iniciado** | SFTP é transferência Android↔Fedora; downloads HTTP/torrent independentes no servidor não existem. |
-| OPS-01, SEC-01, SEC-02 | **Parcial** | Guias de build/uso Android e SSH seguro; operação/restart/backups/API/Core permanecem futuros. |
+| OPS-01, SEC-01, SEC-02 | **Parcial** | Core local/API em loopback, banco Unix/peer e operação manual documentada; sem autostart/restore validado nem Dashboard remoto. |
 
 **Decisão do proprietário:** encerrar este ciclo Android/SSH/SFTP com pendências explícitas na [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9) e [trilha de refinamento](09-TRILHA-REFINAMENTO-ANDROID.md), sem forçar rodadas de polimento antes do Core. [Histórico integral](08-FECHAMENTO-CICLO-ANDROID.md).
+
+
+## Checkpoint MYCT-3A/3B integrado — 15/10/2026
+
+- [PR #10](https://github.com/Samuel-Francisco-AS/My-CT/pull/10) e [PR #11](https://github.com/Samuel-Francisco-AS/My-CT/pull/11) integrados à `main` em sequência após provas reais no Fedora.
+- **INF-02 e INF-03:** comprovação funcional do Core C++20 e persistência PostgreSQL com registro preservado após reinícios; compilação e integração passaram. Nenhum serviço My-CT autoiniciável foi implantado.
+- **DASH-01 e issue #2 permanecem parciais** até MYCT-3C comprovar leitura real da API no Moto G06 via transporte SSH autenticado, sem exposição da API para a rede.
+- Base factual e SHAs: [fechamento MYCT-3A/3B](MYCT-3AB-FECHAMENTO-REPORT.md); recuperação e comandos [server/README.md](../server/README.md).
