@@ -153,3 +153,23 @@ preservado.
 - Aceite exige compilação e gravação/leitura reais, sobrevivência ao encerramento
   do Core, saúde com banco parado e bind local. Instalação depende de autorização;
   evidência e gate corrente: [relatório MYCT-3B](MYCT-3B-POSTGRES-REPORT.md).
+
+
+## 2026-10-15 — MYCT-5A: HTTP/HTTPS pequeno e independente
+
+- Recorte autorizado na missão MYCT-5A: CLI pelo Terminal SSH; torrent, Android
+  Downloads, automação genérica, agendamento e integração PostgreSQL adiados.
+  Não encerra todos os itens da issue #4.
+- C++20 em executável separado `myct-download`, reutilizando curl 8.18 instalado
+  (libcurl-devel ausente). Não instalar dependências para obter o mesmo transporte.
+- Unidade transitória de systemd **de usuário** por transferência, com linger já
+  existente e verificado, sem instalar serviço permanente nem tocar no Core.
+  Um download ativo, sem fila, com falha explícita para segundo pedido.
+- Metadados privados em arquivo bastam para consultar progresso/resultado após
+  desconectar; exigir PostgreSQL manteria dependência sem utilidade nesta fase.
+  Arquivos dedicados por ID, `.part` até sucesso, publicação sem sobrescrita,
+  reserva de 16 MiB e limite pelo espaço disponível. URLs HTTP(S) e destinos
+  públicos validados a cada redirect; LAN somente por opção explícita.
+- [Relatório MYCT-5A](MYCT-5A-DOWNLOADS-REPORT.md): testes Fedora e uso.
+  **Aceite SSH/Moto pendente** por autenticação SSH indisponível ao agente; não
+  confundir saída da CLI com prova de encerramento da sessão. Sem merge/deploy.
