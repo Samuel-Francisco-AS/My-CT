@@ -1,18 +1,16 @@
-# My-CT — guia de retomada (MYCT-3C preparada, prova física pendente)
+# My-CT — retomada após MYCT-3C aceita no Moto G06
 
-**Atualizado:** 15/10/2026 · **Base:** `origin/main` em `5e6eab7`; implementação 3C em `myct-3c-android-dashboard`, ainda para revisão.
-**Ordem de leitura:** [README](../README.md) → [fechamento MYCT-3A/3B](MYCT-3AB-FECHAMENTO-REPORT.md) → [relatório 3B](MYCT-3B-POSTGRES-REPORT.md) → [operação Core](../server/README.md) → [requisitos](03-REQUISITOS-E-ACEITACAO.md) → [AGENTS](../AGENTS.md). Para Android anterior, consulte [fechamento SSH/SFTP](08-FECHAMENTO-CICLO-ANDROID.md).
+**Atualizado:** 15/10/2026 · **Fonte de verdade:** `main`; PRs #10, #11 e #12 mesclados.
+Leia [README](../README.md), [relatório MYCT-3C](MYCT-3C-DASHBOARD-REPORT.md), [relatório MYCT-3B](MYCT-3B-POSTGRES-REPORT.md), [operação Core](../server/README.md) e [AGENTS](../AGENTS.md).
 
 ## Resumo e estado real
 
-- **My-CT é independente da Narys.** Servidor pessoal Fedora headless, cliente Moto G06 nativo Kotlin/Compose, Core C++20 e PostgreSQL.
-- **Android existente:** SSH autenticado com host Ed25519 pinado, terminal PTY/ANSI, SFTP/SAF bidirecional, imagens/PDF abertos no Moto e upload de PDF ao Fedora. Serviços foreground de SSH e dataSync disponíveis no app.
-- **Core já integrado à main:** C++20, Makefile, `GET /v1/health` (CPU/RAM/disco/uptime) local em `127.0.0.1:8765`, CLI de gravação/consulta de eventos e libpq direta. PostgreSQL 18.6 exclusivo em socket Unix privado, peer, TCP desativado.
-- **Evidência 3A:** Fedora: 2/2 testes PASS, endpoint JSON real, bind só loopback; ~4 MiB RSS observado.
-- **Evidência 3B:** Fedora: 3/3 testes locais, 1/1 integração real; evento ID 2 persistiu após reiniciar Core e banco; health respondeu 200 com banco parado; Core ~7,4 MiB RSS, cluster ~23,7 MiB PSS, dados ~42 MiB (amostras).
-- **Estado deixado pelo agente:** Core e cluster PostgreSQL **parados**, dados preservados. Nenhum systemd My-CT, API LAN, automação ou download server-side. Dashboard Android implementado na branch 3C, APK preparado; ainda não instalado/provado no Moto.
-- **Dívidas Android adiadas:** lag, UI truncada, scroll SFTP que volta ao topo, transferências SFTP em background ainda sem prova física; [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9).
-- **Git:** [PR #10](https://github.com/Samuel-Francisco-AS/My-CT/pull/10) (merge `ed5528d0bb733fee9df206cf836d7e0d74c7faf3`) e [PR #11](https://github.com/Samuel-Francisco-AS/My-CT/pull/11) (merge `9d23535ca19357429660a95cb9afa40166309c7b`) integrados em ordem na `main`. O PR #11 foi redirecionado para `main` após o merge do #10.
+- My-CT é **independente da Narys**. Fedora 44 headless e Moto G06 com app nativo Kotlin/Compose.
+- Android: terminal SSH/PT Y com host verificado, arquivos SFTP/SAF, Dashboard Saúde (CPU/RAM/disco/uptime por túnel SSH, sem polling). A MYCT-3C passou nos testes Android (34 PASS, 1 opcional ignorado), build e lint (0 erros). O proprietário enviou captura do Dashboard real no Moto, confirmou o fluxo e os testes físicos. Hotfix de contraste incluído; [PR #12](https://github.com/Samuel-Francisco-AS/My-CT/pull/12) merge `fd8076321cd32300e2c6305954adc1b134e26d77`.
+- Core C++20: `GET /v1/health` em `127.0.0.1:8765`, comprovado no Fedora; operações CLI libpq registram e consultam eventos no banco PostgreSQL exclusivo por socket Unix privado, sem TCP. PRs #10/#11 também integrados, [relatório de fechamento](MYCT-3AB-FECHAMENTO-REPORT.md).
+- **Core não é serviço permanente:** atualmente `./myct-core` é iniciado manualmente e pode parar com Ctrl-C ou ao encerrar a sessão. **Não há systemd/autostart configurado**. PostgreSQL não é necessário para Saúde; o cluster 3B foi deixado parado ao final do teste, dados preservados. Durante a prova do dashboard o Core foi iniciado manualmente no terminal.
+- Dívidas Android separadas: lag no terminal, UX rígida, scroll SFTP que volta ao topo e validação SFTP em background. [Issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9), não iniciar refinamento por conta própria.
+- Descarga HTTP/torrent executada no servidor e rotinas autônomas ainda não existem.
 
 ## Como verificar no Fedora (sem reinicializar o banco)
 
@@ -37,28 +35,15 @@ pg_ctl -D "$MYCT_PGROOT/data" -l "$MYCT_PGROOT/postgres.log" \
 
 Para API local em teste manual, executar `./myct-core` e em outra sessão SSH `curl -fsS http://127.0.0.1:8765/v1/health`; sair com Ctrl-C. Para parar **somente** o cluster deste projeto: `pg_ctl -D "$MYCT_PGROOT/data" -m fast -w stop`. Procedimentos completos (instalação, build, backup, recuperação, variáveis) em [server/README.md](../server/README.md). Não apagar, reinicializar nem reaplicar migração no diretório existente.
 
-## Próxima ação: comprovar MYCT-3C no Moto
+## Próxima necessidade operacional: systemd para o Core
 
-Dashboard implementado com CPU, RAM, disco e uptime reais por HTTP pelo túnel
-JSch da sessão autenticada. Sem polling; consulta na entrada e em Atualizar.
-Estado anterior explícito após falha/desconexão; túnel loopback dinâmico encerrado
-com SSH e recriado sob demanda em outra sessão. Nenhuma mudança de SSH/firewall,
-PostgreSQL, renderizador, serviços ou fluxo SFTP.
+O proprietário perguntou por que precisa executar `./myct-core`: não há serviço gerenciado nem início automático. **Próximo recorte sugerido**: configurar unidade systemd proporcional (de usuário, se adequadamente persistente, ou de sistema com usuário não privilegiado), inicialização no boot, restart controlado, logs simples, bind somente loopback e procedimento de stop/rollback. **Solicitar autorização explícita antes de modificar serviços/configurações do Fedora**; não iniciar PostgreSQL automaticamente apenas para Dashboard. Validar reboot no Fedora real antes de declarar operação contínua aprovada.
 
-- APK: `artifacts/myct-3c-debug.apk` (code 5, `0.3.0-health`), mesma assinatura
-  MYCT-2R, atualização sem desinstalar; checksum ao lado, artefatos fora do Git.
-- Fedora: Core real respondeu com banco parado e bind só loopback; encerrado
-  depois da prova. Não inicializar/reaplicar migração no cluster preservado.
-- **Gate pendente:** ADB sem dispositivo nesta sessão. Proprietário deve instalar,
-  autenticar, abrir Saúde, comparar com `curl`, alternar Terminal/Arquivos, testar
-  Core parado e SSH desconectado/reconectado. Não declarar concluída por JVM/build.
-- [Relatório 3C e roteiro curto](MYCT-3C-DASHBOARD-REPORT.md) registram arquivos,
-  comandos, evidências, consumo e limitações. Não começar outra frente antes
-  dessa comprovação; issue #2 continua aberta.
+Outro assunto aberto para discussão, distinto do systemd: mecanismo nativo My-CT para desbloquear/usar credenciais do cofre sem depender de Narys. Ainda não há requisitos aprovados ou implementação; distinguir desbloqueio do cofre de autorização de acesso a segredos pelos agentes.
 
 ## Fases posteriores e limites
 
-- **Depois da 3C:** operação/autostart por systemd **somente com autorização**, downloads HTTP(S) no Fedora e depois torrent/magnet legal, tarefas independentes. Nada disso está implementado.
+- **Após 3C:** operação/autostart por systemd somente com autorização; downloads HTTP(S) Fedora, depois torrent/magnet legal, tarefas independentes, ainda não implementados.
 - **Refinamento da UI Android:** adiado, uma dívida por vez, [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9).
 - **Hardware:** Fedora 44 headless, i7-3770, 7,6 GiB RAM, SSD 223,6 GiB, Moto G06, sem monitor; preservar recursos. Dados de RAM/disco do inventário original são snapshots.
 - **Regras:** sem segredos no Git/log, sem `sudo`, SSH/firewall/Narys/outros clusters alterados sem autorização, sem force push/rebase destrutivo nem merge automático; custo proporcional à utilidade. O servidor não deve depender de agentes/LLMs para operar.
