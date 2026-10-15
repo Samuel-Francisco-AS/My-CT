@@ -89,3 +89,39 @@
 - **Artefato:** `artifacts/myct-2-debug.apk`,13,496,124 bytes, versão0.2-sftp/code3; SHA256 `4d2cd343d9685c8795f29e215e270cd2c1de63808ea6f6828bf3ef633778c86a`; binário fora do Git.
 - **Próximo gate:** checklist curto em android/README; navegação, enviar/baixar/abrir, conflito/cancelamento, abas, rede/provedor e preferência IME no Moto. ADB sem aparelho; validação física MYCT-2 pendente, sem PASS inventado. Relatório `MYCT-2-SFTP-REPORT.md` detalha retomada e publicação.
 - **Fechamento/publicação:** implementação `7bdef5123e95230a5702d654353f596f5c1e7d77` enviada; [PR #7](https://github.com/Samuel-Francisco-AS/My-CT/pull/7) open/draft com base `myct-1-android-ssh`, dependente do PR #6, sem merge. Proprietário respondeu explicitamente para registrar validação física pendente. Fechamento posterior é documental, sem novo APK.
+
+### 2026-10-15 — MYCT-2R correção SFTP (novo gate físico pendente)
+
+- **Base/relato:** branch `myct-2r-sftp-stability` sobre MYCT-2 atualizada
+  `b3054b6`. Comentário físico PR #7 confirma navegação/duas imagens abertas,
+  PDF não abrindo após queda relatada, vídeo cancelado em background e melhora
+  subjetiva IME false. Causa TCP/corrupção do PDF não comprovada.
+- **Correções:** cancel aborta só canal idempotentemente, streams fechados pelo
+  worker; corrida connect/cancel protegida. COMPLETE após streams/canal; SIZE
+  SAF opcional indisponível vira aviso, divergência permanece erro/limpeza.
+  MIME/visualizador têm mensagem distinta; bytes exatos preservados.
+- **Background:** serviço dataSync separado, notificação/progresso/Cancelar,
+  start por usuário com UI visível, START_NOT_STICKY/onTimeout; processo/estado
+  não dependem da aba. Sem notificação/serviço, manter visível ou cancelará.
+  onDestroy de Activity recriada não desconecta por engano; ownership do serviço
+  protege cópia. Sem garantia contra TCP/kill/Doze, nem retry/credenciais em disco;
+  só booleano de interrupção. specialUse interativo preservado, sem wakelocks.
+- **UX/IME:** unidades decimais KB/MB/GB e contraste Material na área Arquivos.
+  Default IME true/persistência/toggle/restartInput preservados. MYCT-1P suspensa.
+- **Testes:** build/JVM/lint offline PASS (26 descobertos,25 PASS/1 ignorado),
+  lint sem problemas. PDF sintético, truncamento, escrita/flush falhos,
+  cancel concorrente,32MiB sem arquivo em disco; canais reais JSch sobre Session
+  simulada preservam shell e não chamam Session.disconnect. Não é auth/TCP real.
+  Prova OpenSSH por pipes8MiB/direção PASS; Termux21 arquivos/2 patches intactos.
+- **Consumo:** build72,81s/RSS~1,67GiB/CPU451%,swap0; disco132GiB livres;
+  prova local0,15s/RSS18396KiB. Nenhuma nova dependência/instalação/serviço Fedora.
+- **APK:** `artifacts/myct-2r-debug.apk`,13522361 bytes, versão0.2.1/code4;
+  SHA256 `c06e4521f55dcfc4596c909d65132257105eb305a4d456ef4b163fcf5ab51e04`.
+  Certificado debug igual à MYCT-2, assinatura válida, binário fora do Git.
+- **Commit código/APK:** `fc87cda61d98b40137953db26daff7859507ae97`.
+  Fechamento documental posterior; SHA final no PR/entrega. Publicação em draft
+  com base `myct-2-sftp`, dependente #7→#6; main preservada e nenhum merge.
+- **Retomada:** ADB sem aparelho; gate curto PDF/erro isolado/background/retorno/
+  cancelamento/MB-GB e contraste em android/README e relatório MYCT-2R. Não
+  declarar background/PDF aprovados no Moto por JVM; não repetir provas físicas
+  já aprovadas sem motivo. Upload/conflito físico anteriores seguem pendentes.

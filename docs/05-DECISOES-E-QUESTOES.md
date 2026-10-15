@@ -105,3 +105,29 @@ preservado.
 - Cópias acompanhadas com Activity visível; sair cancela. Não ampliar o FGS de
   terminal para transferências persistentes. Hash remoto/retomada avançada e
   operações destrutivas ficam fora do recorte. Aceite físico MYCT-2 pendente.
+
+### MYCT-2R — transferência iniciada pelo usuário em background (15/10/2026)
+
+- Rodada corretiva autorizada após relato físico no PR #7: duas imagens e
+  navegação OK; PDF não abriu após queda relatada; vídeo cancelou ao ocultar.
+  Não atribuir corrupção ou causa TCP sem evidência. MYCT-1P segue suspensa.
+- Substituir a política de cancelar sempre em onStop por continuidade enquanto
+  serviço **dataSync separado** estiver ativo (ou iniciando por ação visível).
+  specialUse permanece exclusivamente SSH interativo. Não há senha/URI em
+  Intent, jobs genéricos, replay, wakelock ou pedido de exceção de bateria.
+- Android documenta dataSync para upload/download. UIDT (API34+) foi considerado,
+  mas acrescentaria agendamento/constraints e outro caminho para min26, para
+  uma cópia imediata que depende da Session já autenticada em memória. O recorte
+  usa dataSync com limite Android15+ e stop imediato em onTimeout; não promete
+  transferências indefinidas nem aceite Play Store. Reavaliar se duração real
+  exceder limites, sem improvisar uso de specialUse para contorná-los.
+- Sem notificação permitida/canal ativo, a cópia permanece visível e cancela ao
+  ocultar. Parada do processo é definitiva; marcador booleano indica possível
+  parcial ao reabrir, sem guardar caminhos privados nem retomar automaticamente.
+- Cancelamento aborta só canal; worker fecha streams. Queda TCP real continua
+  afetando Session/PTY/SFTP. SIZE SAF opcional indisponível não é corrupção;
+  divergência de contagem/tamanho é falha, não sucesso.
+- Referências: [tipos FGS/dataSync](https://developer.android.com/develop/background-work/services/fgs/service-types#data-sync),
+  [limites](https://developer.android.com/develop/background-work/services/fgs/timeout),
+  [UIDT](https://developer.android.com/develop/background-work/background-tasks/uidt).
+  Evidências e riscos no relatório MYCT-2R; gate físico pendente.
