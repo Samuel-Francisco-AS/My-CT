@@ -91,3 +91,17 @@ manual de criação/attach no namespace myct; o app apenas exibe/copia comando,
 não o executa ao conectar. Processo remoto e conexão Android são camadas
 separadas. Evidências, limites e retomada no relatório MYCT-1R; plano inaugural
 preservado.
+
+### MYCT-2 — recorte SFTP e entrada IME (15/10/2026)
+
+- Por decisão do proprietário, suspender investigação de latência MYCT-1P e
+  implementar SFTP nativo + preferência IME reversível, default true.
+- Reutilizar JSch 2.28.8/sessão SSH autenticada. Um canal exclusivo por operação
+  sequencial, separado da PTY; SAF Open/CreateDocument, sem permissões amplas.
+- Sem sobrescrita nesta entrega: conflitos pedem outro nome. Publicar upload
+  temporário com hardlink@openssh.com, pois rename JSch pode selecionar POSIX
+  com substituição. Requer extensão/filesystem compatíveis; falha explícita
+  sem fallback inseguro. Reavaliar portabilidade em missão futura, se necessário.
+- Cópias acompanhadas com Activity visível; sair cancela. Não ampliar o FGS de
+  terminal para transferências persistentes. Hash remoto/retomada avançada e
+  operações destrutivas ficam fora do recorte. Aceite físico MYCT-2 pendente.

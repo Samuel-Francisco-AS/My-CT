@@ -38,6 +38,13 @@ class TerminalModel(application: Application) {
     var fontSizeSp by mutableIntStateOf(prefs.getInt("font-size-sp", 12).coerceIn(10, 20))
         private set
     val diagnostics = TerminalDiagnostics()
+    val files = FilesModel(application)
+    var enforceCharBasedInput by mutableStateOf(prefs.getBoolean("char-based-input", true))
+        private set
+    fun setCharBasedInput(enabled: Boolean) {
+        enforceCharBasedInput = enabled
+        prefs.edit { putBoolean("char-based-input", enabled) }
+    }
     fun setCaptureProtection(enabled: Boolean) {
         protectScreenshots = enabled
         prefs.edit { putBoolean("protect-capture", enabled) }
@@ -120,6 +127,7 @@ class TerminalModel(application: Application) {
                     putString("last-user", username)
                 }
                 updatePhase(Phase.CONNECTED)
+                files.attach(current)
                 message = "SSH conectado · host verificado · PTY real"
                 // Apply actual view dimensions even if they were measured before channel.connect().
                 screen.requestPtyResize()
@@ -167,12 +175,13 @@ class TerminalModel(application: Application) {
             } finally {
                 secret.fill(0)
                 withContext(NonCancellable + Dispatchers.IO) { current.close() }
-                if (id == generation) { screen.finish(); connection = null; pending = null; ctrl = false }
+                if (id == generation) { screen.finish(); connection = null; pending = null; ctrl = false; files.attach(null) }
             }
         }
     }
 
     fun disconnect(reason: String = "Sessão encerrada. Você pode reconectar.") {
+        files.attach(null)
         generation++
         val old = connection
         connection = null

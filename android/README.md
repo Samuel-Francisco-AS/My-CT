@@ -173,3 +173,78 @@ JVM: `MYCT_TEST_LOCAL_SSH=1 ./gradlew :app:testDebugUnitTest --offline` inclui
 handshake real local sem autenticação/shell. O adaptador Base64 em src/test é
 somente para alimentar OSC no teste JVM, não faz parte do APK. Sem variável,
 esse teste SSH é ignorado. Licenças em assets e `terminal/upstream/`.
+
+## MYCT-2 — Arquivos via SFTP e preferência IME
+
+O proprietário informou validação física positiva das principais capacidades
+MYCT-1R. O histórico acima foi preservado. **MYCT-2 ainda exige o checklist
+físico abaixo**; build/JVM/subsistema local não são aceite no Moto.
+
+Atualização: APK `../artifacts/myct-2-debug.apk`, versão **0.2-sftp**, code **3**,
+mesmo pacote/assinatura debug. Instalar por USB/MTP ou SFTP existente e abrir
+pelo gerenciador Android; com dispositivo autorizado, `adb install -r
+artifacts/myct-2-debug.apk` na raiz. Não desinstalar a versão anterior.
+
+Após conectar normalmente e verificar a host key, toque **Arquivos**. O canal
+SFTP reutiliza a sessão autenticada, sem pedir outra senha. Começa no home
+SFTP; toque nas pastas, use **↑ Pai**, **Atualizar** e **Enviar…**. Itens mostram
+nome, tipo, tamanho e data; links exigem confirmação para navegar e não são
+baixados/modificados. Máximo de 2.000 itens por listagem, com aviso se limitada.
+Não há exclusão, movimentação ou renomeação de itens existentes.
+
+- **Enviar:** escolha um documento no seletor Android, confira o nome remoto
+  e confirme. O nome pode ser alterado antes de enviar. Conflito é recusado;
+  selecione novamente com outro nome. Não há substituição nesta versão.
+- Upload usa streaming de 64KiB e diretório temporário exclusivo
+  `.myct-upload-<UUID>`. Depois de fechar/conferir tamanho, publica por hardlink
+  OpenSSH que falha se o destino já existe. Não usa rename POSIX que sobrescreve.
+  Exige `hardlink@openssh.com` e filesystem compatível; sem isso, recusa.
+  Limpa somente o payload/diretório temporário da operação; queda/cancelamento
+  pode impedir limpeza. Não elimina automaticamente resíduos após reconectar.
+- **Baixar:** toque em arquivo regular, **Escolher destino…**, crie um documento
+  pelo SAF e acompanhe. O seletor trata nomes existentes sem sobrescrever.
+  Ao terminar, **Abrir arquivo baixado** usa o provedor e um app compatível.
+- Download confere contagem/tamanho e tamanho/mtime remoto antes/depois; calcula
+  SHA-256 local por streaming, sem comando shell/hash remoto. Não prova hash de
+  duas pontas nem detecta toda alteração concorrente de mesmo tamanho/mtime.
+- **Cancelar:** fecha só o canal/streams da operação; a PTY é preservada se a
+  sessão SSH continuar válida. Download incompleto tenta excluir apenas o novo
+  documento criado por essa operação; se o provedor recusar, avisa sobre PARCIAL.
+  O provedor pode mostrar o destino antes de concluir; não há atomicidade SAF
+  universal nem retomada. Não abra um documento até o app confirmar conclusão.
+
+Uma operação de arquivos por vez, sem fila de transferências. Trocar abas ou
+girar a Activity mantém o estado; sair do app/tela visível cancela a operação.
+O FGS de terminal continua opt-in e não foi ampliado para download em background.
+Bloquear tela, trocar para outro app ou abrir seletor durante outra operação
+pode cancelar. Provedores lentos podem demorar a responder a close/cancel.
+Force-stop/reboot não executam limpeza nem retomada; confira os destinos antes
+de repetir. Não há senha/URI persistida para replay automático.
+
+**Opções → Entrada por caracteres:** preferência local, padrão **ligado/true**.
+Desligar usa false; religar restaura true. Feche Opções para a InputConnection
+ser reiniciada com a preferência, sem nova conexão SSH. Na aba Arquivos, será
+aplicada ao retornar ao Terminal. Pode mudar composição/teclado; não há promessa
+de resolver lag. A investigação MYCT-1P permanece suspensa por decisão do dono.
+
+### Checklist curto no Moto G06
+
+1. Atualizar com o APK MYCT-2, conectar e alternar Terminal/Arquivos sem nova
+   senha; listar home, abrir pasta/pai e atualizar. Testar nome com espaço/acento.
+2. Enviar um arquivo não sensível escolhido por SAF; atualizar e conferir tamanho
+   no Fedora. Repetir nome: deve recusar, preservar existente e permitir outro nome.
+3. Baixar um arquivo regular, escolher destino SAF e abrir pelo botão do app.
+   Testar nome já existente no seletor: destino antigo deve permanecer intacto.
+4. Cancelar arquivo suficientemente grande nas duas direções; conferir ausência
+   de falso sucesso, mensagens de parcial/temporário e PTY ainda utilizável.
+   Testar indisponibilidade de rede/provedor sem repetir transferências sozinho.
+5. Girar e trocar abas durante uma cópia; sair do app deve cancelar a cópia,
+   preservando a política FGS do terminal. Reconectar manualmente sem replay.
+6. Alternar Entrada por caracteres true/false/true, fechar Opções, testar Enter,
+   Backspace, acentos, Unicode, Ctrl/Esc/Tab, seleção e Paste; confirmar persistência
+   após reabrir. Não interpretar mudança subjetiva como diagnóstico de latência.
+
+Relatório, limites e evidências: [MYCT-2](../docs/MYCT-2-SFTP-REPORT.md).
+Testes sem rede: `./gradlew :app:testDebugUnitTest --offline`.
+Prova de subsistema OpenSSH local, sem autenticação/porta, na raiz:
+`python android/diagnostics/sftp-subsystem-proof.py` (gera só temporários próprios).
