@@ -21,7 +21,9 @@ class VaultOfflineTest(unittest.TestCase):
                           "'Prompt'", "'Unlock'", "subprocess.run", "getpass.getpass"):
             self.assertNotIn(forbidden, code)
         self.assertIn("UnlockWithMasterPassword", code)
-        self.assertIn("authenticated_ssh_session_required", code)
+        # SSH/logind is still required, but denial codes are now specific.
+        self.assertIn("require_authenticated_ssh_logind(props, tty, shell)", code)
+        self.assertIn("ssh_secondary_tty_unverified", code)
 
     def test_unlock_rejects_noninteractive_input_before_password_access(self):
         synthetic = "synthetic-password-DO-NOT-USE"
