@@ -81,7 +81,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         applyCaptureProtection(model.protectScreenshots)
-        setContent { MaterialTheme(colorScheme = darkColorScheme()) { TerminalApp(model) } }
+        setContent {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                // Surface supplies the correct onBackground content color to plain Text components.
+                Surface(color = MaterialTheme.colorScheme.background) { TerminalApp(model) }
+            }
+        }
     }
     fun applyCaptureProtection(enabled: Boolean) {
         if (enabled) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -103,7 +108,7 @@ private fun TerminalApp(model: TerminalModel) {
     var captureWarning by remember { mutableStateOf(false) }
     var measurements by remember { mutableStateOf<String?>(null) }
     var pendingPaste by remember { mutableStateOf<PendingPaste?>(null) }
-    var filesTab by rememberSaveable { mutableStateOf(false) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val active = model.phase == TerminalModel.Phase.CONNECTING || model.phase == TerminalModel.Phase.CONNECTED
     val connected = model.phase == TerminalModel.Phase.CONNECTED
     val pin = model.pinForHost()
@@ -146,7 +151,18 @@ private fun TerminalApp(model: TerminalModel) {
             TextButton(onClick = { settings = true }) { Text("Opções") }
             if (active) TextButton(onClick = { model.disconnect() }) { Text(if (connected) "Encerrar" else "Cancelar") }
         }
-        if (!active) {
+        Row(Modifier.fillMaxWidth()) {
+            listOf("Terminal", "Arquivos", "Saúde").forEachIndexed { index, label ->
+                TextButton(onClick = {
+                    pendingPaste = null
+                    if (index != 0) (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
+                        .hideSoftInputFromWindow(activity.window.decorView.windowToken, 0)
+                    selectedTab = index
+                }, modifier = Modifier.weight(1f)) { Text(if (selectedTab == index) "● $label" else label) }
+            }
+        }
+        if (selectedTab == 2) HealthScreen(model.health, Modifier.weight(1f))
+        else if (!active) {
             if (model.files.recoveryNotice.isNotEmpty()) Text(model.files.recoveryNotice,
                 modifier = Modifier.padding(horizontal = 12.dp), style = MaterialTheme.typography.bodySmall)
             Text(model.message, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -177,15 +193,7 @@ private fun TerminalApp(model: TerminalModel) {
                 Text("Use rede privada. Senha não é salva. Perda do processo exige nova autenticação; trabalho remoto pode ser preservado pelo tmux.", style = MaterialTheme.typography.bodySmall)
             }
         } else {
-            if (connected) Row(Modifier.fillMaxWidth()) {
-                TextButton(onClick = { filesTab = false }, modifier = Modifier.weight(1f)) { Text(if (!filesTab) "● Terminal" else "Terminal") }
-                TextButton(onClick = {
-                    pendingPaste = null
-                    (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(activity.window.decorView.windowToken, 0)
-                    filesTab = true
-                }, modifier = Modifier.weight(1f)) { Text(if (filesTab) "● Arquivos" else "Arquivos") }
-            }
-            if (connected && filesTab) FilesScreen(model.files, Modifier.weight(1f))
+            if (connected && selectedTab == 1) FilesScreen(model.files, Modifier.weight(1f))
             else {
             model.terminal?.let { session ->
                 var view by remember(session) { mutableStateOf<TerminalView?>(null) }

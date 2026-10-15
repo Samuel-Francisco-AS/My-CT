@@ -10,8 +10,8 @@ android {
         applicationId = "dev.myct"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.2.1-sftp-corrective"
+        versionCode = 5
+        versionName = "0.3.0-health"
     }
     buildFeatures { compose = true }
     compileOptions {
@@ -30,5 +30,6 @@ dependencies {
     implementation("androidx.compose.material3:material3:1.4.0")
     implementation("com.github.mwiede:jsch:2.28.8")
     implementation("org.bouncycastle:bcprov-jdk18on:1.86")
+    testImplementation("org.json:json:20250517")
     testImplementation("junit:junit:4.13.2")
 }

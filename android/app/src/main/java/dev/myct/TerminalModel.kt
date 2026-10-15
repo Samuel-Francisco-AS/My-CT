@@ -39,6 +39,7 @@ class TerminalModel(application: Application) {
         private set
     val diagnostics = TerminalDiagnostics()
     val files = FilesModel(application)
+    val health = HealthModel()
     var enforceCharBasedInput by mutableStateOf(prefs.getBoolean("char-based-input", true))
         private set
     fun setCharBasedInput(enabled: Boolean) {
@@ -128,6 +129,7 @@ class TerminalModel(application: Application) {
                 }
                 updatePhase(Phase.CONNECTED)
                 files.attach(current)
+                health.attach(current)
                 message = "SSH conectado · host verificado · PTY real"
                 // Apply actual view dimensions even if they were measured before channel.connect().
                 screen.requestPtyResize()
@@ -175,13 +177,14 @@ class TerminalModel(application: Application) {
             } finally {
                 secret.fill(0)
                 withContext(NonCancellable + Dispatchers.IO) { current.close() }
-                if (id == generation) { screen.finish(); connection = null; pending = null; ctrl = false; files.attach(null) }
+                if (id == generation) { screen.finish(); connection = null; pending = null; ctrl = false; files.attach(null); health.attach(null) }
             }
         }
     }
 
     fun disconnect(reason: String = "Sessão encerrada. Você pode reconectar.") {
         files.attach(null)
+        health.attach(null)
         generation++
         val old = connection
         connection = null
@@ -194,6 +197,7 @@ class TerminalModel(application: Application) {
         if (old != null) scope.launch(Dispatchers.IO) { old.close() }
     }
     private fun updatePhase(value: Phase) {
+        if (value != Phase.CONNECTED) health.attach(null)
         phase = value
         onConnectionStateChanged?.invoke()
     }

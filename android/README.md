@@ -1,3 +1,21 @@
+# My-CT Android — Terminal, Arquivos e Saúde
+
+**MYCT-3C (15/10/2026):** Dashboard implementado, **prova no Moto pendente**.
+APK `../artifacts/myct-3c-debug.apk`, `0.3.0-health`/code 5, assinatura compatível
+conferida contra MYCT-2R. Atualizar sem desinstalar. Conectar no Terminal e abrir
+Saúde: consulta CPU/RAM/disco/uptime em HTTP pelo túnel loopback dinâmico da mesma
+sessão SSH. Atualiza na entrada e por Atualizar; sem polling. Core precisa estar
+iniciado manualmente no Fedora; PostgreSQL pode permanecer parado. Amostras após
+falha/desconexão são identificadas como antigas. Nova sessão limpa dados anteriores.
+
+[Relatório, testes e roteiro físico MYCT-3C](../docs/MYCT-3C-DASHBOARD-REPORT.md).
+Build continua pelos comandos abaixo. `org.json` é da plataforma no APK; a
+biblioteca JSON adicional é somente para testes JVM. Permissão HTTP restrita a
+`127.0.0.1`, sem alteração da verificação de host/auth SSH. Sem nova instalação
+no aparelho nesta sessão (ADB vazio).
+
+## Histórico Android anterior
+
 # My-CT Android — terminal SSH e arquivos SFTP (fase inicial integrada)
 
 **Estado de 15/10/2026:** no Moto G06, o proprietário utilizou SSH real e SFTP, baixou/abriu imagens e PDF do Fedora e enviou PDF ao Fedora. A transferência SFTP em segundo plano da MYCT-2R **ainda não foi validada fisicamente**. Lag de digitação, interface rígida e scroll que retorna ao topo da pasta pai ficam para a [trilha de refinamento](../docs/09-TRILHA-REFINAMENTO-ANDROID.md). [Fechamento](../docs/08-FECHAMENTO-CICLO-ANDROID.md) · [Retomada](../docs/10-RETOMADA-PROJETO.md).
