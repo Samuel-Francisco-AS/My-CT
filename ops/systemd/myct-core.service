@@ -1,0 +1,19 @@
+[Unit]
+Description=My-CT Core - API local de saude do Fedora
+Documentation=https://github.com/Samuel-Francisco-AS/My-CT/blob/main/server/README.md
+After=local-fs.target
+RequiresMountsFor=/home/sam/Projetos/My-CT/server
+
+[Service]
+Type=simple
+User=sam
+WorkingDirectory=/home/sam/Projetos/My-CT/server
+ExecStart=/home/sam/Projetos/My-CT/server/myct-core
+Restart=on-failure
+RestartSec=3s
+NoNewPrivileges=yes
+LimitCORE=0
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
