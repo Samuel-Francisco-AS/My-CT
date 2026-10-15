@@ -164,8 +164,10 @@ escuro, fornecendo a cor de conteúdo aos textos. Nenhuma outra refatoração.
 
 Reexecutado o comando Android documentado acima, com
 `:app:assembleDebug :app:testDebugUnitTest :app:lintDebug --offline --console=plain`:
-**BUILD SUCCESSFUL**, **34 testes aprovados, 0 falhas, 1 ignorado** (handshake
-SSH opcional), lint **No issues found**. Gradle emitiu aviso de limite de
+**BUILD SUCCESSFUL** em 1 min 16 s, **34 testes aprovados, 0 falhas, 1 ignorado**
+(handshake SSH opcional). Lint: **0 erros, 6 avisos**, todos sobre versões de
+Gradle/dependências disponíveis (incluindo recomendação de Compose para teclado/
+mouse); nenhuma dependência foi atualizada neste hotfix. Gradle emitiu aviso de limite de
 metaspace ao encerrar o daemon; não houve falha nem alteração dos limites/configuração.
 
 APK regenerado em `artifacts/myct-3c-debug.apk`, checksum atualizado em
