@@ -139,5 +139,31 @@ a CLI permanece fixa em `myct`. Substituição do banco original exige planejame
 e autorização; não há comando destrutivo automático. Restore ainda não é evidência
 aprovada sem execução real.
 
-Sem dashboard Android, downloads ou automações nesta entrega. Métrica de CPU
+Este capítulo descreve o recorte histórico MYCT-3A/3B, anterior ao Dashboard e aos downloads. Métrica de CPU
 é amostrada por 120 ms; uptime é do Core; espaço usa `f_bavail`.
+
+
+## Downloads HTTP/HTTPS — MYCT-5A
+
+Executável C++20 separado do Core, usando curl instalado e systemd transitório
+**de usuário**, sem banco, API adicional ou instalação de serviço. Não iniciar
+segunda instância do Core na 8765: o serviço instalado continua sendo o dono dela.
+
+```sh
+make myct-download
+./myct-download start 'https://example.com/' exemplo.html
+./myct-download list
+./myct-download status ID
+./myct-download cancel ID
+```
+
+`start` retorna UUID; consultar o resultado por ID. Um worker por vez, sem fila.
+Destino `~/Downloads/My-CT/ID/nome`, parcial `.part`; total desconhecido = `-1`.
+Precisa de curl (Fedora validado: 8.18; pelo menos 8.4 para limite durante corpo
+sem tamanho), systemd de usuário ativo e linger previamente habilitado pelo dono.
+Nenhum pacote, serviço ou binário ativo é instalado por `make`.
+`make test` inclui integrações reais com systemd/curl, loopback e HOME temporário
+(~37 s); requer esse ambiente.
+
+[Relatório MYCT-5A](../docs/MYCT-5A-DOWNLOADS-REPORT.md) contém instalação
+opcional, limites, recuperação e procedimento **pendente** de prova SSH/Moto.

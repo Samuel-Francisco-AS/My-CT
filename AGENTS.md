@@ -9,7 +9,7 @@ Estas orientações destinam-se a Codex e outros agentes que trabalhem neste rep
 
 **Restrições MYCT-4:** não compartilhar senha/cofre/token com agentes, não automatizar desbloqueio após reboot, não criar/reinicializar coleção ou relaxar verificação do GNOME Keyring interno/hash. Preservar SSH, SELinux, systemd, PostgreSQL e Narys sem novas mudanças não autorizadas. Os PRs #13 e #14 foram integrados à `main`; sem repetição automática dos testes físicos já aceitos.
 
-**Fora deste fechamento:** downloads HTTP(S)/torrent e rotinas servidor-side ainda não implementadas. Lag Android, UX rígida, retorno ao topo em navegação SFTP e teste de transferência em background são dívidas da [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9), **adiadas** até solicitação específica. Engenharia proporcional à utilidade real, sem superdimensionar controles para produto comercial.
+**MYCT-5A nesta branch/PR:** HTTP(S) via CLI C++20/curl e unidades transitórias do systemd de usuário; testes Fedora aprovados, prova real de desconexão SSH/Moto ainda pendente. Ver [relatório MYCT-5A](docs/MYCT-5A-DOWNLOADS-REPORT.md). Torrent e rotinas servidor-side continuam não implementadas. Lag Android, UX rígida, retorno ao topo em navegação SFTP e teste de transferência em background são dívidas da [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9), **adiadas** até solicitação específica. Engenharia proporcional à utilidade real, sem superdimensionar controles para produto comercial.
 
 ## Mandato
 Criar utilidade comprovada em um servidor Fedora headless com recursos limitados e cliente Android nativo. Preservar a intenção do proprietário, a saúde do PC e a possibilidade de continuidade sem agentes pagos.
