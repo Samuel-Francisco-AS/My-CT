@@ -2,14 +2,7 @@
 
 **My-CT** é uma iniciativa de infraestrutura pessoal: um servidor Linux doméstico, administrado por um aplicativo Android nativo, capaz de executar tarefas, disponibilizar arquivos e realizar downloads sem depender de uma sessão gráfica.
 
-> **Estado em 15/10/2026 — ciclo Android/SSH/SFTP encerrado com dívidas explícitas:** o proprietário comprovou no Moto G06 terminal SSH real, navegação SFTP, download/abertura de imagens e PDF e upload de PDF para o Fedora. MYCT-2R inclui serviços para SSH/transferência e controles de UX; **transferência SFTP em segundo plano ainda não foi validada no aparelho**. Permanecem dívidas de lag, interface rígida e scroll SFTP que volta ao topo ao sair de uma pasta. **Core C++20/PostgreSQL, Dashboard e downloads executados no Fedora ainda não foram implementados.** Detalhes: [fechamento](docs/08-FECHAMENTO-CICLO-ANDROID.md) e [retomada](docs/10-RETOMADA-PROJETO.md).
-
-**Nesta branch, MYCT-3B validada no Fedora:** Core C++20 com saúde real em
-`127.0.0.1:8765` e persistência PostgreSQL por socket Unix privado. Build,
-gravação/leitura após reinícios e saúde com banco parado passaram. Ver
-[relatório MYCT-3B](docs/MYCT-3B-POSTGRES-REPORT.md) e [operação do Core](server/README.md).
-PR #11 depende da MYCT-3A/PR #10; sem merge automático. Dashboard e downloads
-continuam fora deste ciclo.
+> **Estado em 15/10/2026 — MYCT-3A/3B integradas à main:** terminal SSH e SFTP funcionais no Moto G06 (PDF nos dois sentidos), e **Core C++20 com métricas reais e PostgreSQL local comprovados no Fedora**. PRs [#10](https://github.com/Samuel-Francisco-AS/My-CT/pull/10) e [#11](https://github.com/Samuel-Francisco-AS/My-CT/pull/11) mesclados. API HTTP somente em `127.0.0.1:8765`; banco PostgreSQL por socket Unix privado, sem TCP. **Core e banco ficaram parados após o teste**, dados preservados: ainda não há serviço systemd My-CT, Dashboard Android, downloads server-side ou automações. Permanecem dívidas de lag/UX/scroll e validação SFTP background ([issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9)). Ver [fechamento MYCT-3A/3B](docs/MYCT-3AB-FECHAMENTO-REPORT.md) e [retomada](docs/10-RETOMADA-PROJETO.md).
 
 ## Objetivo
 
@@ -48,7 +41,9 @@ As escolhas específicas de bibliotecas, contratos e divisão de entregas são *
 | [Correção MYCT-2R](docs/MYCT-2R-CORRECTION-REPORT.md) | Isolamento SFTP, conclusão, background dataSync, tamanhos e testes |
 | [Fechamento do ciclo Android](docs/08-FECHAMENTO-CICLO-ANDROID.md) | Histórico, evidências físicas, limitações e estado de aceite |
 | [Trilha de refinamento](docs/09-TRILHA-REFINAMENTO-ANDROID.md) | Lag, scroll SFTP, UX, validações em background e demais dívidas adiadas |
-| [Guia de retomada](docs/10-RETOMADA-PROJETO.md) | Ponto de partida da próxima conversa, próxima fase Core e comandos de build |
+| [Guia de retomada](docs/10-RETOMADA-PROJETO.md) | Ponto de partida atualizado: MYCT-3C, saúde real no Moto |
+| [Core/PostgreSQL MYCT-3B](docs/MYCT-3B-POSTGRES-REPORT.md) | Evidência Fedora: build, banco, isolamento, consumo e recuperação |
+| [Fechamento MYCT-3A/3B](docs/MYCT-3AB-FECHAMENTO-REPORT.md) | PRs #10/#11, SHAs, provas e pendências |
 | [Build e instalação Android](android/README.md) | CLI, transferência manual e uso do terminal |
 | [Orientações para agentes](AGENTS.md) | Regras de colaboração para Codex e outros agentes |
 
@@ -73,6 +68,5 @@ Estas issues são pontos de acompanhamento **revisáveis**, não marcos com data
 
 ## Ponto de partida
 
-O inventário Fedora foi registrado em MYCT-0. O ciclo Android/SSH/SFTP foi consolidado em MYCT-1/1R/1P/2/2R, com uso físico positivo e pendências assumidas. **Próxima frente sugerida: Core C++20, PostgreSQL e saúde real do servidor, após discussão do menor recorte útil**. Para iniciar nova conversa, leia [docs/10-RETOMADA-PROJETO.md](docs/10-RETOMADA-PROJETO.md). A [trilha de refinamento](docs/09-TRILHA-REFINAMENTO-ANDROID.md) está adiada, sem bloquear a nova frente.
+MYCT-3A e MYCT-3B foram integradas e validadas no Fedora (Core C++20 + HTTP local + PostgreSQL por socket Unix). **Próxima entrega sugerida: MYCT-3C**, uma tela Android enxuta exibindo dados reais da API via túnel autenticado pela sessão SSH existente, com comprovação no Moto G06. Sem abrir API na rede ou exigir serviços gráficos. O [guia de retomada](docs/10-RETOMADA-PROJETO.md) e o [guia do Core](server/README.md) trazem os pontos de partida. O refinamento Android continua adiado na [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9).
 
-Os comandos de build e instalação do APK estão em [android/README.md](android/README.md). Preparação e deploy do servidor serão tratados em missões específicas após revisão de dependências e configuração.
