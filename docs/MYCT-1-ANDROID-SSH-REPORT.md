@@ -120,4 +120,4 @@ Os testes de emulação são JVM, sem renderer/IME Android em execução; não s
 
 **Retomada mínima:** instalar o APK no Moto G06 por método manual descrito, obter fingerprint por canal confiável e executar o checklist de android/README.md. Registrar resultados físicos no diário antes de aprovar SSH-01/02/03 e AND-01. Confirmar `tty` e `stty size`, `pwd`, `uname -a`, `top`/vi, Ctrl-C/Tab/Esc/setas, teclado/orientação, chave incorreta e desconexão/reconexão. Não ampliar para SFTP ou Core antes de corrigir eventuais falhas centrais do terminal.
 
-O planejamento inaugural não foi reescrito. Git/PR serão entregues com estado de validação parcial, sem merge automático.
+O planejamento inaugural não foi reescrito. Branch publicada: `myct-1-android-ssh`. Commit da implementação/testes: `19289c90e7f04c3b63aa1b4d59a7331a15fa7c22`. [PR #6](https://github.com/Samuel-Francisco-AS/My-CT/pull/6) aberto para main em **draft**, com validação física pendente e sem merge automático. O registro desta publicação é um commit documental posterior, sem alteração do APK.

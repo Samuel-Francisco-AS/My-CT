@@ -50,4 +50,5 @@
 - **Dispositivo físico:** ADB sem dispositivos; proprietário informou que a validação física ficará pendente. `pwd`, `uname -a`, programas interativos, IME/teclas/resize e reconexão no Moto G06 NÃO foram validados. Resultado parcialmente validado, sem aprovação da missão no aparelho.
 - **Riscos e pendências:** autenticação somente password/host Ed25519; testar política real do servidor sem alterá-la, UI/IME, rede e lifecycle Android. Não há foreground service. APK debug com assinatura local; transferência manual por USB/SFTP descrita em android/README.md.
 - **Decisões alteradas:** nenhuma direção arquitetural; bibliotecas e recorte são escolhas experimentais revisáveis em docs/05. SSH/firewall/serviços existentes preservados.
+- **Publicação:** implementação em `19289c9`, branch enviada por SSH; [PR #6](https://github.com/Samuel-Francisco-AS/My-CT/pull/6) criado em draft pelo conector GitHub (gh local sem sessão válida). Nenhum merge.
 - **Próximo menor passo útil:** instalar APK no Moto G06, conferir host key e executar checklist físico antes de ampliar para SFTP/Core.
