@@ -53,3 +53,12 @@
 ## Integração final verificada (15/10/2026)
 
 Todos os PRs do ciclo foram mesclados em `main`: #6 → `ebe0773`, #7 → `58fcf7a`, #8 → `e031998`. Histórico preservado; [relatório de fechamento com SHAs integrais](08-FECHAMENTO-CICLO-ANDROID.md). Este registro documental posterior foi feito diretamente na `main`. As branches `myct-1-android-ssh`, `myct-2-sftp`, `myct-2r-sftp-stability` podem ser excluídas após sincronização local, sem apagar a implementação já mesclada. O refinamento continua registrado na issue #9 e não está implementado.
+
+## MYCT-3B — persistência PostgreSQL (15/10/2026)
+
+MYCT-3A permanece no PR #10, sem merge automático. A MYCT-3B deriva de
+`myct-3a-core-health`, branch `myct-3b-postgres`, com libpq direta, migração
+mínima e CLI local de eventos. Evidência e pendências estão no
+[relatório MYCT-3B](MYCT-3B-POSTGRES-REPORT.md); instalação/build/retomada em
+[server/README.md](../server/README.md). Não avançar Android/systemd/downloads
+por inferência nem declarar aceite do banco sem prova real registrada.

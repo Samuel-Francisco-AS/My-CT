@@ -144,3 +144,11 @@
 - **Documentação incorporada:** relatório de fechamento, backlog de refinamento, handoff, README/requisitos/decisões/planejamento/diário e instruções Android revisadas. [Issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9) mantém as dívidas conscientemente adiadas.
 - **Validade do aceite:** fluxo feliz PDF nos dois sentidos e terminal/SFTP reais no Moto; background de transferências, cancelamento/conflitos adversos e UX/lag/scroll permanecem pendentes. Merge não é aprovação desses cenários.
 - **Reinício do trabalho:** criar branch nova de `origin/main`; consultar `docs/10-RETOMADA-PROJETO.md`. Remoção de branches remotas é operação posterior, mediante comandos entregues ao proprietário.
+
+## 15/10/2026 — MYCT-3B: código PostgreSQL e gate de instalação
+
+Branch derivada da MYCT-3A atualizada, sem alterar PR #10. Implementadas CLI de
+eventos e migração via libpq direta/Makefile. Sem instalações ou serviços;
+compilação bloqueada por libpq-devel ausente e integração real não aprovada.
+Autorização de instalação solicitada. Evidência, comandos e retomada no
+[relatório MYCT-3B](MYCT-3B-POSTGRES-REPORT.md) e em `server/README.md`.

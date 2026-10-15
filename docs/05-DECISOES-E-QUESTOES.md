@@ -140,3 +140,16 @@ preservado.
 - **DECIDIDO:** abrir e adiar trilha de refinamento (lag, UI rígida, scroll SFTP que perde posição ao voltar, validação background/cancelamentos) documentada em [docs/09](09-TRILHA-REFINAMENTO-ANDROID.md) e [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9).
 - **PROPOSTO, não aprovado automaticamente:** próxima entrega Core C++20 + PostgreSQL + dashboard de saúde real; menor demonstração e segurança/rede a decidir na conversa seguinte. Sem backend ou instalação deste ciclo.
 - **Evidência:** após MYCT-2R, proprietário baixou/abriu PDF do Fedora e enviou outro PDF ao Fedora com sucesso; MYCT-2 havia transferido/aberto imagens. Serviço Android dataSync de SFTP ainda **não testado fisicamente**. [Relatório](08-FECHAMENTO-CICLO-ANDROID.md).
+
+## 2026-10-15 — MYCT-3B: persistência mínima autorizada
+
+- **Implementação:** libpq direta substitui a candidata ADR-P02/libpqxx neste
+  recorte: uma tabela, duas operações parametrizadas, sem benefício concreto de
+  wrapper/ORM. Makefile da MYCT-3A preservado, sem CMake.
+- Banco `myct` em cluster exclusivo no diretório do usuário, socket Unix privado,
+  peer e TCP desativado; sem tocar instâncias de outros projetos ou serviços.
+- Migração SQL explícita/transacional; CLI grava/consulta eventos com ID e UTC.
+  HTTP de saúde não consulta banco e não ganha endpoints de escrita.
+- Aceite exige compilação e gravação/leitura reais, sobrevivência ao encerramento
+  do Core, saúde com banco parado e bind local. Instalação depende de autorização;
+  evidência e gate corrente: [relatório MYCT-3B](MYCT-3B-POSTGRES-REPORT.md).

@@ -1,3 +1,5 @@
+#include "postgres.hpp"
+
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -181,12 +183,16 @@ int main(int argc, char** argv) {
     try {
         if (argc == 2 && std::string(argv[1]) == "--once") {
             std::cout << health_json() << '\n';
+        } else if (argc == 3 && std::string(argv[1]) == "--record-event") {
+            std::cout << record_event(argv[2]) << '\n';
+        } else if (argc == 3 && std::string(argv[1]) == "--get-event") {
+            std::cout << get_event(argv[2]) << '\n';
         } else if (argc == 1) {
             serve(8765);
         } else if (argc == 3 && std::string(argv[1]) == "--port") {
             serve(parse_port(argv[2]));
         } else {
-            std::cerr << "Usage: myct-core [--once | --port 8765]\n";
+            std::cerr << "Usage: myct-core [--once | --port 8765 | --record-event TYPE | --get-event ID]\n";
             return 2;
         }
     } catch (const std::exception& error) {
