@@ -26,7 +26,7 @@ data class VaultViewState(val phase: VaultPhase = VaultPhase.NO_SSH, val compati
         VaultPhase.UNLOCKING -> "Desbloqueando cofre…"
         VaultPhase.INPUT_REJECTED -> "Senha não enviada: caracteres de controle ou mais de 4095 bytes não são aceitos neste terminal. Consulte o estado antes de tentar novamente."
         VaultPhase.DENIED -> "Desbloqueio recusado antes da senha. Código: ${diagnostic ?: "unlock_helper_refused"}. Nenhuma senha foi enviada."
-        VaultPhase.ERROR -> "Não foi possível consultar ou desbloquear. Confira myct-vault no Fedora."
+        VaultPhase.ERROR -> "Não foi possível consultar ou desbloquear. Código: ${diagnostic ?: "erro_indefinido"}."
     }
     val busy get() = phase in setOf(VaultPhase.CHECKING, VaultPhase.PREPARING, VaultPhase.UNLOCKING)
 }
@@ -108,12 +108,12 @@ class VaultModel internal constructor(
                 if (id == generation) state = VaultViewState(VaultPhase.DENIED, diagnostic = denial.safeCode)
             } catch (_: TimeoutCancellationException) {
                 attempt.close()
-                if (id == generation) state = VaultViewState(VaultPhase.ERROR)
+                if (id == generation) state = VaultViewState(VaultPhase.ERROR, diagnostic = "ssh_prompt_timeout")
             } catch (_: CancellationException) {
                 attempt.close()
             } catch (_: Exception) {
                 attempt.close()
-                if (id == generation) state = VaultViewState(VaultPhase.ERROR)
+                if (id == generation) state = VaultViewState(VaultPhase.ERROR, diagnostic = "ssh_channel_or_protocol_error")
             }
         }
     }
