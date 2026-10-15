@@ -87,7 +87,7 @@ class VaultModel internal constructor(
                     unlockChannel = opened
                     opened.awaitPasswordPrompt()
                 }
-                if (id != generation) return@launch
+                if (id != generation) { channel?.close(); return@launch }
                 if (asksPassword) {
                     state = VaultViewState(VaultPhase.PASSWORD)
                 } else {
