@@ -125,3 +125,13 @@
   cancelamento/MB-GB e contraste em android/README e relatório MYCT-2R. Não
   declarar background/PDF aprovados no Moto por JVM; não repetir provas físicas
   já aprovadas sem motivo. Upload/conflito físico anteriores seguem pendentes.
+
+
+### 2026-10-15 — aceite funcional físico e encerramento da fase Android/SSH/SFTP
+- **Evidência diretamente relatada pelo proprietário no Moto G06:** após instalar a MYCT-2R, PDF Fedora→Android baixou e **abriu corretamente**, e PDF Android→Fedora foi **enviado com sucesso**. Imagens e navegação SFTP já haviam funcionado. Não há confronto de hashes reais do PDF e a causa da falha do PDF na versão anterior permanece não identificada.
+- **Não executado pelo proprietário:** transferência de arquivo grande da MYCT-2R com Android em segundo plano/tela bloqueada; teste fica como dívida, assim como cancelamento/conflitos no cenário físico. Background de SSH anteriormente relatado positivo, sem promessa de sobrevivência a kill.
+- **Dívidas declaradas:** digitação/backspace ainda com lag perceptível (switch IME=false reduz); interface truncada/rígida; **lista SFTP volta ao início ao retornar do subdiretório para o pai**. O proprietário deseja deixar refinamento para depois e continuar o My-CT, não interromper o projeto com testes intermináveis.
+- **Decisão:** encerrar ciclo Android/SSH/SFTP com aceite funcional parcial por requisito; integrar PRs empilhados #6 → #7 → #8 à main, registrar fechamento do trabalho na documentação e limpar branches após confirmação. Sem reescrever ou falsear resultados dos relatórios anteriores.
+- **Artefatos documentais:** `docs/08-FECHAMENTO-CICLO-ANDROID.md`, `docs/09-TRILHA-REFINAMENTO-ANDROID.md`, `docs/10-RETOMADA-PROJETO.md`; [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9). Próxima conversa pode retomar a partir da main sem depender desta conversa.
+- **Próxima frente recomendada:** Core C++20/PostgreSQL + saúde real no servidor; pesquisar dependências atuais, obter aprovação para instalar/configurar serviços, entregar um fluxo vertical mínimo. O refinamento permanece backlog, sem datas e sem implementação neste fechamento.
+- **SHAs dos merges:** registrar na seção de integração do fechamento após retorno efetivo do GitHub, sem inventar resultados.

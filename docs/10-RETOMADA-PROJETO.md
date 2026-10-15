@@ -12,7 +12,7 @@
 
 ## O que existe na main após integração do ciclo
 
-- `android/`: Kotlin+Compose + JSch 2.28.8, SSH host key Ed25519 conferida por fingerprint SHA256, shell/PT Y, módulos de terminal derivados do Termux para ANSI e teclado; IME true/false configurável, fonte, clipboard manual, capturas opcionais, serviço SSH opt-in e helper manual `tmux`.
+- `android/`: Kotlin+Compose + JSch 2.28.8, SSH host key Ed25519 conferida por fingerprint SHA256, shell/PTY, módulos de terminal derivados do Termux para ANSI e teclado; IME true/false configurável, fonte, clipboard manual, capturas opcionais, serviço SSH opt-in e helper manual `tmux`.
 - Arquivos via SFTP na mesma Session JSch, UI própria de pastas, SAF upload/download (stream 64KiB, progresso/cancelamento, sem sobrescrever), isolamento de falhas por canal, serviço Android dataSync e apresentação de tamanhos MB/GB.
 - Evidência física do proprietário: SSH real e comandos básicos; layout/clipboard/tmux; navegação SFTP; imagens/PDF baixados e abertos; PDF enviado Android→Fedora. Background SFTP novo **não testado fisicamente**. Lag mesmo com false, interface rígida e scroll perdido ao retornar à pasta pai → [refinamento futuro](09-TRILHA-REFINAMENTO-ANDROID.md), issue #9.
 - **Ainda não existem:** código do Core C++/PostgreSQL/My-CT em produção, API/admin/dashboard, download HTTP(S)/torrent via servidor ou agente de automação. Um teste sintático C++20 não é um backend.

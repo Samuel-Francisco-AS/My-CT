@@ -69,3 +69,10 @@ Antes de migrar o banco: definir ownership de migrações, retenção, backup/re
 6. systemd mantém serviços após reboot e app fechado.
 
 Essa ordem pode mudar se uma dependência prática exigir.
+
+
+## Atualização de implementação — 15/10/2026
+
+**Android/SSH/SFTP já implementados e utilizados no Moto G06.** Kotlin+Compose, mwiede/JSch 2.28.8, módulos de terminal Termux reutilizados, Session SSH com host Ed25519 pinado e canais Shell/PTY e SFTP, SAF para arquivos locais, FGS specialUse opt-in do terminal e dataSync para transferência. tmux do Fedora é usado manualmente para preservar trabalho remoto. Download/upload de PDF via SFTP foram relatados funcionando; o dataSync de transferência **não teve validação física em segundo plano**.
+
+**Ainda apenas direcionais:** Core C++20, PostgreSQL, API JSON, painel de saúde, tarefas e motores de download no Fedora; as escolhas de bibliotecas/serviços desses componentes ainda não são implementações. Consulte [fechamento](08-FECHAMENTO-CICLO-ANDROID.md), [retomada](10-RETOMADA-PROJETO.md) e [refinamento](09-TRILHA-REFINAMENTO-ANDROID.md). A arquitetura poderá ser simplificada na prática, conforme evidência e custo operacional.

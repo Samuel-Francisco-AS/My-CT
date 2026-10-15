@@ -1,9 +1,8 @@
-# My-CT Android — SSH e correção MYCT-1R
+# My-CT Android — terminal SSH e arquivos SFTP (fase inicial integrada)
 
-Kotlin/Compose com terminal SSH/PTTY no Fedora. Login, shell e PTY da MYCT-1
-foram comprovados pelo proprietário no Moto G06. As correções MYCT-1R exigem
-novo aceite físico; build e testes JVM não o substituem. Evidências e limites:
-[relatório corretivo](../docs/MYCT-1R-CORRECTION-REPORT.md).
+**Estado de 15/10/2026:** no Moto G06, o proprietário utilizou SSH real e SFTP, baixou/abriu imagens e PDF do Fedora e enviou PDF ao Fedora. A transferência SFTP em segundo plano da MYCT-2R **ainda não foi validada fisicamente**. Lag de digitação, interface rígida e scroll que retorna ao topo da pasta pai ficam para a [trilha de refinamento](../docs/09-TRILHA-REFINAMENTO-ANDROID.md). [Fechamento](../docs/08-FECHAMENTO-CICLO-ANDROID.md) · [Retomada](../docs/10-RETOMADA-PROJETO.md).
+
+**APK mais recente da fase:** `../artifacts/myct-2r-debug.apk`, versão 0.2.1/code4, **não incluído no Git**. Atualizar sem desinstalar, preservando a mesma keystore debug local. Históricos MYCT-1/1R e MYCT-2/2R abaixo mantidos como referência; avisos de validação pendente nesses trechos são históricos, anteriores aos testes físicos posteriores.
 
 ## Build e instalação
 

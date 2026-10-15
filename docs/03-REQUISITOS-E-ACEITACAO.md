@@ -56,3 +56,24 @@ Reiniciar Fedora; serviço necessário volta, SSH continua acessível; verificar
 
 ## Sem falsa conclusão
 Cada requisito terá status: **não iniciado → em andamento → validado no hardware → aceito** ou **adiado/descartado com justificativa**. Registro de teste e commit acompanhando o status. Nenhum requisito deste documento está inicialmente marcado como implementado.
+
+
+## Estado de execução e aceite — 15/10/2026
+
+Este checkpoint complementa a tabela de requisitos inicial, **sem reescrever seus critérios**. Aceite de uma jornada funcional não significa comprovação automática de casos adversos ou de estabilidade prolongada.
+
+| IDs | Estado atual | Evidência e limite |
+| --- | --- | --- |
+| AND-01 | **Comprovado no Moto** | APK nativo instalado e usado; `myct-2r-debug.apk` versão 0.2.1/code4. |
+| SSH-01, SSH-03 | **Fluxo real comprovado** | SSH autenticado com host pinada e PTY, `ls/cd/pwd`. Testes completos de TUI e reconexão adversa não certificados. |
+| SSH-02 | **Funcionalidade relatada no aparelho, detalhes pendentes** | IME/resize/orientação, teclas/clipboard ajustados; lag permanece. |
+| FILE-01 | **Comprovado no Moto** | Navegação/listagem remota SFTP funcionando. UX de retorno à pasta pai perde posição de scroll (dívida). |
+| FILE-02 | **Fluxo real comprovado** | PDF enviado do Moto G06 ao Fedora com sucesso, após MYCT-2R; não equivale a hash bilateral documentado. |
+| FILE-03 | **Fluxo real comprovado** | Duas imagens e PDF baixados e abertos no Moto. Primeiro incidente MYCT-2 não teve causa exata identificada. |
+| FILE-04 | **Parcial: implementado, teste físico incompleto** | Progresso, cancelamento, conflito sem sobrescrita e tratamento de parcial testados por código/JVM; cenários adversos e background dataSync não certificados no Moto. |
+| UX-01 | **Parcial / dívida** | Interface ainda rígida, scroll reinicia ao voltar da pasta e lag perceptível. `shouldEnforceCharBasedInput=false` melhorou subjetivamente. |
+| INF-01, INF-02, INF-03, DASH-01 | **Não implementado/validado para My-CT** | Inventário/headless/SSH não significam Core+PostgreSQL, API nem serviço systemd próprios. |
+| DL-01/02/03, AUTO-01 | **Não iniciado** | SFTP é transferência Android↔Fedora; downloads HTTP/torrent independentes no servidor não existem. |
+| OPS-01, SEC-01, SEC-02 | **Parcial** | Guias de build/uso Android e SSH seguro; operação/restart/backups/API/Core permanecem futuros. |
+
+**Decisão do proprietário:** encerrar este ciclo Android/SSH/SFTP com pendências explícitas na [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9) e [trilha de refinamento](09-TRILHA-REFINAMENTO-ANDROID.md), sem forçar rodadas de polimento antes do Core. [Histórico integral](08-FECHAMENTO-CICLO-ANDROID.md).

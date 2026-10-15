@@ -1,6 +1,10 @@
 # AGENTS.md — colaboração segura no My-CT
 Estas orientações destinam-se a Codex e outros agentes que trabalhem neste repositório. **Leia README.md e docs/04-PLANEJAMENTO-INAUGURAL.md antes de propor implementação.**
 
+## Estado atual e retomada
+
+**15/10/2026:** ciclo Android/SSH/SFTP consolidado na main com evidência física positiva para SSH, SFTP e PDFs nos dois sentidos; transferências em background, lag e UX/scroll são dívidas documentadas. **Antes de começar trabalho novo, leia [docs/10-RETOMADA-PROJETO.md](docs/10-RETOMADA-PROJETO.md), [docs/08-FECHAMENTO-CICLO-ANDROID.md](docs/08-FECHAMENTO-CICLO-ANDROID.md) e [docs/09-TRILHA-REFINAMENTO-ANDROID.md](docs/09-TRILHA-REFINAMENTO-ANDROID.md).** Próxima discussão técnica: Core C++20/PostgreSQL. Não iniciar refinamento nem instalações por conta própria.
+
 ## Mandato
 Criar utilidade comprovada em um servidor Fedora headless com recursos limitados e cliente Android nativo. Preservar a intenção do proprietário, a saúde do PC e a possibilidade de continuidade sem agentes pagos.
 

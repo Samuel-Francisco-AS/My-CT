@@ -6,7 +6,7 @@
 
 ## 1. Resumo e evidência do proprietário
 
-O My-CT agora tem um **APK Android nativo utilizável** no Moto G06 que estabelece sessão SSH autenticada com Fedora, abre um terminal/PT Y real, navega no sistema de arquivos via SFTP e transfere arquivos nos dois sentidos via seletor Android (SAF).
+O My-CT agora tem um **APK Android nativo utilizável** no Moto G06 que estabelece sessão SSH autenticada com Fedora, abre um terminal/PTY real, navega no sistema de arquivos via SFTP e transfere arquivos nos dois sentidos via seletor Android (SAF).
 
 **Evidência física relatada ao concluir esta conversa:** após a MYCT-2R, um **PDF do Fedora foi baixado e aberto corretamente no Moto G06**; outro **PDF do Moto G06 foi enviado ao Fedora com sucesso**. Em teste anterior da MYCT-2, duas imagens remotas foram baixadas e abertas corretamente. Navegação por diretórios SFTP funciona. Essas são observações diretas do proprietário, e não testes automatizados do agente. **Não confundir arquivo aberto com hash ponta a ponta comprovado.**
 
