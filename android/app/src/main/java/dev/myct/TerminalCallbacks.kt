@@ -31,7 +31,7 @@ class ViewCallbacks(private val model: TerminalModel, private val showKeyboard: 
     override fun onScale(scale: Float) = 1f
     override fun onSingleTapUp(e: MotionEvent) { showKeyboard() }
     override fun shouldBackButtonBeMappedToEscape() = false
-    override fun shouldEnforceCharBasedInput() = true
+    override fun shouldEnforceCharBasedInput() = model.enforceCharBasedInput
     override fun shouldUseCtrlSpaceWorkaround() = false
     override fun isTerminalViewSelected() = true
     override fun copyModeChanged(copyMode: Boolean) = Unit

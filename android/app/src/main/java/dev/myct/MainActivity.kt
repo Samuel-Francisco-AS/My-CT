@@ -27,6 +27,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -68,6 +69,10 @@ class MainActivity : ComponentActivity() {
         if (!isChangingConfigurations && !model.backgroundEnabled) model.disconnect("Tela encerrada sem modo persistente; reconecte manualmente.")
         super.onDestroy()
     }
+    override fun onStop() {
+        if (!isChangingConfigurations) model.files.onBackground()
+        super.onStop()
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -94,6 +99,7 @@ private fun TerminalApp(model: TerminalModel) {
     var captureWarning by remember { mutableStateOf(false) }
     var measurements by remember { mutableStateOf<String?>(null) }
     var pendingPaste by remember { mutableStateOf<PendingPaste?>(null) }
+    var filesTab by rememberSaveable { mutableStateOf(false) }
     val active = model.phase == TerminalModel.Phase.CONNECTING || model.phase == TerminalModel.Phase.CONNECTED
     val connected = model.phase == TerminalModel.Phase.CONNECTED
     val pin = model.pinForHost()
@@ -137,6 +143,8 @@ private fun TerminalApp(model: TerminalModel) {
             if (active) TextButton(onClick = { model.disconnect() }) { Text(if (connected) "Encerrar" else "Cancelar") }
         }
         if (!active) {
+            if (model.files.recoveryNotice.isNotEmpty()) Text(model.files.recoveryNotice,
+                modifier = Modifier.padding(horizontal = 12.dp), style = MaterialTheme.typography.bodySmall)
             Text(model.message, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                 color = if (model.phase == TerminalModel.Phase.ERROR) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground)
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -165,9 +173,25 @@ private fun TerminalApp(model: TerminalModel) {
                 Text("Use rede privada. Senha não é salva. Perda do processo exige nova autenticação; trabalho remoto pode ser preservado pelo tmux.", style = MaterialTheme.typography.bodySmall)
             }
         } else {
+            if (connected) Row(Modifier.fillMaxWidth()) {
+                TextButton(onClick = { filesTab = false }, modifier = Modifier.weight(1f)) { Text(if (!filesTab) "● Terminal" else "Terminal") }
+                TextButton(onClick = {
+                    pendingPaste = null
+                    (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(activity.window.decorView.windowToken, 0)
+                    filesTab = true
+                }, modifier = Modifier.weight(1f)) { Text(if (filesTab) "● Arquivos" else "Arquivos") }
+            }
+            if (connected && filesTab) FilesScreen(model.files, Modifier.weight(1f))
+            else {
             model.terminal?.let { session ->
                 var view by remember(session) { mutableStateOf<TerminalView?>(null) }
                 val fontPx = with(LocalDensity.current) { model.fontSizeSp.sp.toPx().roundToInt() }
+                LaunchedEffect(view, model.enforceCharBasedInput, settings) {
+                    if (!settings) view?.let { terminalView ->
+                        terminalView.requestFocus()
+                        (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).restartInput(terminalView)
+                    }
+                }
                 val clipboardActions = rememberUpdatedState(object : TerminalSession.UserClipboard {
                     override fun copy(text: String) { copyToSystemClipboard(text) }
                     override fun requestPaste() { requestSystemPaste() }
@@ -240,6 +264,7 @@ private fun TerminalApp(model: TerminalModel) {
                     }) { Text("Teclado") }
                 }
             }
+            }
         }
     }
     if (settings) AlertDialog(onDismissRequest = { settings = false }, title = { Text("Terminal") }, text = {
@@ -252,6 +277,11 @@ private fun TerminalApp(model: TerminalModel) {
             Text("Ative após conectar. Há notificação com Desconectar. Desativar encerra SSH. Force-stop, morte do processo, reboot ou perda de rede exigem autenticar novamente.", style = MaterialTheme.typography.bodySmall)
             TextButton(onClick = { tmuxHelp = true; settings = false }) { Text("Recuperar trabalho · tmux") }
             Text("Fonte: ${model.fontSizeSp} sp")
+            Row {
+                Text("Entrada por caracteres", Modifier.weight(1f))
+                Switch(checked = model.enforceCharBasedInput, onCheckedChange = { model.setCharBasedInput(it) })
+            }
+            Text("Altera como o teclado Android envia texto ao terminal. Experimente desativar se perceber atraso ao digitar. O resultado pode variar conforme o teclado.", style = MaterialTheme.typography.bodySmall)
             Row { TextButton(onClick = { model.changeFont(-1) }) { Text("A−") }; TextButton(onClick = { model.changeFont(1) }) { Text("A+") } }
             Row { Text("Proteger capturas", Modifier.weight(1f)); Switch(checked = model.protectScreenshots,
                 onCheckedChange = { if (it) model.setCaptureProtection(true) else captureWarning = true }) }

@@ -10,8 +10,8 @@ android {
         applicationId = "dev.myct"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.1.1-ssh-corrective"
+        versionCode = 3
+        versionName = "0.2-sftp"
     }
     buildFeatures { compose = true }
     compileOptions {

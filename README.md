@@ -2,7 +2,7 @@
 
 **My-CT** é uma iniciativa de infraestrutura pessoal: um servidor Linux doméstico, administrado por um aplicativo Android nativo, capaz de executar tarefas, disponibilizar arquivos e realizar downloads sem depender de uma sessão gráfica.
 
-> **Estado atual (14/10/2026):** inventário registrado, login/shell/PTY do APK SSH comprovados pelo proprietário no Moto G06 e correções MYCT-1R implementadas com novo APK debug. Layout/clipboard, capturas e continuidade Android ainda exigem aceite físico corretivo; backend C++, banco, SFTP e downloads permanecem não implementados.
+> **Estado atual (15/10/2026):** o proprietário validou as principais capacidades do terminal MYCT-1R no Moto G06. MYCT-2 implementa navegação SFTP, transferências via SAF e preferência de entrada IME, com APK debug e testes locais; aceite físico dessa entrega permanece pendente. Backend C++, banco e downloads executados pelo servidor ainda não implementados.
 
 ## Objetivo
 
@@ -37,6 +37,7 @@ As escolhas específicas de bibliotecas, contratos e divisão de entregas são *
 | [Inventário MYCT-0](docs/MYCT-0-INVENTORY-REPORT.md) | Ambiente observado e bloqueadores |
 | [Prova SSH MYCT-1](docs/MYCT-1-ANDROID-SSH-REPORT.md) | APK, build, testes e validação física pendente |
 | [Correção MYCT-1R](docs/MYCT-1R-CORRECTION-REPORT.md) | IME, clipboard, foreground service e recuperação via tmux |
+| [Arquivos MYCT-2](docs/MYCT-2-SFTP-REPORT.md) | SFTP/SAF, preferência IME, APK e limites de validação |
 | [Build e instalação Android](android/README.md) | CLI, transferência manual e uso do terminal |
 | [Orientações para agentes](AGENTS.md) | Regras de colaboração para Codex e outros agentes |
 
@@ -60,6 +61,6 @@ Estas issues são pontos de acompanhamento **revisáveis**, não marcos com data
 
 ## Ponto de partida
 
-O inventário Fedora foi registrado em MYCT-0. A prova SSH do APK está em MYCT-1; o próximo gate é validar as correções MYCT-1R no Moto G06. Consultar o [planejamento inaugural](docs/04-PLANEJAMENTO-INAUGURAL.md) antes de abrir frentes adicionais.
+O inventário Fedora foi registrado em MYCT-0. O terminal evoluiu em MYCT-1/1R; o próximo gate é validar navegação e transferências SFTP/SAF da MYCT-2 no Moto G06. Consultar o [planejamento inaugural](docs/04-PLANEJAMENTO-INAUGURAL.md) antes de abrir frentes adicionais.
 
 Os comandos de build e instalação do APK estão em [android/README.md](android/README.md). Preparação e deploy do servidor serão tratados em missões específicas após revisão de dependências e configuração.

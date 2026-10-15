@@ -1,6 +1,7 @@
 package dev.myct
 
 import com.jcraft.jsch.ChannelShell
+import com.jcraft.jsch.ChannelSftp
 import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
 import java.io.InputStream
@@ -11,6 +12,7 @@ class SshConnection {
     @Volatile private var session: Session? = null
     @Volatile private var shell: ChannelShell? = null
     @Volatile private var closed = false
+    private val fileChannels = mutableSetOf<ChannelSftp>()
     lateinit var input: InputStream
         private set
     lateinit var output: OutputStream
@@ -57,8 +59,27 @@ class SshConnection {
     fun resize(cols: Int, rows: Int, width: Int, height: Int) {
         shell?.takeIf { it.isConnected }?.setPtySize(cols, rows, width, height)
     }
+    fun openFiles(control: TransferControl): RemoteStore {
+        control.check()
+        val channel = synchronized(fileChannels) {
+            check(!closed && session?.isConnected == true)
+            (session!!.openChannel("sftp") as ChannelSftp).also { fileChannels.add(it) }
+        }
+        val store = JschRemoteStore(channel) {
+            runCatching { channel.disconnect() }
+            synchronized(fileChannels) { fileChannels.remove(channel) }
+        }
+        try {
+            control.track(store) // Cancels an in-flight channel connect without closing the PTY.
+            control.check()
+            channel.connect(10_000)
+            control.check()
+            return store
+        } catch (e: Exception) { store.close(); throw e }
+    }
     fun close() {
-        closed = true
+        val channels = synchronized(fileChannels) { closed = true; fileChannels.toList().also { fileChannels.clear() } }
+        channels.forEach { it.disconnect() }
         shell?.disconnect()
         session?.disconnect()
     }
