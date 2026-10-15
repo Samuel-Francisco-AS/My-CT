@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python3 -I
 """My-CT vault: manual unlock of EXISTING GNOME 50 login keyring over private SSH.
 
 Adapted from the previously validated Narys credential-manager backend; no
@@ -244,6 +244,7 @@ class HumanPassword:
 def main():
     operation = sys.argv[1] if len(sys.argv) == 2 else ''
     require(operation in ('status', 'unlock'), 'fixed_credential_operation_required')
+    require(sys.flags.isolated == 1, 'isolated_python_required')
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     require(ctypes.CDLL(None).prctl(4, 0, 0, 0, 0) == 0, 'credential_dump_protection_required')
     def interrupted(signum, frame):
