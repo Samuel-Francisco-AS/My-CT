@@ -49,7 +49,7 @@ class VaultProtocolTest {
         val out = ByteArrayOutputStream()
         val reply = begin + "\r\n" +
             """{"version": 1, "ok": false, "error_code": "authenticated_ssh_session_required", "category": "credentials"}""" +
-            "\\r\\nMYCT-VAULT-DONE:test:1\\r\\n"
+            "\r\nMYCT-VAULT-DONE:test:1\r\n"
         val transport = channel(reply, out)
         val failure = runCatching { transport.awaitPasswordPrompt() }.exceptionOrNull()
         assertTrue(failure is VaultUnlockDenied)
