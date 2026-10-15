@@ -45,6 +45,22 @@ class VaultProtocolTest {
             transport.close()
         }
     }
+    @Test fun remoteHelperDenialExposesOnlySanitizedCodeAndDoesNotPermitPassword() {
+        val out = ByteArrayOutputStream()
+        val reply = begin + "\r\n" +
+            """{"version": 1, "ok": false, "error_code": "authenticated_ssh_session_required", "category": "credentials"}""" +
+            "\\r\\nMYCT-VAULT-DONE:test:1\\r\\n"
+        val transport = channel(reply, out)
+        val failure = runCatching { transport.awaitPasswordPrompt() }.exceptionOrNull()
+        assertTrue(failure is VaultUnlockDenied)
+        assertEquals("authenticated_ssh_session_required", (failure as VaultUnlockDenied).safeCode)
+        val sent = out.toString("UTF-8")
+        assertFalse(sent.contains("test-password"))
+        assertTrue(runCatching { transport.submitSecret("test-password".toByteArray()) }.isFailure)
+        assertEquals(sent, out.toString("UTF-8"))
+        transport.close()
+    }
+
     @Test fun controlBytesAndCanonicalOverflowNeverGoToWire() {
         val invalid = (0..31).map { byteArrayOf(65, it.toByte(), 66) } +
             listOf(byteArrayOf(127), ByteArray(0), ByteArray(4096) { 65 })
