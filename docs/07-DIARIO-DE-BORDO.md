@@ -152,3 +152,11 @@ eventos e migração via libpq direta/Makefile. Sem instalações ou serviços;
 compilação bloqueada por libpq-devel ausente e integração real não aprovada.
 Autorização de instalação solicitada. Evidência, comandos e retomada no
 [relatório MYCT-3B](MYCT-3B-POSTGRES-REPORT.md) e em `server/README.md`.
+
+### MYCT-3B — autorização recebida, execução sudo bloqueada
+
+O proprietário autorizou pacotes e dependências. A tentativa de instalação
+com `sudo -n dnf` retornou `sudo: a password is required`; nenhum pacote
+foi instalado. Gate agora é a execução do comando documentado em terminal
+interativo pelo proprietário, sem pedir nem armazenar sua senha. Build e
+prova real seguem pendentes; autorização não precisa ser repetida.

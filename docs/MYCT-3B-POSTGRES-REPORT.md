@@ -44,7 +44,10 @@ saúde com banco parado, binds locais e testes anteriores sem regressão.
 ## Dependências, recursos e gate de retomada
 
 Nenhum pacote instalado, nenhum cluster criado, nenhum serviço modificado.
-Instalação solicitada ao proprietário e ainda sem autorização recebida:
+Instalação autorizada pelo proprietário em 15/10/2026. Tentativa com
+`sudo -n dnf --repo=fedora --repo=updates install -y libpq-devel postgresql postgresql-server`
+bloqueada por `sudo: a password is required`. Nenhum pacote instalado. O
+proprietário deve executar no terminal interativo:
 
 ```sh
 sudo dnf --repo=fedora --repo=updates install libpq-devel postgresql postgresql-server
@@ -53,7 +56,7 @@ sudo dnf --repo=fedora --repo=updates install libpq-devel postgresql postgresql-
 `libpq-devel` resolve libpq runtime; `postgresql` fornece cliente/administração;
 `postgresql-server` fornece servidor/initdb/pg_ctl. Sem contrib, ORM ou CMake.
 
-**Gate exato:** autorizar/realizar a instalação, seguir o cluster exclusivo em
+**Gate exato:** realizar a instalação já autorizada em terminal com sudo, seguir o cluster exclusivo em
 [server/README.md](../server/README.md), executar `make && make test`, aplicar
 migração e rodar `make test-db`. Registrar o ID/UTC retornado; parar/reiniciar
 Core e reler esse ID. Parar banco e consultar `/v1/health`, conferir
