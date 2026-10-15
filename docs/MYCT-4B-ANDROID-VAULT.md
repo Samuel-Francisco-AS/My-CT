@@ -191,6 +191,74 @@ O proprietário instalou `myct-4b-debug.apk` e executou `sudo systemctl reboot` 
 
 **Hotfix de diagnóstico publicado na branch após o APK 1429ece:** `VaultUnlockChannel` extrai exclusivamente o campo `error_code` do JSON de recusa já sanitizado pelo `myct-vault`, e `VaultModel` mostra código seguro na aba. Erros de timeout e de canal/protocolo ganham códigos distintos. Nenhum stdout/stderr bruto, senha ou item do cofre aparece na interface. Um teste sintético verifica a recusa antes do prompt e que nenhum byte de senha é escrito.
 
-**Status:** hotfix apenas em fonte. O APK instalado no Moto é anterior ao diagnóstico. Necessário o Codex sincronizar esta branch, rodar `assembleDebug/testDebugUnitTest/lintDebug` (sem substituir testes existentes), gerar **novo** `artifacts/myct-4b-debug.apk` e checksum, conferir assinatura, publicar PR draft **sem merge**. Reinstalar como atualização, conectar SSH e tocar Desbloquear **uma vez sem digitar senha**; anotar exclusivamente o código mostrado. Se for `authenticated_ssh_session_required`, `interactive_ssh_shell_required` ou outro, corrigir a causa concreta sem desativar verificações do cofre. Se for `ssh_channel_or_protocol_error` ou `ssh_prompt_timeout`, examinar especificamente protocolo/PTY, ainda sem lidar com senha.
+**Status na publicação do commit `3697454`:** hotfix apenas em fonte. O APK instalado no Moto é anterior ao diagnóstico. Necessário o Codex sincronizar esta branch, rodar `assembleDebug/testDebugUnitTest/lintDebug` (sem substituir testes existentes), gerar **novo** `artifacts/myct-4b-debug.apk` e checksum, conferir assinatura, publicar PR draft **sem merge**. Reinstalar como atualização, conectar SSH e tocar Desbloquear **uma vez sem digitar senha**; anotar exclusivamente o código mostrado. Se for `authenticated_ssh_session_required`, `interactive_ssh_shell_required` ou outro, corrigir a causa concreta sem desativar verificações do cofre. Se for `ssh_channel_or_protocol_error` ou `ssh_prompt_timeout`, examinar especificamente protocolo/PTY, ainda sem lidar com senha.
 
 Não é necessário reiniciar Fedora novamente para o diagnóstico enquanto o cofre continuar bloqueado.
+
+
+## Validação do hotfix de diagnóstico — Codex, 15/10/2026
+
+Sincronização por fast-forward até
+`369745445310747783eb9e427c1af37c4e32f2b9`, preservando os sete commits publicados
+pela Luna após `1429ece`. Revisados o diff de `Vault.kt`, `VaultModel.kt` e o novo
+teste de `VaultProtocolTest.kt`, incluindo sua integração com o protocolo existente.
+**Nenhum problema adicional comprovado: código e testes do hotfix mantidos sem
+alterações nesta rodada.**
+
+O código de recusa só é extraído depois do marcador da tentativa e do término
+não zero, sem prompt recebido. A extração limita caracteres/tamanho do campo
+`error_code` (`[a-z][a-z0-9_]{2,63}`), usa fallback `unlock_helper_refused` e não
+expõe stdout/stderr ou mensagens arbitrárias de exceção. `VaultModel` distingue
+recusa anterior à senha, `ssh_prompt_timeout` e `ssh_channel_or_protocol_error`.
+Recusa fecha o canal e mantém a guarda de senha: o teste sintético confirma que
+`authenticated_ssh_session_required` aparece como código, sem permitir escrever
+senha. O diagnóstico não conclui que esse foi o código real do Moto.
+
+Comando executado no Fedora, Java 21.0.10 e SDK/Build Tools 36 existentes:
+
+```sh
+ANDROID_HOME=/home/sam/Android/Sdk ./android/gradlew -p android \
+  :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --offline --console=plain
+```
+
+**BUILD SUCCESSFUL em 1 min 22 s**. **49 testes: 48 aprovados, 0 falhas/erros e
+1 ignorado** (handshake SSH opcional, sem `MYCT_TEST_LOCAL_SSH=1`). Lint: **0 erros,
+6 avisos de versões de Gradle/dependências**. Aviso de metaspace ao encerrar o
+daemon não impediu conclusão; nenhuma configuração/dependência foi modificada.
+Resultados locais em `android/app/build/reports/tests/testDebugUnitTest/` e
+`android/app/build/reports/lint-results-debug.html`.
+
+APK regenerado: `artifacts/myct-4b-debug.apk`, **13,613,562 bytes**,
+mesma versão **0.4.0-vault/code 6**, artefato fora do Git.
+SHA-256 atual: `7f1d77af8cd74930284b8dde885332e7e41c580d7e2ed7a9b6dc019f2408d531`.
+Checksum atualizado em `artifacts/myct-4b-debug.apk.sha256`, conferido com
+`sha256sum --check`. APK anterior: `971f3c8b2644c93a83f4bc78fa4aaebacc7d4dea56aecdf6a624a01e91fa6597`.
+Antes da substituição, `apksigner verify --print-certs` validou ambos e confirmou
+o mesmo certificado SHA-256:
+`b788958be4c919889fc30813f13f1aceb5b6b69670514c82e16288f4b60b83b3`.
+Atualizar sem desinstalar/limpar dados ou pins. `git diff --check` sem erros.
+
+**Limites:** `adb devices -l` retornou lista vazia. Nenhum APK foi instalado nesta
+rodada, nenhum desbloqueio real foi executado e nenhuma senha pessoal foi
+solicitada, recebida ou registrada. Sem alterações em `myct-vault`, verificações
+SSH/TTY/logind, autenticação, systemd, GNOME Keyring, Core ou PostgreSQL. O teste
+sintético comprova tratamento do código, **não identifica a causa real da recusa
+no Moto**. Consumo/legibilidade do novo APK no aparelho continuam sem medição.
+PR #14 permanece em draft, sem merge e com a mesma base.
+
+### Próxima prova no Moto — sem digitar senha
+
+1. Instalar o APK atualizado sobre a instalação anterior e conectar SSH.
+2. Abrir Cofre, consultar o estado e, se bloqueado/compatível, tocar
+   **Desbloquear uma única vez, sem digitar senha**.
+3. Anotar exclusivamente o código exibido. Se o campo de senha aparecer, tocar
+   **Cancelar**: isso confirma chegada ao prompt, sem precisar enviar senha.
+4. `ssh_prompt_timeout` indica espera pelo protocolo; `ssh_channel_or_protocol_error`
+   indica abertura/leitura/protocolo. Um código do helper identifica a verificação
+   recusada; ainda será necessário analisar sua causa concreta. Não enviar logs
+   de PTY, conteúdo do cofre ou senhas. Não reiniciar ou alterar proteções para
+   obter um resultado diferente.
+
+Desbloqueio pela UI permanece **com falha física registrada, causa ainda pendente
+do diagnóstico do aparelho e sem aceite**. Boot/telemetria e consulta real do
+estado do cofre já informados pelo proprietário permanecem como provas anteriores.
