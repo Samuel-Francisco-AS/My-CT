@@ -154,17 +154,20 @@ private fun TerminalApp(model: TerminalModel) {
             TextButton(onClick = { settings = true }) { Text("Opções") }
             if (active) TextButton(onClick = { model.disconnect() }) { Text(if (connected) "Encerrar" else "Cancelar") }
         }
-        Row(Modifier.fillMaxWidth()) {
-            listOf("Terminal", "Arquivos", "Saúde", "Cofre").forEachIndexed { index, label ->
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+            listOf("Terminal", "Arquivos", "Saúde", "Cofre", "Downloads").forEachIndexed { index, label ->
                 TextButton(onClick = {
                     pendingPaste = null
                     if (index != 0) (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
                         .hideSoftInputFromWindow(activity.window.decorView.windowToken, 0)
                     selectedTab = index
-                }, modifier = Modifier.weight(1f)) { Text(if (selectedTab == index) "● $label" else label) }
+                }) { Text(if (selectedTab == index) "● $label" else label) }
             }
         }
-        if (selectedTab == 3) VaultScreen(model.vault, Modifier.weight(1f))
+        if (selectedTab == 4) DownloadsScreen(model.downloads, model.files.busy, { path ->
+            if (!model.files.busy && connected) { model.files.load(path); selectedTab = 1 }
+        }, Modifier.weight(1f))
+        else if (selectedTab == 3) VaultScreen(model.vault, Modifier.weight(1f))
         else if (selectedTab == 2) HealthScreen(model.health, Modifier.weight(1f))
         else if (!active) {
             if (model.files.recoveryNotice.isNotEmpty()) Text(model.files.recoveryNotice,

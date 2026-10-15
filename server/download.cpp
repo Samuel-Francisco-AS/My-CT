@@ -106,7 +106,11 @@ static std::string unit(const fs::path& p) { return "myct-download-"+p.filename(
 static bool active(const fs::path& p) { return run({"systemctl","--user","is-active","--quiet",unit(p)})==0; }
 static void show(const fs::path& p) {
     std::string state=line(p/"state"), name=line(p/"name");
-    if((state=="running" || state=="starting") && !active(p)) state="interrupted";
+    if((state=="running" || state=="starting") && !active(p)) {
+        // The worker may finish while systemctl runs. Prefer its final state.
+        state=line(p/"state");
+        if(state=="running" || state=="starting") state="interrupted";
+    }
     fs::path dest=home()/"Downloads/My-CT"/p.filename()/name;
     std::error_code ec; auto size=fs::file_size(state=="completed"?dest:fs::path(dest.string()+".part"),ec);
     std::cout << "id: " << p.filename().string() << "\nstate: " << state << "\nbytes: " << (ec?0:size)
