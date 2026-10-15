@@ -1,7 +1,10 @@
 # MYCT-5B — Downloads Android (aceite físico pendente)
 
-APK atual: `../artifacts/myct-5b-debug.apk`, `0.5.0-downloads`/code 7.
+APK atual: `../artifacts/myct-5b-debug.apk`, `0.5.1-downloads`/code 8.
 Atualizar sobre a instalação existente, preservando assinatura e dados.
+A versão 0.5.1 corrige desabilitação dos campos e deslocamento do formulário
+durante polling. Novo aceite no Moto: digitar no nome por pelo menos 16 s,
+com teclado aberto e lista atualizando.
 Cinco abas: **Terminal | Arquivos | Saúde | Cofre | Downloads**; deslize a barra
 horizontalmente em telas estreitas. Conecte pelo Terminal e abra Downloads.
 Cole URL HTTP/HTTPS pública e nome opcional; Baixar solicita execução no Fedora.

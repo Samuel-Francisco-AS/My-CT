@@ -32,7 +32,7 @@ fun DownloadsScreen(model: DownloadsModel, filesBusy: Boolean, openFiles: (Strin
     }
     LaunchedEffect(visible, model.connected) {
         if (visible && model.connected) while (isActive) {
-            model.refresh()
+            model.refresh(passive = true)
             delay(4000)
         }
     }
@@ -41,16 +41,19 @@ fun DownloadsScreen(model: DownloadsModel, filesBusy: Boolean, openFiles: (Strin
             Text("Downloads · Fedora", style = MaterialTheme.typography.titleMedium)
             Text("HTTP/HTTPS público. Uma transferência ativa por vez, sem fila. Continua no Fedora ao fechar o app.", style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(url, { if (it.length <= 8192) url = it }, label = { Text("URL HTTP/HTTPS") },
-                singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = model.connected && !model.busy,
+                singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = model.formEnabled,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false))
             OutlinedTextField(name, { if (it.length <= 256) name = it }, label = { Text("Nome opcional (padrão: download)") },
-                singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = model.connected && !model.busy,
+                singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = model.formEnabled,
                 keyboardOptions = KeyboardOptions(autoCorrectEnabled = false))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { model.start(url, name) }, enabled = model.connected && !model.busy && url.isNotBlank()) { Text("Baixar") }
                 TextButton(onClick = { model.refresh() }, enabled = model.connected && !model.busy) { Text("Atualizar") }
             }
-            if (model.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            // Keep the form geometry stable; passive polling must not steal focus or move it.
+            Box(Modifier.fillMaxWidth().height(4.dp)) {
+                if (model.showOperationProgress) LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
             Text(model.message, style = MaterialTheme.typography.bodySmall)
             if (model.stale) Text("Dados anteriores; estado atual não confirmado.", color = MaterialTheme.colorScheme.error)
         }

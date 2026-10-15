@@ -14,6 +14,9 @@ class DownloadsModel internal constructor(
         private set
     var busy by mutableStateOf(false)
         private set
+    private var passiveRefresh by mutableStateOf(false)
+    val formEnabled get() = connected && (!busy || passiveRefresh)
+    val showOperationProgress get() = busy && !passiveRefresh
     var items by mutableStateOf(emptyList<ServerDownload>())
         private set
     var message by mutableStateOf("Conecte ao Fedora pela aba Terminal.")
@@ -25,10 +28,10 @@ class DownloadsModel internal constructor(
         generation++
         job?.cancel(); job = null
         connection = value; connected = value != null
-        busy = false; items = emptyList(); stale = false
+        busy = false; passiveRefresh = false; items = emptyList(); stale = false
         message = if (connected) "Consulte o histórico do Fedora." else "SSH desconectado. Conecte pela aba Terminal."
     }
-    fun refresh() = operate(DownloadAction.List)
+    fun refresh(passive: Boolean = false) = operate(DownloadAction.List, passive)
     fun start(url: String, name: String) {
         if (items.any { it.active } && !stale) {
             message = "Já existe uma transferência ativa; não há fila. Aguarde ou cancele."; return
@@ -39,13 +42,14 @@ class DownloadsModel internal constructor(
     // Leaving the tab stops queries. A mutation already sent may have succeeded: never retry it.
     fun hide() {
         if (!busy) return
-        generation++; job?.cancel(); job = null; busy = false; stale = true
+        generation++; job?.cancel(); job = null; busy = false; passiveRefresh = false; stale = true
         message = "Consulta encerrada. Atualize para conferir o estado real antes de repetir uma ação."
     }
-    private fun operate(action: DownloadAction) {
+    private fun operate(action: DownloadAction, passive: Boolean = false) {
         val ssh = connection ?: return
         if (busy) return
         val epoch = generation
+        passiveRefresh = passive
         busy = true
         job = scope.launch {
             try {
@@ -79,7 +83,7 @@ class DownloadsModel internal constructor(
                 }
             } catch (_: Exception) {
                 if (epoch == generation) { stale = true; message = "Falha no canal SSH. Confira a conexão e atualize antes de repetir a ação." }
-            } finally { if (epoch == generation) busy = false }
+            } finally { if (epoch == generation) { busy = false; passiveRefresh = false } }
         }
     }
 }

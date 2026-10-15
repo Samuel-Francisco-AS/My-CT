@@ -49,6 +49,44 @@ class DownloadsModelTest {
             } finally { scope.cancel() }
         }
     }
+    @Test fun passivePollingKeepsFormEditableWhileActionsRemainLockedAcrossFourCycles() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val entered = java.util.concurrent.Semaphore(0)
+        val release = java.util.concurrent.Semaphore(0)
+        var queries = 0
+        val model = DownloadsModel(scope) { _, action ->
+            assertEquals(DownloadAction.List, action)
+            queries++
+            entered.release()
+            release.acquire()
+            record("running").replace("bytes: 10", "bytes: $queries")
+        }
+        try {
+            model.attach(SshConnection())
+            repeat(4) {
+                model.refresh(passive = true)
+                assertTrue(entered.tryAcquire(2, TimeUnit.SECONDS))
+                assertTrue(model.busy) // Baixar/Atualizar/Cancelar retain their existing locks.
+                assertTrue(model.formEnabled)
+                assertFalse(model.showOperationProgress)
+                model.refresh(); model.cancel(id); model.start("https://example.com/", "test")
+                release.release()
+                await { !model.busy }
+                assertEquals((it + 1).toLong(), model.items.single().bytes)
+                assertTrue(model.formEnabled)
+            }
+            assertEquals(4, queries)
+            model.refresh() // An explicit action still owns the form and visible progress.
+            assertTrue(entered.tryAcquire(2, TimeUnit.SECONDS))
+            assertFalse(model.formEnabled)
+            assertTrue(model.showOperationProgress)
+            model.attach(null)
+            assertFalse(model.formEnabled)
+            assertFalse(model.showOperationProgress)
+            assertFalse(model.busy)
+        } finally { release.release(); scope.cancel() }
+    }
+
     @Test fun malformedServerReplyEndsBusyStateAndMarksHistoryStale() {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         val model = DownloadsModel(scope) { _, _ -> "id: incomplete\n" }

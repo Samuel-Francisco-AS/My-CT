@@ -5,6 +5,41 @@ com HEAD/base `a80813c6cdff0e6c91088699ec7b600d63725bf9` (PR #15 integrado).
 **Implementado e validado automaticamente; aceite físico no Moto G06 pendente.**
 Nenhum merge, instalação da CLI, deploy do Core ou alteração de serviços ativos.
 
+## Correção após feedback físico — 0.5.1-downloads / code 8
+
+[Comentário do proprietário na PR #16](https://github.com/Samuel-Francisco-AS/My-CT/pull/16#issuecomment-6203357697):
+no Moto G06, a versão 0.5.0 listou o histórico real e concluiu
+`https://example.com/` (577 bytes), com Ver em Arquivos presente. Isso é evidência
+parcial de integração; **o aceite global continua pendente**. Ao editar o nome,
+polling desabilitava os campos e recolhia o teclado a cada 4 s.
+
+Hipótese e teste mínimo: `busy` era ativado também por `List` automático,
+alimentando `enabled` dos campos e inserindo/removendo a barra do formulário.
+Agora `refresh(passive = true)` distingue a consulta automática: campos usam
+`formEnabled`, mantendo edição durante polling, enquanto Baixar/Atualizar/Cancelar
+continuam bloqueados por `busy` durante qualquer operação. Ações explícitas
+mantêm o comportamento anterior. A barra do formulário só aparece em ações
+explícitas e ocupa uma caixa de altura fixa (4 dp), sem deslocar o formulário.
+Polling continua em 4 s, limitado à aba/Activity visível e sessão conectada.
+Nenhuma alteração em Core, SSH, SFTP, Cofre, serviços ou motor da CLI.
+
+Teste JVM adicional controla quatro ciclos passivos, confirma campos habilitados,
+ausência de indicador de ação, avanço dos bytes e recusa de ações concorrentes;
+confere também atualização manual e desconexão. Os testes existentes de
+cancelamento/reconexão/saída da aba são executados na suíte Android. Não são
+simulação de foco/IME real: isso exige o aparelho, ausente no ADB desta execução.
+
+**Novo gate físico:** atualizar sem desinstalar; abrir Downloads, manter o campo
+de nome focado e digitar por **mais de três ciclos (pelo menos 16 s)**. Teclado
+deve ficar aberto e histórico/progresso continuar atualizando. Fazer fluxo curto
+de Ver em Arquivos, cancelamento confirmado e reconexão; não repetir testes da
+MYCT-5A já aceitos. PR permanece em rascunho até confirmação do proprietário.
+
+APK atual: `artifacts/myct-5b-0.5.1-debug.apk` (também em
+`artifacts/myct-5b-debug.apk`). A entrega inicial e suas medidas abaixo são
+históricas; os resultados e hash da correção constam no fim deste relatório.
+
+
 ## Aceite definido antes da implementação
 
 Iniciar HTTP/HTTPS pelo Android, consultar histórico real do Fedora, mostrar
@@ -219,3 +254,25 @@ Na entrega local, `artifacts/myct-5b-final-sha.txt` guarda esse SHA final,
 também registrado na descrição do PR. Retomar pelo PR/branch, instalar CLI e APK
 somente pelo proprietário e executar o roteiro Moto; não integrar à main antes
 de avaliar o aceite físico.
+
+
+## Resultado da correção de foco (0.5.1)
+
+- `:app:assembleDebug :app:testDebugUnitTest :app:lintDebug --offline`: aprovado.
+  **58 testes contabilizados, 57 PASS / 1 opcional ignorado**, zero erros/falhas;
+  lint zero erros / 6 avisos existentes. Teste novo de quatro ciclos aprovado.
+- APK `dev.myct`, `0.5.1-downloads`, code 8, confirmado com `aapt dump badging`.
+  Tamanho **13.436.913 bytes**; SHA-256:
+  `07e62067e84ad757b476edd459e2a78a8179f688f3dd10e758320fce09f2a3d9`.
+- `apksigner verify --print-certs`: assinatura idêntica ao APK anterior
+  (`b788958be4c919889fc30813f13f1aceb5b6b69670514c82e16288f4b60b83b3`).
+- Build/testes/lint: 86,42 s; CPU acumulada 365,38 s; RSS máximo 2.014.712 KiB
+  (aproximadamente 1,92 GiB), sem swap; limites Gradle inalterados. Logs/JUnit/lint
+  em `artifacts/myct-5b-validation/0.5.1/`.
+- Somente testes Android pertinentes executados nesta correção. Nenhum teste
+  físico MYCT-5A, mudança de serviços, instalação ou alteração servidor-side.
+- [Prévia instalável 0.5.1](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5b-v0.5.1-rc1):
+  APK versionado e checksum anexados; acesso segue as permissões do repositório.
+  O tag identifica o commit exato desta correção/documentação.
+- **Foco/IME real, Ver em Arquivos, cancelamento e reconexão no Moto: aguardando
+  o novo fluxo curto do proprietário.** PR #16 permanece rascunho e sem merge.

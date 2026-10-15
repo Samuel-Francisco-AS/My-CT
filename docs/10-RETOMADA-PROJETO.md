@@ -5,7 +5,7 @@
 
 
 **Entrega MYCT-5B:** branch `myct-5b-android-downloads`, APK debug
-`artifacts/myct-5b-debug.apk`, versão `0.5.0-downloads`/code 7. Quinta aba
+`artifacts/myct-5b-debug.apk`, versão `0.5.1-downloads`/code 8. Quinta aba
 Downloads via exec SSH na mesma sessão, polling visível de 4 s, cancelamento e
 Ver em Arquivos. **Aceite físico pendente**; não confundir com MYCT-5A já aceita.
 Instalar manualmente a CLI estável, com nenhuma transferência ativa:
