@@ -2,8 +2,7 @@
 
 **My-CT** é uma iniciativa de infraestrutura pessoal: um servidor Linux doméstico, administrado por um aplicativo Android nativo, capaz de executar tarefas, disponibilizar arquivos e realizar downloads sem depender de uma sessão gráfica.
 
-> **Estado em 15/10/2026 — MYCT-3C preparada, aceite no Moto pendente:** Core C++20 e PostgreSQL já integrados/provados no Fedora; terminal SSH e SFTP já utilizados no Moto G06. Esta branch acrescenta **Terminal | Arquivos | Saúde**, com CPU/RAM/disco/uptime via túnel na sessão SSH autenticada, sem polling. APK debug disponível localmente, mesma assinatura da MYCT-2R. Build/testes não substituem a prova física: ainda falta instalar e comparar métricas no Moto, alternar abas e comprovar desconexão/reconexão. Core e banco ficaram **parados**, dados preservados. Ver [relatório/roteiro MYCT-3C](docs/MYCT-3C-DASHBOARD-REPORT.md) e [retomada](docs/10-RETOMADA-PROJETO.md). Refinamento da [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9) continua adiado.
-
+> **Estado em 15/10/2026 — MYCT-3A/3B/3C integradas e comprovadas no Fedora/Moto G06:** Core C++20 fornece CPU/RAM/disco/uptime em `127.0.0.1:8765`; PostgreSQL local/libpq comprovou persistência. App Android nativo possui **Terminal | Arquivos | Saúde**, com métricas reais via túnel da sessão SSH autenticada. A MYCT-3C recebeu correção de contraste e foi aprovada fisicamente pelo proprietário; [PR #12](https://github.com/Samuel-Francisco-AS/My-CT/pull/12) integrada à main. **Core ainda iniciado manualmente por `./myct-core`**, sem systemd/autostart; banco independente da saúde. Downloads e automações não implementados. Lag, UX/scroll SFTP e prova background continuam adiados na [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9). [Relatório 3C](docs/MYCT-3C-DASHBOARD-REPORT.md) · [Retomada](docs/10-RETOMADA-PROJETO.md).
 
 ## Objetivo
 
@@ -70,4 +69,4 @@ Estas issues são pontos de acompanhamento **revisáveis**, não marcos com data
 
 ## Ponto de partida
 
-MYCT-3C tem implementação Android e APK preparados nesta branch, com validação física pendente. O próximo passo é executar o [roteiro no Moto G06](docs/MYCT-3C-DASHBOARD-REPORT.md), confirmar telemetria real pelo SSH e preservar Terminal/Arquivos. A API permanece local, sem PostgreSQL necessário para saúde. Não iniciar outra frente antes dessa prova. Consulte o [guia de retomada](docs/10-RETOMADA-PROJETO.md) e o [guia do Core](server/README.md).
+MYCT-3C foi comprovada no Moto G06 e integrada à `main` após corrigir o contraste. Próxima conversa operacional: **serviço systemd para iniciar e manter o Core automaticamente**, somente após autorização do proprietário; manter API em loopback, acesso Android por SSH e banco independente (não iniciar PostgreSQL desnecessariamente para telemetria). Operação atual em [server/README.md](server/README.md). A questão de **acesso autorizado ao cofre sem depender da Narys** é assunto separado para discussão, ainda não projetado ou implementado. A [trilha de refinamento Android](docs/09-TRILHA-REFINAMENTO-ANDROID.md) continua adiada.
