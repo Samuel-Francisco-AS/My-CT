@@ -114,7 +114,7 @@ no Moto ainda não medidas. Não repetir testes extensos do banco/3A/3B.
 
 `artifacts/myct-3c-debug.apk`, com `artifacts/myct-3c-debug.apk.sha256`, fora do Git.
 Origem: `android/app/build/outputs/apk/debug/app-debug.apk`.
-Tamanho: **13,552,604 bytes**. SHA-256: `28fd14954a8ec9e485486093d14a7975ab3ed0d998e564f2d0e97aa82bcc076f`.
+Tamanho atualizado após hotfix: **13.552.874 bytes**. SHA-256: `1e16cb54be443f66419947901ff52fae79297f628a420ae60564965c11bc3ddf`.
 `apksigner verify --print-certs` conferiu o mesmo certificado do APK MYCT-2R:
 SHA-256 `b788958be4c919889fc30813f13f1aceb5b6b69670514c82e16288f4b60b83b3`.
 Atualizar sem desinstalar; não apagar dados/pins nem commitar keystore.
@@ -153,3 +153,34 @@ Concluir somente após proprietário confirmar roteiro, métricas reais e
 Terminal/Arquivos preservados. Publicar PR para revisão, sem merge automático.
 Issue #9 permanece adiada; downloads, systemd, polling, PostgreSQL e refinamento
 de UX continuam fora deste recorte. Core e PostgreSQL deixados parados.
+
+
+## Hotfix de contraste — Luna, 15/10/2026
+
+Branch sincronizada por fast-forward com `origin/myct-3c-android-dashboard`,
+incorporando `ec0d16d48290345b49321fb9c427d696be56b656` da Luna. A única mudança
+de código é a `Surface` em torno de `TerminalApp`, dentro do tema Material
+escuro, fornecendo a cor de conteúdo aos textos. Nenhuma outra refatoração.
+
+Reexecutado o comando Android documentado acima, com
+`:app:assembleDebug :app:testDebugUnitTest :app:lintDebug --offline --console=plain`:
+**BUILD SUCCESSFUL**, **34 testes aprovados, 0 falhas, 1 ignorado** (handshake
+SSH opcional), lint **No issues found**. Gradle emitiu aviso de limite de
+metaspace ao encerrar o daemon; não houve falha nem alteração dos limites/configuração.
+
+APK regenerado em `artifacts/myct-3c-debug.apk`, checksum atualizado em
+`artifacts/myct-3c-debug.apk.sha256` e validado com `sha256sum --check` (**OK**).
+Tamanho **13.552.874 bytes**, SHA-256
+`1e16cb54be443f66419947901ff52fae79297f628a420ae60564965c11bc3ddf`.
+O APK anterior tinha SHA-256
+`28fd14954a8ec9e485486093d14a7975ab3ed0d998e564f2d0e97aa82bcc076f`.
+
+Antes de substituir o artefato, `apksigner verify --print-certs` validou ambos
+e confirmou certificado SHA-256 idêntico:
+`b788958be4c919889fc30813f13f1aceb5b6b69670514c82e16288f4b60b83b3`.
+Mantidos `0.3.0-health`/code 5 e compatibilidade de atualização sem desinstalar.
+
+[PR #12](https://github.com/Samuel-Francisco-AS/My-CT/pull/12) conferido como
+**draft**, aberto e sem merge. Correção de contraste ainda depende da inspeção
+visual no Moto G06, junto com o roteiro físico acima; esta rodada não instala o
+APK nem concede aceite físico. Core/PostgreSQL não foram iniciados ou alterados.
