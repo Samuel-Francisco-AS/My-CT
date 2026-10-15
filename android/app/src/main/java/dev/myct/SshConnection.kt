@@ -1,5 +1,7 @@
 package dev.myct
 
+import com.jcraft.jsch.Channel
+import com.jcraft.jsch.ChannelExec
 import com.jcraft.jsch.ChannelShell
 import com.jcraft.jsch.ChannelSftp
 import com.jcraft.jsch.JSch
@@ -13,6 +15,7 @@ class SshConnection {
     @Volatile private var shell: ChannelShell? = null
     @Volatile private var closed = false
     private val fileChannels = mutableSetOf<ChannelSftp>()
+    private val vaultChannels = mutableSetOf<Channel>()
     private val healthForwarding = HealthForwarding(open = {
         val current = checkNotNull(session)
         check(!closed && current.isConnected)
@@ -21,6 +24,43 @@ class SshConnection {
     fun health(): HealthSample {
         check(!closed && session?.isConnected == true)
         return fetchHealth(healthForwarding.port())
+    }
+    /** Query only Secret Service locked/unlocked metadata through existing SSH. */
+    fun vaultStatus(): VaultStatus {
+        val channel = synchronized(vaultChannels) {
+            check(!closed && session?.isConnected == true)
+            (session!!.openChannel("exec") as ChannelExec).also { vaultChannels.add(it) }
+        }
+        try {
+            channel.setCommand("\"\$HOME/.local/bin/myct-vault\" status")
+            val stream = channel.inputStream
+            channel.connect(10_000)
+            return readVaultStatus(stream)
+        } finally {
+            channel.disconnect()
+            synchronized(vaultChannels) { vaultChannels.remove(channel) }
+        }
+    }
+
+    /** Separate interactive SSH shell: keeps password off the ordinary PTY and argv. */
+    fun openVaultUnlock(): VaultUnlockChannel {
+        val channel = synchronized(vaultChannels) {
+            check(!closed && session?.isConnected == true)
+            (session!!.openChannel("shell") as ChannelShell).also { vaultChannels.add(it) }
+        }
+        try {
+            channel.setPty(true)
+            channel.setPtyType("dumb", 80, 24, 0, 0)
+            channel.connect(10_000)
+            check(!closed)
+            return VaultUnlockChannel(channel) {
+                synchronized(vaultChannels) { vaultChannels.remove(channel) }
+            }
+        } catch (error: Exception) {
+            channel.disconnect()
+            synchronized(vaultChannels) { vaultChannels.remove(channel) }
+            throw error
+        }
     }
     lateinit var input: InputStream
         private set
@@ -95,6 +135,7 @@ class SshConnection {
     fun close() {
         val channels = synchronized(fileChannels) { closed = true; fileChannels.toList().also { fileChannels.clear() } }
         healthForwarding.close()
+        synchronized(vaultChannels) { vaultChannels.toList().also { vaultChannels.clear() } }.forEach { it.disconnect() }
         channels.forEach { it.disconnect() }
         shell?.disconnect()
         session?.disconnect()
