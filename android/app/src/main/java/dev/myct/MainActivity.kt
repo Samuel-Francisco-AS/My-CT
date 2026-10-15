@@ -133,7 +133,10 @@ private fun TerminalApp(model: TerminalModel) {
             model.terminal?.let { pendingPaste = PendingPaste(it, text) }
         } catch (_: Exception) { feedback("Não foi possível ler o clipboard nesta tela.") }
     }
-    LaunchedEffect(model.protectScreenshots) { activity.applyCaptureProtection(model.protectScreenshots) }
+    // Always block screenshots on the vault tab, regardless of the general preference.
+    LaunchedEffect(model.protectScreenshots, selectedTab) {
+        activity.applyCaptureProtection(model.protectScreenshots || selectedTab == 3)
+    }
     DisposableEffect(activity) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) { password = ""; pendingPaste = null }
@@ -152,7 +155,7 @@ private fun TerminalApp(model: TerminalModel) {
             if (active) TextButton(onClick = { model.disconnect() }) { Text(if (connected) "Encerrar" else "Cancelar") }
         }
         Row(Modifier.fillMaxWidth()) {
-            listOf("Terminal", "Arquivos", "Saúde").forEachIndexed { index, label ->
+            listOf("Terminal", "Arquivos", "Saúde", "Cofre").forEachIndexed { index, label ->
                 TextButton(onClick = {
                     pendingPaste = null
                     if (index != 0) (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
@@ -161,7 +164,8 @@ private fun TerminalApp(model: TerminalModel) {
                 }, modifier = Modifier.weight(1f)) { Text(if (selectedTab == index) "● $label" else label) }
             }
         }
-        if (selectedTab == 2) HealthScreen(model.health, Modifier.weight(1f))
+        if (selectedTab == 3) VaultScreen(model.vault, Modifier.weight(1f))
+        else if (selectedTab == 2) HealthScreen(model.health, Modifier.weight(1f))
         else if (!active) {
             if (model.files.recoveryNotice.isNotEmpty()) Text(model.files.recoveryNotice,
                 modifier = Modifier.padding(horizontal = 12.dp), style = MaterialTheme.typography.bodySmall)
