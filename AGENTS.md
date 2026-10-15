@@ -3,7 +3,7 @@ Estas orientações destinam-se a Codex e outros agentes que trabalhem neste rep
 
 ## Estado atual e retomada
 
-**15/10/2026:** ciclo Android/SSH/SFTP consolidado na main com evidência física positiva para SSH, SFTP e PDFs nos dois sentidos; transferências em background, lag e UX/scroll são dívidas documentadas. **Antes de começar trabalho novo, leia [docs/10-RETOMADA-PROJETO.md](docs/10-RETOMADA-PROJETO.md), [docs/08-FECHAMENTO-CICLO-ANDROID.md](docs/08-FECHAMENTO-CICLO-ANDROID.md) e [docs/09-TRILHA-REFINAMENTO-ANDROID.md](docs/09-TRILHA-REFINAMENTO-ANDROID.md).** Próxima discussão técnica: Core C++20/PostgreSQL. Não iniciar refinamento nem instalações por conta própria.
+**15/10/2026, após merges #10/#11:** ciclo Android/SSH/SFTP consolidado na main e MYCT-3A/3B concluídas com provas reais no Fedora: Core C++20, endpoint HTTP local e PostgreSQL/libpq com cluster por socket privado. **Próximo recorte proposto: MYCT-3C — Dashboard Android mínimo lendo métrica real pelo túnel SSH já autenticado.** Antes de começar, leia [guia de retomada](docs/10-RETOMADA-PROJETO.md), [fechamento 3A/3B](docs/MYCT-3AB-FECHAMENTO-REPORT.md), [Core](server/README.md) e [refinamento Android adiado](docs/09-TRILHA-REFINAMENTO-ANDROID.md). Core e PostgreSQL foram deixados parados, dados preservados; não reaplicar initdb/migração. Lag, UX/scroll e background SFTP continuam dívidas, não iniciar refinamento ou instalações por conta própria.
 
 ## Mandato
 Criar utilidade comprovada em um servidor Fedora headless com recursos limitados e cliente Android nativo. Preservar a intenção do proprietário, a saúde do PC e a possibilidade de continuidade sem agentes pagos.
