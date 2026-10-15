@@ -2,7 +2,8 @@
 
 Data: 15/10/2026. **Implementação entregue; integração real ainda NÃO aprovada.**
 Base atualizada: `myct-3a-core-health` em `afeeebc`; PR #10 preservado.
-Branch: `myct-3b-postgres`, PR destinado inicialmente à MYCT-3A, sem merge.
+Branch: `myct-3b-postgres`, [PR #11](https://github.com/Samuel-Francisco-AS/My-CT/pull/11)
+em rascunho contra a MYCT-3A, sem merge.
 
 ## Implementação e aceite
 
