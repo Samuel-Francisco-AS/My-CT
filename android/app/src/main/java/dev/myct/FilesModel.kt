@@ -1,10 +1,16 @@
 package dev.myct
 
 import android.app.Application
+import android.content.Intent
+import android.app.NotificationManager
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import androidx.compose.runtime.*
+import androidx.core.content.edit
 import com.jcraft.jsch.ChannelSftp
 import com.jcraft.jsch.SftpException
 import kotlinx.coroutines.*
@@ -39,7 +45,10 @@ class FilesModel(private val app: Application) {
         private set
     var recoveryNotice by mutableStateOf("")
         private set
-    fun dismissRecoveryNotice() { recoveryNotice = "" }
+    fun dismissRecoveryNotice() {
+        recoveryNotice = ""
+        if (!busy) transferPrefs.edit { putBoolean("unfinished", false) }
+    }
 
     fun attach(value: SshConnection?) {
         val old = control
@@ -59,15 +68,49 @@ class FilesModel(private val app: Application) {
         status = status.copy(phase = FilePhase.CANCELLING, message = "Cancelando; aguarde o fechamento dos streams…")
         scope.launch(Dispatchers.IO) { token.cancel() }
     }
-    fun onBackground() { if (busy) cancel() }
+    var transferServiceActive by mutableStateOf(false)
+        internal set
+    var onTransferChanged: (() -> Unit)? = null
+    private var serviceReady: CompletableDeferred<Boolean>? = null
+    private var background = false
+    val transferKeepsConnection get() = transferServiceActive || serviceReady != null
+    fun onForeground() { background = false }
+    private val transferPrefs = app.getSharedPreferences("sftp-recovery", 0)
+    init {
+        if (transferPrefs.getBoolean("unfinished", false)) recoveryNotice =
+            "O processo terminou durante uma transferência. Pode haver documento PARCIAL no Android ou temporário/upload no Fedora. Confira o destino antes de repetir; não há retomada automática."
+    }
+    fun serviceStarted() { transferServiceActive = true; serviceReady?.complete(true) }
+    fun serviceStopped(cancelActive: Boolean = true) {
+        val wasActive = transferServiceActive
+        transferServiceActive = false
+        serviceReady?.complete(false)
+        if (cancelActive && wasActive && busy && status.name.isNotEmpty()) cancel()
+    }
+    private suspend fun startTransferService(): Boolean {
+        val manager = app.getSystemService(NotificationManager::class.java)
+        if ((Build.VERSION.SDK_INT >= 33 && app.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) ||
+            !manager.areNotificationsEnabled()) return false
+        val ready = CompletableDeferred<Boolean>()
+        serviceReady = ready
+        return try {
+            app.startForegroundService(Intent(app, SftpTransferService::class.java).setAction(SftpTransferService.START))
+            withTimeoutOrNull(5000) { ready.await() } == true
+        } catch (_: Exception) { false }
+        finally { serviceReady = null }
+    }
+    fun onBackground() {
+        background = true
+        if (busy && !transferKeepsConnection) cancel()
+    }
     fun load(path: String? = listing?.path) {
-        operate(FileStatus(FilePhase.LISTING, message = "Carregando…")) { store, token, id ->
+        operate(FileStatus(FilePhase.LISTING, message = "Carregando…")) { store, token, id, finish ->
             token.check()
             val canonical = store.canonical(path ?: store.home())
             require(store.stat(canonical)?.kind == RemoteKind.DIRECTORY)
             val result = store.list(canonical)
             token.check()
-            withContext(Dispatchers.Main) {
+            finish {
                 if (epoch == id) {
                     listing = result
                     status = FileStatus(message = if (result.limited) "Lista limitada a 2.000 itens ou contém nomes não suportados."
@@ -89,7 +132,7 @@ class FilesModel(private val app: Application) {
         if (destination == null || destination.first != epoch || connection == null || uri.scheme != "content") {
             status = FileStatus(FilePhase.ERROR, message = "Seleção expirada. Escolha o arquivo novamente nesta conexão."); return
         }
-        operate(FileStatus(FilePhase.LISTING, message = "Lendo metadados do provedor Android…")) { _, token, id ->
+        operate(FileStatus(FilePhase.LISTING, message = "Lendo metadados do provedor Android…")) { _, token, id, finish ->
             var name = "arquivo"
             var size: Long? = null
             app.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { cursor ->
@@ -101,7 +144,7 @@ class FilesModel(private val app: Application) {
                 }
             }
             token.check()
-            withContext(Dispatchers.Main) { if (id == epoch) {
+            finish { if (id == epoch) {
                 uploadChoice = UploadChoice(uri, destination.second, id, name, size)
                 status = FileStatus(message = "Confirme o nome de destino. Arquivos existentes não serão substituídos.")
             } }
@@ -116,13 +159,12 @@ class FilesModel(private val app: Application) {
         }
         uploadChoice = null
         completedDownload = null
-        operate(FileStatus(FilePhase.TRANSFERRING, name, total = choice.size, message = "Enviando…")) { store, token, id ->
+        operate(FileStatus(FilePhase.TRANSFERRING, name, total = choice.size, message = "Enviando…")) { store, token, id, finish ->
             val result = (app.contentResolver.openInputStream(choice.uri) ?: throw IOException()).use { source ->
-                token.track(source)
                 SftpTransfers.upload(store, choice.directory, name, source, choice.size, token, progress(token))
             }
-            withContext(Dispatchers.Main) { if (id == epoch) {
-                status = FileStatus(FilePhase.COMPLETE, name, result.bytes, result.bytes, "Upload concluído; tamanho remoto conferido. Atualize a lista.")
+            finish { if (id == epoch) {
+                status = FileStatus(FilePhase.COMPLETE, name, result.bytes, result.bytes, "Upload concluído: ${formatFileSize(result.bytes)} (${result.bytes} bytes); tamanho remoto conferido. Atualize a lista.")
             } }
         }
     }
@@ -146,20 +188,21 @@ class FilesModel(private val app: Application) {
                 val removed = runCatching { DocumentsContract.deleteDocument(app.contentResolver, uri) }.getOrDefault(false)
                 if (removed) "Documento incompleto removido do provedor."
                 else "O provedor pode manter um arquivo PARCIAL no destino escolhido; remova-o manualmente."
-            }) { store, token, id ->
+            }) { store, token, id, finish ->
             val result = (app.contentResolver.openOutputStream(uri, "wt") ?: throw IOException()).use { target ->
-                token.track(target)
                 SftpTransfers.download(store, choice.path, choice.entry, target, token, progress(token))
             }
-            // Close/flush provider before declaring completion. Unknown size is allowed.
-            app.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
-                if (c.moveToFirst() && !c.isNull(0) && c.getLong(0) >= 0 && c.getLong(0) != result.bytes) throw IntegrityFailure()
+            // SIZE is optional. A provider query failure is not evidence of corruption.
+            val sizeCheck = completedDocumentSize(result.bytes) {
+                app.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+                    if (c.moveToFirst() && !c.isNull(0)) c.getLong(0).takeIf { it >= 0 } else null
+                }
             }
             token.check()
-            withContext(Dispatchers.Main) { if (id == epoch) {
+            finish { if (id == epoch) {
                 completedDownload = uri
                 status = FileStatus(FilePhase.COMPLETE, choice.entry.name, result.bytes, result.bytes,
-                    "Download concluído; tamanho conferido. SHA-256 local: ${result.sha256}")
+                    "Download concluído: ${formatFileSize(result.bytes)} (${result.bytes} bytes). Contagem e origem conferidas. $sizeCheck Hash remoto indisponível; SHA-256 local: ${result.sha256}")
             } }
         }
     }
@@ -167,7 +210,7 @@ class FilesModel(private val app: Application) {
         token.check()
         token.bytesTransferred.set(bytes) // One slot per operation; no queued UI updates.
     }
-    private fun operate(initial: FileStatus, onFailure: (suspend () -> String)? = null, block: suspend (RemoteStore, TransferControl, Int) -> Unit) {
+    private fun operate(initial: FileStatus, onFailure: (suspend () -> String)? = null, block: suspend (RemoteStore, TransferControl, Int, (() -> Unit) -> Unit) -> Unit) {
         val ssh = connection ?: run { status = FileStatus(FilePhase.ERROR, message = "SSH desconectado."); return }
         if (busy) return // No unbounded job/transfer queue.
         val id = epoch
@@ -182,11 +225,22 @@ class FilesModel(private val app: Application) {
                         status = status.copy(bytes = token.bytesTransferred.get())
                 }
             }
+            var completion: (() -> Unit)? = null
+            val transfer = initial.phase == FilePhase.TRANSFERRING
             try {
+                if (transfer) {
+                    val active = startTransferService() // Request while the initiating UI is visible.
+                    withContext(Dispatchers.IO) { transferPrefs.edit(commit = true) { putBoolean("unfinished", true) } }
+                    if (id != epoch || (background && !active)) { token.cancel(); token.check() }
+                    status = status.copy(message = status.message + if (active)
+                        " Continua em segundo plano com notificação; sem retomada automática."
+                        else " Serviço indisponível: mantenha o app visível. Ative notificações para a próxima transferência.")
+                }
                 withContext(Dispatchers.IO) {
                     val store = ssh.openFiles(token)
-                    store.use { block(it, token, id) }
+                    store.use { block(it, token, id) { action -> completion = action } }
                 }
+                completion?.invoke() // Only after provider streams AND SFTP channel have closed.
             } catch (error: Exception) {
                 val cleanupNote = withContext(Dispatchers.IO) { onFailure?.invoke().orEmpty() }
                 if (id == epoch) status = status.copy(phase = if (token.cancelled) FilePhase.CANCELLED else FilePhase.ERROR,
@@ -198,7 +252,9 @@ class FilesModel(private val app: Application) {
                 if (id == epoch && control === token) {
                     control = null
                     if (status.busy) status = status.copy(phase = FilePhase.IDLE)
+                    if (transfer) transferPrefs.edit { putBoolean("unfinished", false) }
                 }
+                if (transfer) onTransferChanged?.invoke()
             }
         }
     }

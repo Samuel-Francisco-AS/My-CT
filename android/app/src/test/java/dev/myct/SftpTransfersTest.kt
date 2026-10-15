@@ -16,12 +16,13 @@ class SftpTransfersTest {
         var link = false
         var writes = 0
         var closed = false
+        var reader: (() -> InputStream)? = null
         override fun close() { closed = true }
         override fun home() = "/home/test"
         override fun canonical(path: String) = RemotePath.absolute(path)
         override fun list(path: String) = RemoteListing(path, emptyList(), false)
         override fun stat(path: String) = files[path]?.let { RemoteEntry(path.substringAfterLast('/'), if (link) RemoteKind.LINK else RemoteKind.FILE, it.size.toLong(), modified) }
-        override fun read(path: String) = ByteArrayInputStream(files.getValue(path))
+        override fun read(path: String): InputStream = reader?.invoke() ?: ByteArrayInputStream(files.getValue(path))
         override fun writeNewTemporary(path: String): OutputStream {
             writes++
             return object : ByteArrayOutputStream() {
@@ -128,8 +129,46 @@ class SftpTransfersTest {
             SftpTransfers.download(store, "/home/test/file", entry, ByteArrayOutputStream(), TransferControl()) {}
         }
     }
+    @Test fun syntheticPdfIsCopiedExactly() {
+        // One blank page, valid object offsets/xref; synthetic, no owner document.
+        val pdf = StringBuilder("%PDF-1.4\n")
+        val offsets = mutableListOf<Int>()
+        listOf("<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] >>").forEachIndexed { index, body ->
+            offsets.add(pdf.length)
+            pdf.append("${index + 1} 0 obj\n$body\nendobj\n")
+        }
+        val xref = pdf.length
+        pdf.append("xref\n0 4\n0000000000 65535 f \n")
+        offsets.forEach { pdf.append("%010d 00000 n \n".format(java.util.Locale.ROOT, it)) }
+        pdf.append("trailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n$xref\n%%EOF\n")
+        val bytes = pdf.toString().toByteArray(Charsets.US_ASCII)
+        val store = Store().apply { files["/home/test/synthetic.pdf"] = bytes }
+        val target = ByteArrayOutputStream()
+        val result = SftpTransfers.download(store, "/home/test/synthetic.pdf", store.stat("/home/test/synthetic.pdf")!!,
+            target, TransferControl()) {}
+        assertEquals(bytes.size.toLong(), result.bytes)
+        assertArrayEquals(bytes, target.toByteArray())
+        assertEquals(java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }, result.sha256)
+    }
+    @Test fun truncatedDownloadProviderFailureAndCancellationNeverReturnSuccess() {
+        val path = "/home/test/file"
+        val store = Store().apply { files[path] = byteArrayOf(1, 2, 3) }
+        val expected = store.stat(path)!!
+        store.reader = { byteArrayOf(1, 2).inputStream() }
+        expect(IntegrityFailure::class.java) {
+            SftpTransfers.download(store, path, expected, ByteArrayOutputStream(), TransferControl()) {}
+        }
+        store.reader = null
+        val broken = object : OutputStream() { override fun write(b: Int) { throw IOException() } }
+        expect(IOException::class.java) { SftpTransfers.download(store, path, expected, broken, TransferControl()) {} }
+        val token = TransferControl()
+        expect(CancellationException::class.java) {
+            SftpTransfers.download(store, path, expected, ByteArrayOutputStream(), token) { token.cancel() }
+        }
+    }
     @Test fun boundedStreamingAndCancellationCloseResources() {
-        var left = 5 * 1024 * 1024
+        var left = 32 * 1024 * 1024
         var largest = 0
         val source = object : InputStream() {
             override fun read(): Int = error("Use streaming buffer")
@@ -141,16 +180,15 @@ class SftpTransfersTest {
             }
         }
         val result = SftpTransfers.copy(source, OutputStream.nullOutputStream(), TransferControl()) {}
-        assertEquals(5L * 1024 * 1024, result.bytes)
+        assertEquals(32L * 1024 * 1024, result.bytes)
         assertTrue(largest <= 65536)
         val token = TransferControl()
         val closed = mutableListOf<Int>()
-        token.track(Closeable { closed.add(1) }) // transport first
-        token.track(Closeable { closed.add(2) })
+        token.trackTransport(Closeable { closed.add(1) }) // only the transport is aborted
         token.cancel()
-        assertEquals(listOf(1, 2), closed)
-        expect(CancellationException::class.java) { token.track(Closeable { closed.add(3) }) }
-        assertEquals(listOf(1, 2, 3), closed)
+        assertEquals(listOf(1), closed)
+        expect(CancellationException::class.java) { token.trackTransport(Closeable { closed.add(3) }) }
+        assertEquals(listOf(1, 3), closed)
     }
     @Test fun transferStatesKeepCancellationBusyUntilWorkerFinishes() {
         for (phase in FilePhase.entries) {

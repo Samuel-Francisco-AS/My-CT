@@ -1,9 +1,8 @@
-# My-CT Android — SSH e correção MYCT-1R
+# My-CT Android — terminal SSH e arquivos SFTP (fase inicial integrada)
 
-Kotlin/Compose com terminal SSH/PTTY no Fedora. Login, shell e PTY da MYCT-1
-foram comprovados pelo proprietário no Moto G06. As correções MYCT-1R exigem
-novo aceite físico; build e testes JVM não o substituem. Evidências e limites:
-[relatório corretivo](../docs/MYCT-1R-CORRECTION-REPORT.md).
+**Estado de 15/10/2026:** no Moto G06, o proprietário utilizou SSH real e SFTP, baixou/abriu imagens e PDF do Fedora e enviou PDF ao Fedora. A transferência SFTP em segundo plano da MYCT-2R **ainda não foi validada fisicamente**. Lag de digitação, interface rígida e scroll que retorna ao topo da pasta pai ficam para a [trilha de refinamento](../docs/09-TRILHA-REFINAMENTO-ANDROID.md). [Fechamento](../docs/08-FECHAMENTO-CICLO-ANDROID.md) · [Retomada](../docs/10-RETOMADA-PROJETO.md).
+
+**APK mais recente da fase:** `../artifacts/myct-2r-debug.apk`, versão 0.2.1/code4, **não incluído no Git**. Atualizar sem desinstalar, preservando a mesma keystore debug local. Históricos MYCT-1/1R e MYCT-2/2R abaixo mantidos como referência; avisos de validação pendente nesses trechos são históricos, anteriores aos testes físicos posteriores.
 
 ## Build e instalação
 
@@ -114,8 +113,8 @@ permissões `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE` e
 `START_NOT_STICKY`, sem credenciais em Intent. Essa escolha técnica não é
 aprovação da Play Store nem validação física da plataforma. Justificativa e
 [referências oficiais](https://developer.android.com/develop/background-work/services/fgs/service-types#special-use)
-no relatório corretivo. Não foi usado dataSync ou permissão de mudança de rede
-sem função real para satisfazer outro tipo.
+no relatório corretivo. O serviço do terminal não usa dataSync nem permissões de mudança de rede.
+A transferência SFTP possui serviço dataSync separado na MYCT-2R, descrito abaixo.
 
 ## Recuperar trabalho no Fedora com tmux
 
@@ -213,13 +212,43 @@ Não há exclusão, movimentação ou renomeação de itens existentes.
   O provedor pode mostrar o destino antes de concluir; não há atomicidade SAF
   universal nem retomada. Não abra um documento até o app confirmar conclusão.
 
-Uma operação de arquivos por vez, sem fila de transferências. Trocar abas ou
-girar a Activity mantém o estado; sair do app/tela visível cancela a operação.
-O FGS de terminal continua opt-in e não foi ampliado para download em background.
-Bloquear tela, trocar para outro app ou abrir seletor durante outra operação
-pode cancelar. Provedores lentos podem demorar a responder a close/cancel.
-Force-stop/reboot não executam limpeza nem retomada; confira os destinos antes
-de repetir. Não há senha/URI persistida para replay automático.
+### MYCT-2R — correção de confiabilidade e segundo plano
+
+APK `../artifacts/myct-2r-debug.apk`, versão **0.2.1-sftp-corrective**, code **4**.
+Mesma assinatura debug conferida contra MYCT-2; atualizar sem desinstalar.
+`adb install -r artifacts/myct-2r-debug.apk` (opcional, na raiz, com ADB autorizado).
+O proprietário já comprovou navegação e download/abertura de duas imagens na
+MYCT-2; PDF e arquivo grande motivaram esta correção. Novo aceite físico pendente.
+
+Uma operação por vez, sem fila. Download/upload iniciado por você tenta ativar
+um **serviço foreground dataSync separado do specialUse do terminal**, enquanto
+o app está visível. Permita notificações pelo botão na tela Arquivos (Android
+13+) e mantenha o canal **Transferência SFTP** habilitado nas configurações do
+Android. Sem permissão/canal/serviço disponível, a mensagem informa modo visível:
+sair cancela. Permitir notificações durante uma cópia vale para a próxima.
+
+Com serviço ativo, trocar abas/apps, girar, bloquear a tela ou recriar a Activity
+não cancela apenas por ocultar a tela; a notificação mostra progresso e
+**Cancelar**, e tocar nela retorna ao app. Estado/IO pertencem ao processo,
+não à tela Arquivos. O serviço para após conclusão/falha/cancelamento. O limite
+Android 15+ para dataSync (6 horas em 24 horas em background) é respeitado via
+onTimeout; não há garantia de rede/processo durante Doze ou políticas do Moto.
+Não é necessário habilitar o FGS interativo para transferir em segundo plano.
+Desconectar SSH deliberadamente continua interrompendo SFTP.
+
+Cancelamento fecha somente o canal SFTP; streams são fechados pelo worker,
+sem fechamento simultâneo. Provedor bloqueado pode atrasar o cancelamento.
+Contagem e tamanho/mtime remoto são conferidos; destino SAF é fechado antes
+de consultar SIZE. Divergência é erro; SIZE indisponível é aviso explícito.
+SHA-256 é local, sem comparação remota. Abrir com visualizador é uma operação
+posterior, cuja falha não prova corrupção. MB/GB usam divisão decimal por 1000;
+os bytes exatos continuam em detalhes/resultados para diagnóstico.
+
+Force-stop/reboot/morte do processo não executam limpeza nem retomada. Apenas
+um marcador booleano local indica interrupção no próximo início; não guarda
+senha, URI ou caminhos. Confira documentos PARCIAIS/temporários antes de
+repetir manualmente. A queda TCP real afeta todos os canais da mesma sessão.
+Downloads HTTP/torrent independentes no Fedora continuam fora deste fluxo.
 
 **Opções → Entrada por caracteres:** preferência local, padrão **ligado/true**.
 Desligar usa false; religar restaura true. Feche Opções para a InputConnection
@@ -227,24 +256,24 @@ ser reiniciada com a preferência, sem nova conexão SSH. Na aba Arquivos, será
 aplicada ao retornar ao Terminal. Pode mudar composição/teclado; não há promessa
 de resolver lag. A investigação MYCT-1P permanece suspensa por decisão do dono.
 
-### Checklist curto no Moto G06
+### Checklist curto no Moto G06 — MYCT-2R
 
-1. Atualizar com o APK MYCT-2, conectar e alternar Terminal/Arquivos sem nova
-   senha; listar home, abrir pasta/pai e atualizar. Testar nome com espaço/acento.
-2. Enviar um arquivo não sensível escolhido por SAF; atualizar e conferir tamanho
-   no Fedora. Repetir nome: deve recusar, preservar existente e permitir outro nome.
-3. Baixar um arquivo regular, escolher destino SAF e abrir pelo botão do app.
-   Testar nome já existente no seletor: destino antigo deve permanecer intacto.
-4. Cancelar arquivo suficientemente grande nas duas direções; conferir ausência
-   de falso sucesso, mensagens de parcial/temporário e PTY ainda utilizável.
-   Testar indisponibilidade de rede/provedor sem repetir transferências sozinho.
-5. Girar e trocar abas durante uma cópia; sair do app deve cancelar a cópia,
-   preservando a política FGS do terminal. Reconectar manualmente sem replay.
-6. Alternar Entrada por caracteres true/false/true, fechar Opções, testar Enter,
-   Backspace, acentos, Unicode, Ctrl/Esc/Tab, seleção e Paste; confirmar persistência
-   após reabrir. Não interpretar mudança subjetiva como diagnóstico de latência.
+1. Baixar PDF sintético/não sensível por SAF e abrir pelo botão do app.
+2. Provocar erro isolado SFTP (ex.: arquivo de teste removido após seleção) e
+   confirmar terminal utilizável; queda de rede/TCP é um caso distinto.
+3. Com notificações permitidas, transferir arquivo grande sintético, trocar de
+   app e bloquear tela; conferir notificação de progresso.
+4. Voltar e conferir progresso/resultado real, tamanho e abertura do destino.
+5. Cancelar manualmente pela tela ou notificação; conferir mensagem, limpeza de
+   parcial e terminal. Não repetir automaticamente.
+6. Conferir MB/GB e contraste de título, caminho, textos secundários/progresso.
 
-Relatório, limites e evidências: [MYCT-2](../docs/MYCT-2-SFTP-REPORT.md).
+Upload/conflito ainda carecem do aceite já pendente da MYCT-2; não considerar
+esta rodada como aprovação implícita. IME permanece reversível, default true e
+sem nova investigação de lag; não se exige repetir provas já aprovadas.
+
+Relatório corretivo: [MYCT-2R](../docs/MYCT-2R-CORRECTION-REPORT.md).
+Histórico: [MYCT-2](../docs/MYCT-2-SFTP-REPORT.md).
 Testes sem rede: `./gradlew :app:testDebugUnitTest --offline`.
 Prova de subsistema OpenSSH local, sem autenticação/porta, na raiz:
 `python android/diagnostics/sftp-subsystem-proof.py` (gera só temporários próprios).

@@ -52,7 +52,8 @@ interface RemoteStore : Closeable {
 }
 
 class JschRemoteStore(private val channel: ChannelSftp, private val release: () -> Unit) : RemoteStore {
-    override fun close() = release()
+    private val closed = AtomicBoolean()
+    override fun close() { if (closed.compareAndSet(false, true)) release() }
     override fun home() = RemotePath.absolute(channel.home)
     override fun canonical(path: String) = RemotePath.absolute(channel.realpath(RemotePath.absolute(path)))
     private fun entry(name: String, a: com.jcraft.jsch.SftpATTRS) = RemoteEntry(name,
@@ -89,25 +90,29 @@ class JschRemoteStore(private val channel: ChannelSftp, private val release: () 
     override fun removeTemporaryDirectory(path: String) = channel.rmdir(RemotePath.literal(path))
 }
 
-/** No credential/content logging. All close actions run on IO, including provider streams. */
+/** Cancellation aborts only the channel. The owning worker closes its streams in use/finally.
+ * Closing JSch protocol streams concurrently with read/write/close is not safe. A provider
+ * blocked in IO may delay cancellation; never interrupt the shared SSH transport to unblock it.
+ */
 class TransferControl {
     val bytesTransferred = AtomicLong()
     private val stopped = AtomicBoolean()
-    private val resources = mutableListOf<Closeable>()
+    private var transport: Closeable? = null
     val cancelled get() = stopped.get()
     fun check() { if (cancelled) throw CancellationException() }
-    fun track(resource: Closeable) {
-        synchronized(resources) {
-            if (!cancelled) { resources.add(resource); return }
+    fun trackTransport(resource: Closeable) {
+        val abort = synchronized(this) {
+            check(transport == null)
+            if (cancelled) true else { transport = resource; false }
         }
-        runCatching { resource.close() }
-        throw CancellationException()
+        if (abort) { runCatching { resource.close() }; throw CancellationException() }
     }
     fun cancel() {
-        stopped.set(true)
-        val copy = synchronized(resources) { resources.toList() }
-        // Transport is registered first: close it before stream.close can wait for ACKs.
-        copy.forEach { runCatching { it.close() } }
+        val abort = synchronized(this) {
+            if (!stopped.compareAndSet(false, true)) return
+            transport.also { transport = null }
+        }
+        runCatching { abort?.close() }
     }
 }
 
@@ -151,7 +156,6 @@ object SftpTransfers {
             created = true
             control.check()
             val result = store.writeNewTemporary(temporary).use { output ->
-                control.track(output)
                 copy(source, output, control, progress)
             }
             if (expected != null && result.bytes != expected) throw IntegrityFailure()
@@ -176,11 +180,18 @@ object SftpTransfers {
         val before = requireRegular(store, path)
         if (before.size != expected.size || before.modified != expected.modified) throw IntegrityFailure()
         val result = store.read(path).use { input ->
-            control.track(input)
             copy(input, target, control, progress)
         }
         val after = requireRegular(store, path)
         if (result.bytes != before.size || before.size != after.size || before.modified != after.modified) throw IntegrityFailure()
         return result
     }
+}
+
+/** Query after output.close; unavailable optional metadata must not delete a complete document. */
+fun completedDocumentSize(expected: Long, query: () -> Long?): String {
+    val actual = try { query() } catch (_: Exception) { null }
+    if (actual != null && actual != expected) throw IntegrityFailure()
+    return if (actual == null) "Provedor não permitiu conferir o tamanho final SAF."
+        else "Tamanho final SAF conferido."
 }

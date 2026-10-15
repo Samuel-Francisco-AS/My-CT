@@ -64,3 +64,11 @@ Mudanças de prioridade ou tecnologia não exigem novo grande planejamento; bast
 - Não executar scripts destrutivos, reinicializações, abertura de portas externas ou operações privilegiadas sem revisão explícita.
 - Evitar ciclos de tentativa custosos e sem avanço; depois de bloqueio reproduzível, registrar, simplificar ou trocar abordagem.
 - Entrega final de cada janela: commit(s), comportamento comprovado, relatório curto, comando de retomada e pendências.
+
+
+## Checkpoint 15/10/2026 — encerramento da fase Android inicial
+
+- MYCT-0 inventariou o servidor; MYCT-1/1R/1P estabeleceram terminal SSH, corrigiram IME/clipboard/background, investigaram lag sem comprovar causa; MYCT-2/2R adicionaram SFTP/SAF, canal isolado e serviço dataSync. O proprietário comprovou no Moto downloads e abertura de imagens/PDF, upload de PDF, navegação e funções-chave do terminal. Ver [fechamento](08-FECHAMENTO-CICLO-ANDROID.md).
+- **Não estender esta janela para corrigir todo o UX:** lag, scroll SFTP ao retornar ao pai, interface rígida e validação de transferências em segundo plano ficam em [refinamento](09-TRILHA-REFINAMENTO-ANDROID.md)/[issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9). São dívidas explícitas, não funcionalidades aprovadas por suposição.
+- **Próximo menor fluxo útil a discutir:** iniciar Core C++20 + PostgreSQL e painel de saúde real no Fedora, com integração Android privada mínima e controles proporcionais. CMake/Postgres estavam ausentes no inventário; reinspecionar antes de instalar. Não começar HTTP/torrent/jobs/uma arquitetura genérica ao mesmo tempo. [Guia de retomada](10-RETOMADA-PROJETO.md).
+- Esta atualização não cria prazo ou obrigação de executar toda a janela A/C; o plano continua **flexível** e submetido a decisão do proprietário.
