@@ -4,6 +4,13 @@
 
 > **Estado em 15/10/2026 — ciclo Android/SSH/SFTP encerrado com dívidas explícitas:** o proprietário comprovou no Moto G06 terminal SSH real, navegação SFTP, download/abertura de imagens e PDF e upload de PDF para o Fedora. MYCT-2R inclui serviços para SSH/transferência e controles de UX; **transferência SFTP em segundo plano ainda não foi validada no aparelho**. Permanecem dívidas de lag, interface rígida e scroll SFTP que volta ao topo ao sair de uma pasta. **Core C++20/PostgreSQL, Dashboard e downloads executados no Fedora ainda não foram implementados.** Detalhes: [fechamento](docs/08-FECHAMENTO-CICLO-ANDROID.md) e [retomada](docs/10-RETOMADA-PROJETO.md).
 
+**Nesta branch, MYCT-3B validada no Fedora:** Core C++20 com saúde real em
+`127.0.0.1:8765` e persistência PostgreSQL por socket Unix privado. Build,
+gravação/leitura após reinícios e saúde com banco parado passaram. Ver
+[relatório MYCT-3B](docs/MYCT-3B-POSTGRES-REPORT.md) e [operação do Core](server/README.md).
+PR #11 depende da MYCT-3A/PR #10; sem merge automático. Dashboard e downloads
+continuam fora deste ciclo.
+
 ## Objetivo
 
 Fazer do computador Fedora uma estação remota e um executor de tarefas úteis, acessível pelo Moto G06, com manutenção possível mesmo depois do término do acesso ao Codex.

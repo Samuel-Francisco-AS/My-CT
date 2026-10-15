@@ -1,74 +1,105 @@
 # MYCT-3B — persistência PostgreSQL mínima
 
-Data: 15/10/2026. **Implementação entregue; integração real ainda NÃO aprovada.**
-Base atualizada: `myct-3a-core-health` em `afeeebc`; PR #10 preservado.
+Data: 15/10/2026. **Aceite técnico comprovado no Fedora real.**
 Branch: `myct-3b-postgres`, [PR #11](https://github.com/Samuel-Francisco-AS/My-CT/pull/11)
-em rascunho contra a MYCT-3A, sem merge.
+contra `myct-3a-core-health` (`afeeebc`). PR #10 preservado, sem merge automático.
 
-## Implementação e aceite
+## Implementação
 
 - `server/postgres.cpp/.hpp`: libpq direta, conexão Unix/peer, banco `myct`,
   usuário Unix efetivo, conexão por operação e SQL parametrizado.
-- `server/migrations/001_execution_events.sql`: transação com tabela de eventos,
-  bigint identity, timestamptz e tipo restrito a 1–64 caracteres ASCII seguros.
+- `server/migrations/001_execution_events.sql`: tabela com bigint identity,
+  timestamptz e tipo restrito a 1–64 caracteres ASCII seguros; migração transacional.
 - `main.cpp`: `--record-event TYPE` e `--get-event ID`, saída TSV com UTC.
-- Makefile mantido; libpq é a única nova dependência de código.
-- Saúde HTTP permanece independente do banco, em loopback; sem endpoints novos.
-- Teste existente HTTP agora usa socket indisponível. Um teste CLI verifica
-  falhas explícitas/entrada; `make test-db` grava e relê via processos distintos.
-- `server/README.md`: pacote mínimo, cluster privado sem TCP/systemd, migração,
-  operação, backup e recuperação. Sem alterações SSH/firewall/Narys/Android.
+- Makefile mantido; sem CMake, ORM, framework ou dependência libpqxx.
+- Saúde HTTP independente do banco, somente loopback; sem endpoints novos.
+- Teste HTTP com banco indisponível, teste CLI de falha/entrada e teste real
+  `make test-db`, que grava e consulta por processos distintos.
+- Operação, backup e recuperação em [server/README.md](../server/README.md).
 
-Aceite exigido: build Fedora, gravação/leitura reais após encerramento do Core,
-saúde com banco parado, binds locais e testes anteriores sem regressão.
+## Ambiente e dependências
 
-## Evidência e validação desta execução
+Fedora Linux 44, GCC `16.2.1 20260819`, GNU Make `4.4.1`.
+Pacotes instalados pelo proprietário após autorização:
 
-- Fedora Linux 44, GCC `16.2.1 20260819`, GNU Make `4.4.1`.
-- `git fetch origin myct-3a-core-health` + avanço fast-forward: já atualizada.
-- `rpm -q libpq libpq-devel postgresql postgresql-server`: todos ausentes.
-- `dnf info libpq-devel postgresql postgresql-server`: pacotes disponíveis;
-  metadados observaram libpq-devel 18.0 e cliente/servidor 18.6. A consulta
-  apresentou erro de assinatura de repositório terceiro; nenhuma chave foi
-  importada. Instalação proposta usa somente `fedora`/`updates`.
-- `python3 -m py_compile server/tests/test_core.py server/tests/integration_postgres.py`:
-  PASS (sintaxe Python apenas, não execução dos testes).
-- `git diff --check`: PASS.
-- `make -C server`: **BLOQUEADO** por ausência de `pg_config`/`libpq-fe.h`;
-  receita agora informa a dependência ausente antes de compilar.
-- `make test` e `make test-db`: **não executados**, dependem do novo binário.
-  Nenhuma gravação PostgreSQL foi demonstrada nesta execução.
-- A evidência MYCT-3A informada pelo proprietário (2/2 PASS, health real,
-  bind 127.0.0.1:8765, ~4 MiB RSS e 0% CPU) é anterior; não é validação da 3B.
-
-## Dependências, recursos e gate de retomada
-
-Nenhum pacote instalado, nenhum cluster criado, nenhum serviço modificado.
-Instalação autorizada pelo proprietário em 15/10/2026. Tentativa com
-`sudo -n dnf --repo=fedora --repo=updates install -y libpq-devel postgresql postgresql-server`
-bloqueada por `sudo: a password is required`. Nenhum pacote instalado. O
-proprietário deve executar no terminal interativo:
-
-```sh
-sudo dnf --repo=fedora --repo=updates install libpq-devel postgresql postgresql-server
+```text
+libpq-18.0-4.fc44.x86_64
+libpq-devel-18.0-4.fc44.x86_64
+postgresql-18.6-1.fc44.x86_64
+postgresql-server-18.6-1.fc44.x86_64
 ```
 
-`libpq-devel` resolve libpq runtime; `postgresql` fornece cliente/administração;
-`postgresql-server` fornece servidor/initdb/pg_ctl. Sem contrib, ORM ou CMake.
+`libpq-devel` fornece header/pg_config; libpq é runtime; postgresql fornece
+cliente/administração e postgresql-server fornece initdb/postgres/pg_ctl.
+`pg_config --version` informa `PostgreSQL 18beta1` no pacote disponível;
+`SELECT version()` confirmou servidor **18.6**. Build e conexão reais passaram
+com essa combinação; nenhuma troca de pacote foi necessária.
 
-**Gate exato:** realizar a instalação já autorizada em terminal com sudo, seguir o cluster exclusivo em
-[server/README.md](../server/README.md), executar `make && make test`, aplicar
-migração e rodar `make test-db`. Registrar o ID/UTC retornado; parar/reiniciar
-Core e reler esse ID. Parar banco e consultar `/v1/health`, conferir
-`SHOW listen_addresses`, socket privado e `ss -lntp`. Reiniciar somente o cluster
-My-CT e consultar novamente. Não usar nem alterar banco de outro projeto.
+Histórico do gate: inicialmente faltavam os pacotes; após autorização a tentativa
+`sudo -n dnf` exigiu senha, e o proprietário realizou a instalação em terminal.
+O gate foi resolvido antes desta validação, sem pedir ou registrar a senha.
 
-Consumo 3B **não medido**: sem binário/servidor executáveis. Após o gate, registrar
-`ps -o pid,rss,%cpu,comm -p PID_DO_CORE`, processos do cluster (RSS pode duplicar
-memória compartilhada), tamanho do binário e `du -sh "$MYCT_PGROOT/data"`.
-Config proposta: shared_buffers 16 MB, max_connections 10; isso não constitui
-medição. Backup/restore documentados, ainda não testados.
+## Evidência real e resultados
 
-Limites: disponibilidade do servidor PostgreSQL não foi demonstrada; compilação,
-testes e consumo precisam da instalação. Não declarar o ciclo aprovado por
-inspeção de código ou pela validação anterior da MYCT-3A.
+| Validação | Resultado |
+| --- | --- |
+| `make -C server test` | Compilação C++20 sem avisos; **3/3 PASS**, incluindo os dois testes anteriores |
+| Migração com `psql -X ... -v ON_ERROR_STOP=1 -f server/migrations/001_execution_events.sql` | BEGIN / CREATE TABLE / COMMIT |
+| `MYCT_PGSOCKET=... make -C server test-db` | **1/1 PASS**, evento ID 1 gravado/relido por processos distintos |
+| `--record-event myct3b.fedora.validation` e `--get-event 2` | Registro real idêntico, conforme abaixo |
+| Encerrar Core, parar/reiniciar banco, reiniciar Core e consultar ID 2 | Mesmo registro retornado |
+| Banco parado: gravação CLI | Código 1, erro explícito PostgreSQL unavailable |
+| Banco parado: `/v1/health`, no processo existente e após reiniciar Core | HTTP **200**, JSON com `status: ok` |
+| `SHOW listen_addresses` | Vazio: nenhum listener TCP do cluster |
+| `SHOW unix_socket_directories` | `/home/sam/.local/share/myct/postgres/run` |
+| `SHOW unix_socket_permissions` e `stat` do diretório/socket | `0700` / `700` |
+| `ss -lntp`, filtrado pelos PIDs criados | Somente Core em `127.0.0.1:8765`; nenhum TCP do PostgreSQL |
+| Sintaxe Python e `git diff --check` | PASS |
+
+Registro gravado, relido após saída do gravador e novamente após reiniciar banco/Core:
+
+```text
+2    2026-10-15T14:47:10.088294Z    myct3b.fedora.validation
+```
+
+A saída original usa tabulações. O teste de integração também define
+`PGHOSTADDR=192.0.2.1` e `PGSERVICE=myct_nonexistent_service`: a conexão local
+passou, comprovando que esses overrides herdados não redirecionam a CLI.
+
+## Consumo observado
+
+Amostra breve em repouso, após escrita/leitura e uma requisição HTTP:
+
+- Core: **7.556 KiB RSS (~7,4 MiB)**, CPU **0,0%** em `ps`.
+- Cluster PostgreSQL: **24.227 KiB PSS agregado (~23,7 MiB)**, somando
+  `/proc/PID/smaps_rollup` do postmaster e filhos. CPU observada: **0,0%** por
+  processo. RSS do postmaster: 21.768 KiB; RSS dos filhos compartilha páginas
+  e não deve ser somado como memória física exclusiva.
+- Dados do cluster: **42 MiB**, `du -sh`.
+- Binário: **58.656 bytes**.
+- Configuração: `shared_buffers=16MB`, `max_connections=10`.
+
+Isso não é benchmark de carga nem garantia de consumo contínuo; atende à prova
+mínima deste ciclo. Nenhum polling automático foi introduzido.
+
+## Estado deixado e retomada
+
+**Core e cluster exclusivo parados ao fim da validação; os dois registros foram
+preservados.** Sem boot/systemd, deploy, SSH/firewall/rede pública/Narys/Android
+alterados. Nenhuma instância PostgreSQL de outro projeto foi usada ou alterada.
+
+```sh
+cd ~/Projetos/My-CT/server
+export MYCT_PGROOT="$HOME/.local/share/myct/postgres"
+export MYCT_PGSOCKET="$MYCT_PGROOT/run"
+pg_ctl -D "$MYCT_PGROOT/data" -l "$MYCT_PGROOT/postgres.log" \
+  -o "-k '$MYCT_PGSOCKET'" -w start
+./myct-core --get-event 2
+./myct-core
+```
+
+Não repetir `initdb`, `createdb` ou a migração no cluster já existente.
+Ctrl-C encerra o Core; `pg_ctl -D "$MYCT_PGROOT/data" -m fast -w stop` encerra
+somente este banco. Backup/restore estão documentados, mas **restore não foi
+executado**. Não há gate pendente dos critérios MYCT-3B; testes prolongados,
+Android, systemd, downloads e automações continuam fora do recorte.

@@ -62,3 +62,10 @@ mínima e CLI local de eventos. Evidência e pendências estão no
 [relatório MYCT-3B](MYCT-3B-POSTGRES-REPORT.md); instalação/build/retomada em
 [server/README.md](../server/README.md). Não avançar Android/systemd/downloads
 por inferência nem declarar aceite do banco sem prova real registrada.
+
+**Atualização de aceite MYCT-3B:** pacotes instalados pelo proprietário e prova
+real concluída no Fedora 44: build, 3/3 testes locais, 1/1 integração PostgreSQL,
+evento ID 2 persistido após reinícios, health HTTP 200 com banco parado e binds
+locais conferidos. Core e cluster exclusivo ficaram parados com dados preservados.
+Para retomar, usar os comandos do relatório; não repetir initdb/migração.
+PR #11 segue contra MYCT-3A, sem merge automático.
