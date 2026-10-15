@@ -65,12 +65,10 @@ class SshLogindBindingTests(unittest.TestCase):
     def test_secondary_private_tty_accepted_only_when_shell_owns_same_device(self):
         from types import SimpleNamespace
         st = lambda dev: SimpleNamespace(st_mode=stat.S_IFCHR | 0o600, st_rdev=dev)
-        with patch.object(self.helper.os, "stat", return_value=st(100)), \\
-             patch.object(self.helper.os, "fstat", return_value=st(100)):
+        with patch.object(self.helper.os, "stat", return_value=st(100)), patch.object(self.helper.os, "fstat", return_value=st(100)):
             self.helper.require_authenticated_ssh_logind(
                 self.properties("pts/1"), "/dev/pts/42", Path("/fake/shell"))
-        with patch.object(self.helper.os, "stat", return_value=st(100)), \\
-             patch.object(self.helper.os, "fstat", return_value=st(200)):
+        with patch.object(self.helper.os, "stat", return_value=st(100)), patch.object(self.helper.os, "fstat", return_value=st(200)):
             with self.assertRaises(self.helper.Blocked) as blocked:
                 self.helper.require_authenticated_ssh_logind(
                     self.properties("pts/1"), "/dev/pts/42", Path("/fake/shell"))
