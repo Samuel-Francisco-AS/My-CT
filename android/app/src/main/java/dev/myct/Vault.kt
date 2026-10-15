@@ -122,7 +122,7 @@ internal class VaultUnlockChannel(
     companion object {
         private const val PROMPT = "Senha do cofre login (SSH privado, sem eco): "
         // The helper prints sanitized JSON codes; never expose PTY stdout/stderr.
-        private val SAFE_HELPER_CODES = Regex("\\\"error_code\\\"\\\\s*:\\s*\\\"([a-z][a-z0-9_]{2,63})\\\"")
+        private val SAFE_HELPER_CODES = Regex("\"error_code\"\\s*:\\s*\"([a-z][a-z0-9_]{2,63})\"")
     }
 }
 
