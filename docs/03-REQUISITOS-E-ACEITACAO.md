@@ -75,7 +75,7 @@ Este checkpoint complementa a tabela de requisitos inicial, **sem reescrever seu
 | INF-01 | **Parcial** | Fedora headless com SSH funcional; reinicialização automática do Core e do cluster My-CT por systemd não implementada. |
 | INF-02 | **Comprovado no Fedora** | MYCT-3A/3B: binário C++20 compilou e foi executado no hardware; 2/2 (3A), 3/3 (3B) testes locais PASS. |
 | INF-03 | **Comprovado no Fedora (persistência mínima)** | libpq/CLI, PostgreSQL 18.6 exclusivo com socket Unix privado; registro persistiu após reiniciar Core e banco; 1/1 integração PASS. |
-| DASH-01 | **Parcial** | API HTTP de CPU/RAM/disco e uptime responde com dados reais no Fedora; **não existe tela Android** nem supervisão de serviços. |
+| DASH-01 | **Comprovado no Moto (telemetria)** | CPU/RAM/disco/uptime reais via túnel SSH autenticado no APK MYCT-3C; captura física do proprietário após hotfix de contraste. Supervisão de serviços/autostart segue pendente em INF-01. |
 | DL-01/02/03, AUTO-01 | **Não iniciado** | SFTP é transferência Android↔Fedora; downloads HTTP/torrent independentes no servidor não existem. |
 | OPS-01, SEC-01, SEC-02 | **Parcial** | Core local/API em loopback, banco Unix/peer e operação manual documentada; sem autostart/restore validado nem Dashboard remoto. |
 
@@ -86,5 +86,13 @@ Este checkpoint complementa a tabela de requisitos inicial, **sem reescrever seu
 
 - [PR #10](https://github.com/Samuel-Francisco-AS/My-CT/pull/10) e [PR #11](https://github.com/Samuel-Francisco-AS/My-CT/pull/11) integrados à `main` em sequência após provas reais no Fedora.
 - **INF-02 e INF-03:** comprovação funcional do Core C++20 e persistência PostgreSQL com registro preservado após reinícios; compilação e integração passaram. Nenhum serviço My-CT autoiniciável foi implantado.
-- **DASH-01 e issue #2 permanecem parciais** até MYCT-3C comprovar leitura real da API no Moto G06 via transporte SSH autenticado, sem exposição da API para a rede.
+- **DASH-01 foi posteriormente comprovado no Moto G06 na MYCT-3C**, com API acessada por túnel SSH autenticado e captura física após correção de contraste. O marco Core→banco→API→Android foi alcançado; autostart systemd continua pendente (INF-01).
 - Base factual e SHAs: [fechamento MYCT-3A/3B](MYCT-3AB-FECHAMENTO-REPORT.md); recuperação e comandos [server/README.md](../server/README.md).
+
+
+## Checkpoint MYCT-3C integrado — 15/10/2026
+
+- [PR #12](https://github.com/Samuel-Francisco-AS/My-CT/pull/12) mesclado à `main` (`fd8076321cd32300e2c6305954adc1b134e26d77`). Build, 34 testes Android aprovados, 1 opcional ignorado, lint sem erros; primeira inspeção no Moto comprovou comunicação real, porém revelou contraste ruim. Após hotfix `ec0d16d`, nova captura confirmou legibilidade, e proprietário declarou os testes físicos aprovados.
+- **DASH-01 (CPU/RAM/disco/uptime real no Android): comprovado no Moto**, por túnel da conexão SSH verificada; sem polling nem API exposta à rede.
+- **INF-01 permanece parcial:** `./myct-core` exige início manual; persistência pós-logout/reboot, gerenciamento e reinício automático ainda **não implementados**. Novo recorte systemd requer autorização.
+- Evidências em [MYCT-3C-DASHBOARD-REPORT.md](MYCT-3C-DASHBOARD-REPORT.md). Dívidas de lag, SFTP scroll e background continuam [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9).
