@@ -186,3 +186,12 @@ Mantidos `0.3.0-health`/code 5 e compatibilidade de atualização sem desinstala
 **draft**, aberto e sem merge. Correção de contraste ainda depende da inspeção
 visual no Moto G06, junto com o roteiro físico acima; esta rodada não instala o
 APK nem concede aceite físico. Core/PostgreSQL não foram iniciados ou alterados.
+
+
+## Aceite físico pelo proprietário — 15/10/2026, Moto G06
+
+O proprietário instalou a versão MYCT-3C atualizada após hotfix de contraste e enviou **captura física** da aba Saúde em operação. Valores legíveis na captura: CPU 0,0%; RAM 913,6 MiB utilizada / 7,6 GiB total / 6,7 GiB disponível; disco 89,8 GiB utilizado / 221,6 GiB total / 131,8 GiB disponível; uptime Core 24 s; última consulta 13:16:15, 15/10/2026.
+
+Na captura anterior ao hotfix, dados reais também eram exibidos, mas textos sem contraste apareciam pretos sobre fundo quase preto. Depois da correção `ec0d16d` e rebuild `e861304`, a captura mostra **contraste adequado**. Proprietário informou expressamente: **"Funcionou, e passou nos testes."** Assim, aceite físico da tela Saúde, consulta real SSH → Core e demais verificações do roteiro são registrados como **confirmados pelo proprietário**, sem alegar reprodução independente por ADB.
+
+**MYCT-3C aceita funcionalmente no hardware real**, conforme o relato e a captura. Isso não inclui ensaio de carga ou regressões futuras de UX. O Core ainda é processo iniciado manualmente, sem systemd/autostart; PostgreSQL é independente das métricas. Próximo assunto operacional: implantação de serviço systemd de inicialização automática **somente com autorização explícita**. Dívidas Android anteriores permanecem na issue #9.
