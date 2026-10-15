@@ -144,3 +144,31 @@
 - **Documentação incorporada:** relatório de fechamento, backlog de refinamento, handoff, README/requisitos/decisões/planejamento/diário e instruções Android revisadas. [Issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9) mantém as dívidas conscientemente adiadas.
 - **Validade do aceite:** fluxo feliz PDF nos dois sentidos e terminal/SFTP reais no Moto; background de transferências, cancelamento/conflitos adversos e UX/lag/scroll permanecem pendentes. Merge não é aprovação desses cenários.
 - **Reinício do trabalho:** criar branch nova de `origin/main`; consultar `docs/10-RETOMADA-PROJETO.md`. Remoção de branches remotas é operação posterior, mediante comandos entregues ao proprietário.
+
+## 15/10/2026 — MYCT-3B: código PostgreSQL e gate de instalação
+
+Branch derivada da MYCT-3A atualizada, sem alterar PR #10. Implementadas CLI de
+eventos e migração via libpq direta/Makefile. Sem instalações ou serviços;
+compilação bloqueada por libpq-devel ausente e integração real não aprovada.
+Autorização de instalação solicitada. Evidência, comandos e retomada no
+[relatório MYCT-3B](MYCT-3B-POSTGRES-REPORT.md) e em `server/README.md`.
+
+### MYCT-3B — autorização recebida, execução sudo bloqueada
+
+O proprietário autorizou pacotes e dependências. A tentativa de instalação
+com `sudo -n dnf` retornou `sudo: a password is required`; nenhum pacote
+foi instalado. Gate agora é a execução do comando documentado em terminal
+interativo pelo proprietário, sem pedir nem armazenar sua senha. Build e
+prova real seguem pendentes; autorização não precisa ser repetida.
+
+### MYCT-3B — gate resolvido e validação real aprovada
+
+Após instalação dos pacotes pelo proprietário: Core compilou no Fedora 44;
+`make test` 3/3 PASS e `make test-db` 1/1 PASS com PostgreSQL 18.6 real.
+Cluster exclusivo em `~/.local/share/myct/postgres`, peer, socket 0700 e nenhum
+TCP. Evento ID 2 (`myct3b.fedora.validation`) sobreviveu ao encerramento do
+Core e reinício do banco. Health HTTP 200 com banco parado, inclusive após
+reiniciar Core; API confirmada somente em 127.0.0.1:8765. Core ~7,4 MiB RSS,
+cluster ~23,7 MiB PSS agregado, CPU observada 0,0%, dados 42 MiB.
+Core e banco parados ao final; registros preservados. Nenhuma mudança de código
+foi necessária para passar os testes. Evidências e retomada no relatório MYCT-3B.

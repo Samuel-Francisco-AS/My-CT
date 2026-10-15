@@ -1,5 +1,6 @@
 import http.client
 import json
+import os
 import pathlib
 import socket
 import subprocess
@@ -25,7 +26,11 @@ class CoreSmokeTest(unittest.TestCase):
         with socket.socket() as reservation:
             reservation.bind(("127.0.0.1", 0))
             port = reservation.getsockname()[1]
-        process = subprocess.Popen([str(BINARY), "--port", str(port)], stdout=subprocess.DEVNULL)
+        # Health must work even when the configured database socket is absent.
+        env = dict(os.environ, MYCT_PGSOCKET="/myct-test-unavailable-socket",
+                   PGHOSTADDR="192.0.2.1", PGSERVICE="myct_nonexistent_service")
+        process = subprocess.Popen([str(BINARY), "--port", str(port)],
+                                   stdout=subprocess.DEVNULL, env=env)
         try:
             for _ in range(50):
                 if process.poll() is not None:
@@ -59,6 +64,23 @@ class CoreSmokeTest(unittest.TestCase):
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=3)
+
+
+class DatabaseCliTest(unittest.TestCase):
+    def test_database_failure_is_explicit_and_inputs_are_validated(self):
+        env = dict(os.environ, MYCT_PGSOCKET="/myct-test-unavailable-socket",
+                   PGHOSTADDR="192.0.2.1", PGSERVICE="myct_nonexistent_service")
+        for args, message in [
+            (["--record-event", "manual.test"], "PostgreSQL unavailable"),
+            (["--record-event", "bad'event"], "event type"),
+            (["--get-event", "0"], "positive bigint"),
+        ]:
+            with self.subTest(args=args):
+                result = subprocess.run([str(BINARY), *args], env=env,
+                                        capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertIn(message, result.stderr)
 
 
 if __name__ == "__main__":
