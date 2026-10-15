@@ -52,3 +52,10 @@
 - **Decisões alteradas:** nenhuma direção arquitetural; bibliotecas e recorte são escolhas experimentais revisáveis em docs/05. SSH/firewall/serviços existentes preservados.
 - **Publicação:** implementação em `19289c9`, branch enviada por SSH; [PR #6](https://github.com/Samuel-Francisco-AS/My-CT/pull/6) criado em draft pelo conector GitHub (gh local sem sessão válida). Nenhum merge.
 - **Próximo menor passo útil:** instalar APK no Moto G06, conferir host key e executar checklist físico antes de ampliar para SFTP/Core.
+
+### 2026-10-14 — MYCT-1R: prova física e abertura da correção
+- **Evidência relatada pelo proprietário:** no Moto G06, APK conectou autenticado por SSH ao Fedora; `ls`, `cd`, `pwd` funcionam; `tty` → `/dev/pts/3` e `stty size` → `17 51` **com teclado aberto**.
+- **Problemas observados:** ajuste visual/IME e latência leve, cópia para clipboard inoperante, screenshot preta, sessão terminada quando o Android encerra app em segundo plano e senha exigida ao reconectar.
+- **Confirmações por revisão de código:** `FLAG_SECURE` global e callback de Copy vazio; sem foreground service; não foi demonstrada a causa do lag/resize.
+- **Decisão:** correção incremental MYCT-1R na branch de PR #6, sem merge; planejar dimensões/IME, clipboard e controle de screenshot, continuidade via serviço Android apropriado e persistência de trabalho remoto via tmux ou equivalente. Sequência negociável. Ver [plano MYCT-1R](MYCT-1R-CORRECTIVE-PLAN.md).
+- **Estado:** planejamento apenas; nenhum teste corretivo, build ou implantação realizado nesta entrada.
