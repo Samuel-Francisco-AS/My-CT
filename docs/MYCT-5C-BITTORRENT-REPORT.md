@@ -234,7 +234,7 @@ SHA-256: `3686101a5e18d49a33ec1eb8db1e76d6b0eadb0a26dafd003526c3e64c73fabf`.
 0.5.2. Atualizar sem desinstalar; não foi instalado no Moto nesta execução.
 
 ```sh
-sha256sum -c artifacts/myct-5c-0.5.3-debug.apk.sha256
+(cd artifacts && sha256sum -c myct-5c-0.5.3-debug.apk.sha256)
 # Com aparelho conectado e ADB autorizado pelo proprietário:
 adb install -r artifacts/myct-5c-0.5.3-debug.apk
 ```
@@ -247,3 +247,22 @@ servidor 47,29 s e RSS máximo 326.720 KiB (~319 MiB), sem swap. Gradle avisou
 sobre metaspace ao encerrar, mas terminou com sucesso, sem elevar limites.
 CLI no caso real **motor ausente**: 0,15 s, RSS 17.696 KiB (~17,3 MiB), saída 3.
 Isso não mede o daemon, o app no Moto nem todos os filhos systemd dos testes.
+
+## Publicação e referência de retomada
+
+- Implementação/APK: commit `5800d79` (hash completo consultável pelo tag abaixo).
+- [PR #17 em rascunho](https://github.com/Samuel-Francisco-AS/My-CT/pull/17),
+  base `main`, branch `myct-5c-bittorrent`. **Sem merge.**
+- [Prévia técnica 0.5.3 e checksum](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5c-v0.5.3-rc1).
+  Tag identifica o commit da implementação testada. Release identificada como
+  candidata com motor real/aceite pendentes, não como entrega funcional aceita.
+- Commits posteriores podem apenas completar este relatório. Para obter o SHA
+  final da documentação: `gh pr view 17 --repo Samuel-Francisco-AS/My-CT
+  --json headRefOid`. O histórico do PR registra todos os commits sem autorreferência.
+
+Retomada imediata: instalar pacote pelo proprietário, autorizar preparo/ativação
+da unidade proposta, executar gate Fedora pequeno e só então gate físico Moto.
+Não tentar contornar essa dependência com pacote extraído, sudo automatizado ou
+serviço substituto. Atualizar relatório/PR com resultados reais antes de declarar
+MYCT-5C pronta para aceite. Questões de instalação/ativação foram apresentadas
+na sessão; nenhuma autorização explícita recebida até esta publicação.
