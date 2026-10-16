@@ -15,6 +15,7 @@ class SshConnection {
     @Volatile private var shell: ChannelShell? = null
     @Volatile private var closed = false
     private val fileChannels = mutableSetOf<ChannelSftp>()
+    private val downloadChannels = mutableSetOf<ChannelExec>()
     private val vaultChannels = mutableSetOf<Channel>()
     private val healthForwarding = HealthForwarding(open = {
         val current = checkNotNull(session)
@@ -41,6 +42,28 @@ class SshConnection {
             synchronized(vaultChannels) { vaultChannels.remove(channel) }
         }
     }
+
+    internal fun downloads(action: DownloadAction): String = executeDownload(action, {
+        val channel = synchronized(downloadChannels) {
+            check(!closed && session?.isConnected == true)
+            (session!!.openChannel("exec") as ChannelExec).also { downloadChannels.add(it) }
+        }
+        object : DownloadExec {
+            override fun connect(command: String, output: OutputStream, error: OutputStream) {
+                channel.setCommand(command)
+                channel.setOutputStream(output)
+                channel.setErrStream(error)
+                channel.connect(10_000)
+                check(!closed)
+            }
+            override val done get() = channel.isClosed
+            override val exitStatus get() = channel.exitStatus
+            override fun close() {
+                channel.disconnect()
+                synchronized(downloadChannels) { downloadChannels.remove(channel) }
+            }
+        }
+    })
 
     /** Separate interactive SSH shell: keeps password off the ordinary PTY and argv. */
     internal fun openVaultUnlock(): VaultUnlockChannel {
@@ -134,6 +157,7 @@ class SshConnection {
     }
     fun close() {
         val channels = synchronized(fileChannels) { closed = true; fileChannels.toList().also { fileChannels.clear() } }
+        synchronized(downloadChannels) { downloadChannels.toList().also { downloadChannels.clear() } }.forEach { it.disconnect() }
         healthForwarding.close()
         synchronized(vaultChannels) { vaultChannels.toList().also { vaultChannels.clear() } }.forEach { it.disconnect() }
         channels.forEach { it.disconnect() }

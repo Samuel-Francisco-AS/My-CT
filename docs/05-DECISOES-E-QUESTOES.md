@@ -173,3 +173,22 @@ preservado.
 - [Relatório MYCT-5A](MYCT-5A-DOWNLOADS-REPORT.md): testes Fedora e uso.
   **Aceite SSH/Moto pendente** por autenticação SSH indisponível ao agente; não
   confundir saída da CLI com prova de encerramento da sessão. Sem merge/deploy.
+
+## 2026-10-15 — MYCT-5B: Android como cliente da CLI existente
+
+- Quinta aba Downloads, sem API/daemon/banco novos. Canais SSH exec curtos na
+  sessão autenticada existente; PTY Terminal e PTY privado Cofre preservados.
+- Caminho fixo `$HOME/.local/bin/myct-download`, verificado por `test -x` a cada
+  operação. Instalação manual pelo proprietário, sem sudo. Android nunca instala.
+- Polling de 4 s apenas com aba/Activity visíveis e SSH conectado. Sem fila,
+  reenvio de ações ou histórico local exclusivo. Histórico vem de `list`.
+- Integração pequena com `FilesModel.load(path)` permite Ver em Arquivos sem
+  refatorar o SFTP. Barra de abas ganha rolagem horizontal para telas estreitas.
+- Escopo continua HTTP/HTTPS público. Não expor `--allow-private` como nome nem
+  opção Android; a CLI mantém validação completa de URL/nome/DNS/destino.
+- Desvio pontual justificado por testes: `show()` da CLI relê estado depois de
+  detectar unidade inativa. Corrida observada em três testes existentes produzia
+  `interrupted` junto de mensagem final. Teste determinístico simula término
+  durante `systemctl`; sem alterar motor, serviços instalados ou regras de rede.
+- Aceite físico MYCT-5B pendente no Moto; aceite MYCT-5A permanece válido.
+  [Entrega e roteiro](MYCT-5B-ANDROID-DOWNLOADS-REPORT.md).

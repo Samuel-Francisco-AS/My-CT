@@ -165,6 +165,24 @@ class Downloads(unittest.TestCase):
         (p / 'state').write_text('running\n')  # crash/reboot metadata recovery, simulated
         self.assertEqual(self.status(ident)['state'], 'interrupted')
 
+    def test_completion_during_active_probe_uses_final_state(self):
+        # Deterministic probe race; no unit, HTTP request or persistent installation.
+        ident = str(uuid.uuid4())
+        p = self.home / '.local/share/myct/downloads' / ident
+        p.mkdir(parents=True)
+        (p / 'state').write_text('running\n')
+        (p / 'name').write_text('probe.bin\n')
+        commands = self.home / 'probe-bin'
+        commands.mkdir()
+        probe = commands / 'systemctl'
+        probe.write_text('#!/bin/sh\nprintf "completed\\n" > "$HOME/.local/share/myct/downloads/' + ident + '/state"\nexit 3\n')
+        probe.chmod(0o700)
+        env = dict(self.env, PATH=str(commands) + ':' + os.environ['PATH'])
+        result = subprocess.run([str(BIN), 'status', ident], env=env,
+                                text=True, capture_output=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('state: completed\n', result.stdout)
+
     def test_write_limit(self):
         # Real kernel file-size limit: simulates storage write failure without filling disk.
         ident = str(uuid.uuid4())

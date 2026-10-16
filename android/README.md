@@ -1,3 +1,35 @@
+# MYCT-5B — Downloads Android (aceite físico pendente)
+
+APK atual: `../artifacts/myct-5b-debug.apk`, `0.5.2-downloads`/code 9.
+Atualizar sobre a instalação existente, preservando assinatura e dados.
+Foco/IME da versão 0.5.1 aceitos no Moto. A versão 0.5.2 mantém também os
+botões estáveis durante polling e prioriza o toque sobre a leitura passiva.
+Novo aceite: observar Baixar/Atualizar por mais de 16 s, digitar no nome e
+confirmar que os toques produzem efeito enquanto a lista atualiza.
+Cinco abas: **Terminal | Arquivos | Saúde | Cofre | Downloads**; deslize a barra
+horizontalmente em telas estreitas. Conecte pelo Terminal e abra Downloads.
+Cole URL HTTP/HTTPS pública e nome opcional; Baixar solicita execução no Fedora.
+Uma transferência ativa por vez, sem fila. Consultas a cada 4 s apenas com a aba
+visível; Atualizar consulta manualmente. Cancelar pede confirmação e mantém
+parcial. Ver em Arquivos abre o diretório no SFTP existente.
+
+Pré-requisito manual, com nenhuma transferência ativa no Fedora:
+
+```sh
+cd ~/Projetos/My-CT
+make -C server myct-download
+install -Dm0700 server/myct-download "$HOME/.local/bin/myct-download"
+```
+
+O app verifica executabilidade e orienta instalação quando necessário; não
+instala nada. URLs privadas/LAN não são habilitadas pela tela nesta fase.
+[Relatório MYCT-5B, build, instalação e aceite Moto](../docs/MYCT-5B-ANDROID-DOWNLOADS-REPORT.md).
+
+Os trechos abaixo são históricos. Core já inicia por systemd e Saúde/Cofre
+foram aceitos fisicamente na MYCT-4/4B, conforme o guia de retomada.
+
+---
+
 # My-CT Android — Terminal, Arquivos e Saúde
 
 **MYCT-3C (15/10/2026):** Dashboard implementado, **prova no Moto pendente**.
