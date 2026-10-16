@@ -108,8 +108,7 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
             }
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 TextButton(onClick = { saveScroll(); model.toggleHiddenFiles() }) {
-                    Text(if (showHidden) "Ocultar arquivos ."
-                        else "Mostrar arquivos .")
+                    Text(if (showHidden) "Ocultar ocultos" else "Mostrar ocultos")
                 }
                 listing?.let {
                     Text("${visibleEntries.size} de ${it.entries.size} itens",
