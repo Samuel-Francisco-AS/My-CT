@@ -1,6 +1,6 @@
 # MYCT-5D — Plano de verificação de arquivos
 
-**Situação:** 5D-A **ACEITA fisicamente** no Moto G06 em 16/10/2026, [PR #19](https://github.com/Samuel-Francisco-AS/My-CT/pull/19) integrada à `main`. [Relatório e evidência de aceite](MYCT-5D-A-REPORT.md). 5D-B **não iniciada** e depende de autorização explícita. O plano original abaixo permanece como referência.
+**Situação:** 5D-A **ACEITA fisicamente** no Moto G06 em 16/10/2026, [PR #19](https://github.com/Samuel-Francisco-AS/My-CT/pull/19) integrada à `main`. [Relatório e evidência de aceite](MYCT-5D-A-REPORT.md). 5D-B1 **implementada para revisão** sob autorização expressa: [relatório B1](MYCT-5D-B1-REPORT.md), [contrato CLI](MYCT-5D-B1-CLI.md). Timer ainda desabilitado; B2 não iniciada. O plano original abaixo permanece como referência.
 **Issue:** [#18 — MYCT-5D](https://github.com/Samuel-Francisco-AS/My-CT/issues/18).  
 **Dependência:** fechamento e merge da [MYCT-5C / PR #17](https://github.com/Samuel-Francisco-AS/My-CT/pull/17), seguidos de sincronização local da `main`.
 

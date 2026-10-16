@@ -167,3 +167,10 @@ Nenhum pacote, serviço ou binário ativo é instalado por `make`.
 
 [Relatório MYCT-5A](../docs/MYCT-5A-DOWNLOADS-REPORT.md) contém instalação
 opcional, limites, recuperação e procedimento **pendente** de prova SSH/Moto.
+
+## Antivírus sob demanda — MYCT-5D-B1
+
+`make myct-av-scan` compila o worker C++20, usando a mesma autorização de caminhos
+de `myct-inspect`. Instalação explícita do adaptador/unidades e validação Fedora:
+[relatório B1](../docs/MYCT-5D-B1-REPORT.md) e
+[contrato CLI/JSON](../docs/MYCT-5D-B1-CLI.md). Não altera o Core instalado.

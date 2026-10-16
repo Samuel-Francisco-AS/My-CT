@@ -1,8 +1,17 @@
 # AGENTS.md — colaboração segura no My-CT
 
+**MYCT-5D-B1 ACEITA operacionalmente em 16/10/2026 (PR #20):** ClamAV pontual no Fedora,
+CLI `myct-av` + worker C++20, base dedicada atualizada realmente, análise
+não destrutiva e unidades de usuário entregues. [Relatório B1](docs/MYCT-5D-B1-REPORT.md)
+e [contrato para B2](docs/MYCT-5D-B1-CLI.md). Instalação B1 no espaço de `sam`
+realizada sob autorização; **timer de 36h ativado e validado pelo proprietário**, confirmado ativo sem alteração
+nesta correção. Limite de entrada atualizado para **2.000.000.000 bytes**, com
+os demais limites de recursos preservados. O proprietário instalou o worker atualizado e confirmou uma análise CLI real de `abc`: CLEAN, 10,071 s, ~962 MiB RSS, base daily 28155 atual. [Aceite e medições](docs/MYCT-5D-B1-REPORT.md). **PR #20 autorizado para merge; B2 Android não iniciada.** Issue #18 permanece aberta.
+
+
 **MYCT-5C ACEITA pelo proprietário em 16/10/2026; PR #17 integrado à main.** Transmission 4.1.3 dedicado no Fedora, gerenciamento BitTorrent/magnet Android 0.5.4/code 11, download autônomo sem SSH, remover preservando dados, SFTP, pausa/retomada. Correção de nomes confirmada em aparelho físico: `<título real sanitizado>-<hash8>` após conclusão por hook nativo + RPC, sem migração de legados, sem interromper seeding. [Relatório](docs/MYCT-5C-BITTORRENT-REPORT.md). Não instalar CLI 0.5.3 antiga sobre o hook 0.5.4.
 
-**MYCT-5D-A ACEITA fisicamente em 16/10/2026:** [relatório](docs/MYCT-5D-A-REPORT.md), [PR #19](https://github.com/Samuel-Francisco-AS/My-CT/pull/19) integrado à `main`; APK 0.5.5/code 12, helper `myct-inspect`, seis testes mínimos aprovados no Moto G06. Não repetir aceite; ao retomar partir da `main` sincronizada. [Issue #18](https://github.com/Samuel-Francisco-AS/My-CT/issues/18) permanece aberta porque MYCT-5D-B/ClamAV não começou e requer autorização de instalação. Não reabrir dívidas #9 nem automações #4 sem solicitação.
+**MYCT-5D-A ACEITA fisicamente em 16/10/2026:** [relatório](docs/MYCT-5D-A-REPORT.md), [PR #19](https://github.com/Samuel-Francisco-AS/My-CT/pull/19) integrado à `main`; APK 0.5.5/code 12, helper `myct-inspect`, seis testes mínimos aprovados no Moto G06. Não repetir aceite; ao retomar partir da `main` sincronizada. [Issue #18](https://github.com/Samuel-Francisco-AS/My-CT/issues/18) permanece aberta para continuidade da MYCT-5D-B; B1 aceita operacionalmente com worker atualizado e teste real, B2 não iniciada. Não reabrir dívidas #9 nem automações #4 sem solicitação.
 
 Estas orientações destinam-se a Codex e outros agentes que trabalhem neste repositório. **Leia README.md e docs/04-PLANEJAMENTO-INAUGURAL.md antes de propor implementação.**
 
