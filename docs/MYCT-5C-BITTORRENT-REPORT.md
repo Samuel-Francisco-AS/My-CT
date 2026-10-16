@@ -1,5 +1,27 @@
 # MYCT-5C — BitTorrent/magnet por SSH
 
+## Encerramento — aceite físico do proprietário (16/10/2026)
+
+**MYCT-5C ACEITA no Fedora 44 e Moto G06.** PR [#17](https://github.com/Samuel-Francisco-AS/My-CT/pull/17), candidata final **0.5.4-torrents / code 11**. Este fechamento é posterior às seções históricas abaixo e substitui qualquer anotação anterior de "teste pendente". O merge para `main` e a exclusão das branches são os passos administrativos finais.
+
+**Provas físicas relatadas pelo proprietário na conversa, e consolidadas no PR:**
+1. Transmission 4.1.3 dedicado ao usuário, serviço systemd ativo, RPC `127.0.0.1:19091`, CLI real `~/.local/bin/myct-torrent` consultando o daemon.
+2. Magnet Tiny Core Linux: download real de **18.616.320 bytes**, metadados 100%, arquivo ISO no Fedora e `status:6`, sem erro. Pausa efetivamente `status:0` após atualização assíncrona, retomada e controles Android funcionando.
+3. Android 0.5.3: listagem, pausa/retomada, **Ver em Arquivos** para o diretório SFTP correto; **Remover** da lista mantendo o arquivo no disco.
+4. Outro torrent escolhido pelo proprietário foi iniciado pelo app; ele encerrou o SSH e, após reconectar, observou **continuidade do download sem a conexão Android** (sem coleta formal de série temporal ou taxa de bytes).
+5. Correção 0.5.4 (commit `10950f7`): hook de conclusão lê **título real dos metadados** e pede ao motor relocation via RPC para `<título-sanitizado>-<hash8>`. Teste controlado de 65.536 bytes no Transmission real comprovou conteúdo íntegro, pasta legível, seeding disponível e arquivos/torrents anteriores intactos. **O proprietário confirmou no Moto G06 que, ao concluir um novo download, a pasta recebeu corretamente o nome legível.** Este era o último gate pendente; foi aprovado.
+6. Build Android 0.5.4: **67 PASS, 1 ignorado**, lint sem erros; operacionais Python **13/13 PASS**. Não confundir testes automatizados com as evidências físicas acima. APK/sha256 na [release 0.5.4](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5c-v0.5.4-rc1).
+
+**Entregue:** download e seeding gerenciados pelo Fedora sem exigir SSH/app conectado; magnet, progresso/peers/taxa, controles e acesso por SFTP; pastas legíveis para novos torrents ao concluir; legados preservados; nenhuma alteração de limites de upload/ratio ou arquivos internos.
+
+**Pendências não bloqueantes:** importar arquivo `.torrent` pelo SAF (somente magnet via Android nesta fase); provar upload efetivo para peer externo (estado 6 não mede bytes enviados); reinício/reboot específico do Transmission/hook não comprovado; conferir persistência da ativação do hook caso o daemon seja reiniciado abruptamente; dívidas anteriores de UX/HTTP/SFTP na [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9). A [issue #4](https://github.com/Samuel-Francisco-AS/My-CT/issues/4) permanece aberta porque também cobre a primeira automação do servidor.
+
+**Próxima fase autorizada, não iniciada:** [MYCT-5D — inspeção e segurança de arquivos, issue #18](https://github.com/Samuel-Francisco-AS/My-CT/issues/18) e [plano](MYCT-5D-PLANEJAMENTO-VERIFICACAO-ARQUIVOS.md), começando por formato/tamanho/SHA-256 antes de avaliar ClamAV com autorização. Refinamento Android MYCT-R e automações MYCT-6 permanecem posteriores.
+
+**Operação:** o Git não reinstala CLI/hook: as cópias no Fedora já foram atualizadas pelo executor na correção 0.5.4. Não desinstalar/transplantar cópias antigas nem reiniciar motor apenas para fechar o PR. Dados de seeding, inclusive pastas hash antigas, ficam onde estão. Iniciar próxima fase em branch nova após sincronizar `main`.
+
+---
+
 ## Correção 0.5.4 — nomes reais, sem migrar existentes (16/10/2026)
 
 **Estado atual:** os gates essenciais MYCT-5C foram comprovados pelo proprietário
@@ -7,8 +29,8 @@ após a publicação inicial: motor real, adição pelo Moto, download sem SSH,
 consulta, pausa/retomada, SFTP e remoção preservando arquivos. Fontes:
 [comentários e decisão de nomes no PR #17](https://github.com/Samuel-Francisco-AS/My-CT/pull/17#issuecomment-6218182578)
 (ver também os demais comentários do PR). A correção de nomes descrita abaixo
-foi comprovada no Fedora; **novo APK ainda exige validação dessa correção no Moto**.
-PR continua rascunho, sem merge. O registro inicial ao final é histórico:
+foi comprovada no Fedora; **o proprietário confirmou o nome legível no Moto G06 com APK 0.5.4**.
+O merge é tratado no encerramento administrativo do PR #17. O registro inicial ao final é histórico:
 Transmission não está mais ausente.
 
 ### Aceite e solução mínima
