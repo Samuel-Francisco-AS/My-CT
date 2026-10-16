@@ -2,7 +2,7 @@
 
 **MYCT-5C aprovada (16/10/2026, PR #17):** BitTorrent/magnet pelo Transmission 4.1.3 no Fedora e controles no APK **0.5.4/code 11**. O proprietário confirmou no Moto G06 download sem SSH, pausa/retomada, remoção preservando arquivo, SFTP e **nome de pasta pelo título real ao concluir**, usando hook/RPC do Transmission. Seeding preservado; sem migração das pastas antigas. [Relatório de fechamento](docs/MYCT-5C-BITTORRENT-REPORT.md) · [release 0.5.4](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5c-v0.5.4-rc1).
 
-**Próxima: MYCT-5D, planejada e não iniciada** — [issue #18](https://github.com/Samuel-Francisco-AS/My-CT/issues/18) / [plano](docs/MYCT-5D-PLANEJAMENTO-VERIFICACAO-ARQUIVOS.md), começando por inspeção de arquivos (formato/tamanho/SHA-256) e posteriormente antivírus sob demanda, mediante autorização. Dívidas Android continuam na #9; automações futuras na #4.
+**MYCT-5D-A candidata:** inspeção de arquivo individual pela aba Arquivos (tipo/tamanho/SHA-256 e comparação opcional), APK 0.5.5/code 12. **Instalação manual do novo helper e aceite no Moto pendentes; sem deploy.** [Relatório e roteiro](docs/MYCT-5D-A-REPORT.md). MYCT-5D-B/ClamAV permanece posterior, mediante autorização; dívidas #9 e automações #4 continuam adiadas.
 
 **My-CT** é uma iniciativa de infraestrutura pessoal: um servidor Linux doméstico, administrado por um aplicativo Android nativo, capaz de executar tarefas, disponibilizar arquivos e realizar downloads sem depender de uma sessão gráfica.
 

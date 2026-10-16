@@ -1,5 +1,7 @@
 package dev.myct
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -125,10 +127,44 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
                 dismissButton = { TextButton(onClick = { model.dismissUpload() }) { Text("Cancelar") } })
         }
         model.downloadChoice?.let { choice ->
-            AlertDialog(onDismissRequest = { model.dismissDownload() }, title = { Text("Baixar arquivo") },
+            AlertDialog(onDismissRequest = { model.dismissDownload() }, title = { Text("Arquivo no Fedora") },
                 text = { Text("${choice.entry.name} · ${formatFileSize(choice.entry.size)} (${choice.entry.size} bytes)\nEscolha um novo documento no Android. Nomes existentes são tratados pelo seletor SAF. Se interrompido, o provedor pode manter um arquivo parcial.") },
-                confirmButton = { TextButton(onClick = { download.launch(choice.entry.name) }) { Text("Escolher destino…") } },
+                confirmButton = { Column {
+                    TextButton(onClick = { model.inspectSelected() }) { Text("Verificar arquivo") }
+                    TextButton(onClick = { download.launch(choice.entry.name) }) { Text("Escolher destino…") }
+                } },
                 dismissButton = { TextButton(onClick = { model.dismissDownload() }) { Text("Cancelar") } })
+        }
+        if (model.inspectionVisible) {
+            var checksum by remember { mutableStateOf("") }
+            AlertDialog(onDismissRequest = { model.closeInspection() }, title = { Text("Verificar arquivo") },
+                text = { Column(Modifier.verticalScroll(rememberScrollState())) {
+                    if (model.inspecting) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    Text(model.inspectionMessage)
+                    model.inspection?.let { result ->
+                        Text("Nome: ${result.name}")
+                        Text("Localização: ${result.path}")
+                        Text("Tamanho: ${formatFileSize(result.bytes)} (${result.bytes} bytes)")
+                        Text("Extensão: ${result.extension.ifEmpty { "Sem extensão" }}")
+                        Text("Formato por conteúdo (MIME): ${result.type.ifEmpty { "Não identificado" }}")
+                        val declaredType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(result.extension.lowercase())
+                        if (declaredType != null && result.type.isNotEmpty() && declaredType != result.type)
+                            Text("A extensão sugere $declaredType; o conteúdo foi identificado como ${result.type}.")
+                        Text("SHA-256: ${result.sha256}")
+                        TextButton(onClick = {
+                            context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("SHA-256", result.sha256))
+                            Toast.makeText(context, "SHA-256 copiado", Toast.LENGTH_SHORT).show()
+                        }) { Text("Copiar SHA-256") }
+                        OutlinedTextField(checksum, { if (it.length <= 256) checksum = it },
+                            label = { Text("SHA-256 conhecido (opcional)") }, modifier = Modifier.fillMaxWidth())
+                        val comparison = compareChecksum(result.sha256, checksum)
+                        Text(comparison, style = MaterialTheme.typography.titleMedium,
+                            color = if (comparison == "DIVERGENTE") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+                        Text(result.warning, style = MaterialTheme.typography.bodySmall)
+                    }
+                } }, confirmButton = { TextButton(onClick = { model.closeInspection() }) {
+                    Text(if (model.inspecting) "Cancelar inspeção" else "Fechar")
+                } })
         }
         link?.let { entry ->
             AlertDialog(onDismissRequest = { link = null }, title = { Text("Link simbólico") },

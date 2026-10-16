@@ -1,6 +1,6 @@
 # MYCT-5D — Plano de verificação de arquivos
 
-**Situação:** planejada e aprovada pelo proprietário em 16/10/2026. **Não iniciada.**  
+**Situação:** 5D-A implementada como candidata em 16/10/2026, sem deploy nem aceite físico. [Relatório e roteiro](MYCT-5D-A-REPORT.md). 5D-B não iniciada. O plano original abaixo permanece como referência.
 **Issue:** [#18 — MYCT-5D](https://github.com/Samuel-Francisco-AS/My-CT/issues/18).  
 **Dependência:** fechamento e merge da [MYCT-5C / PR #17](https://github.com/Samuel-Francisco-AS/My-CT/pull/17), seguidos de sincronização local da `main`.
 
