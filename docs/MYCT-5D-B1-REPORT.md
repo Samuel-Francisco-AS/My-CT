@@ -3,7 +3,7 @@
 16/10/2026 · Issue [#18](https://github.com/Samuel-Francisco-AS/My-CT/issues/18).
 Branch `myct-5d-b1-clamav`, criada da `main` limpa e sincronizada em
 `6d78dbdbb279b3493a6de0e46367cbd1cffef57e` (após PR #19).
-**MYCT-5D-B1 ACEITA operacionalmente pelo proprietário em 16/10/2026; PR #20 autorizado para fechamento e merge. B2 não iniciada.**
+**MYCT-5D-B1 ACEITA operacionalmente pelo proprietário em 16/10/2026; [PR #20](https://github.com/Samuel-Francisco-AS/My-CT/pull/20) integrado à `main` no merge `a5770afa45c3771437118536e8183d14e5dd0ce4`. B2 não iniciada.**
 APK permanece **0.5.5/code 12**, aceite 5D-A preservado.
 
 ## Aceite definido antes da implementação
@@ -352,7 +352,7 @@ c5b2f7ad735e15340a3530510fba384b520681791d8640978abb5a6591700de7  myct-av-update
 Não houve operação de habilitar/desabilitar, restart, reload, recriação ou escrita
 nas unidades instaladas. O relato de validação do timer é do proprietário; o
 agente confirmou estado/propriedades sem repetir espera física de 36h.
-PR #20 permanece aberto sem merge, na branch existente. B2 não iniciada.
+Na data dos testes da correção, o PR #20 ainda estava aberto e sem merge. O fechamento confirmado está registrado abaixo; B2 não iniciada.
 
 Após acrescentar a conferência do offset de stdin, a bateria real específica foi
 reexecutada com sucesso: 80 MiB CLEAN em **22,163 s**, pico **1.056.344 KiB RSS**,
@@ -386,7 +386,7 @@ sem reivindicar análise completa de arquivo de 2 GB. O timer de 36h foi
 anteriormente habilitado e comprovado `enabled/active` pelo proprietário, com
 próxima execução agendada; não foi alterado no fechamento.
 
-**PR #20 autorizado para merge na main.** O aceite cobre o motor do Fedora,
+**PR #20 integrado à `main` em `a5770afa45c3771437118536e8183d14e5dd0ce4`.** O aceite cobre o motor do Fedora,
 **não** a interface Android; o APK permanece 0.5.5/code 12, e a MYCT-5D-B2
 continua pendente. A issue #18 deve permanecer aberta. Sem varredura automática,
 quarentena ou exclusão; detecção não implica ação sobre arquivo. `CLEAN` não

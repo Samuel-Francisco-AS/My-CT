@@ -1,4 +1,4 @@
-# My-CT — guia de retomada após MYCT-5D-A
+# My-CT — guia de retomada após MYCT-5D-B1
 
 **MYCT-5D-B1 ACEITA operacionalmente em 16/10/2026 (PR #20):** ClamAV pontual no Fedora,
 CLI `myct-av` + worker C++20, base dedicada atualizada realmente, análise
@@ -6,7 +6,7 @@ não destrutiva e unidades de usuário entregues. [Relatório B1](MYCT-5D-B1-REP
 e [contrato para B2](MYCT-5D-B1-CLI.md). Instalação B1 no espaço de `sam`
 realizada sob autorização; **timer de 36h ativado e validado pelo proprietário**, confirmado ativo sem alteração
 nesta correção. Limite de entrada atualizado para **2.000.000.000 bytes**, com
-os demais limites de recursos preservados. O proprietário instalou o worker atualizado e confirmou uma análise CLI real de `abc`: CLEAN, 10,071 s, ~962 MiB RSS, base daily 28155 atual. [Aceite e medições](MYCT-5D-B1-REPORT.md). **PR #20 autorizado para merge; B2 Android não iniciada.** Issue #18 permanece aberta.
+os demais limites de recursos preservados. O proprietário instalou o worker atualizado e confirmou uma análise CLI real de `abc`: CLEAN, 10,071 s, ~962 MiB RSS, base daily 28155 atual. [Aceite e medições](MYCT-5D-B1-REPORT.md). **[PR #20](https://github.com/Samuel-Francisco-AS/My-CT/pull/20) integrado à `main` (merge `a5770afa45c3771437118536e8183d14e5dd0ce4`); B2 Android não iniciada.** Issue #18 permanece aberta.
 
 
 **MYCT-5C aceita em 16/10/2026 — PR #17 integrado à `main` (merge `30d909be5c4ba17dbf46c2008c42448c3c08b9c9`), APK 0.5.4/code 11.** Fedora 44 com Transmission 4.1.3 como serviço dedicado e RPC loopback; downloads/magnets e seeding continuam sem SSH/Android. Proprietário comprovou no Moto G06 adicionar, listar, pausar/retomar, remover preservando arquivo, Ver em Arquivos por SFTP e continuidade do download sem SSH. Também confirmou que o **novo torrent ganhou pasta com título real sanitizado + hash8 ao terminar**, após correção por hook/RPC, sem migrar pastas existentes. [Fechamento MYCT-5C](MYCT-5C-BITTORRENT-REPORT.md) · [PR #17](https://github.com/Samuel-Francisco-AS/My-CT/pull/17) · [APK 0.5.4](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5c-v0.5.4-rc1).
@@ -17,7 +17,7 @@ os demais limites de recursos preservados. O proprietário instalou o worker atu
 
 ---
 
-**Atualizado:** 16/10/2026 · **Fonte de verdade:** PR #20 B1 autorizado para merge; `main` deverá ser sincronizada após fechamento. Histórico 5A/5B abaixo. MYCT-5A aceita; MYCT-5B integrada com aceite funcional parcial.
+**Atualizado:** 16/10/2026 · **Fonte de verdade:** `main` após merge do PR #20; sincronizar checkout Fedora antes da B2. Histórico 5A/5B abaixo. MYCT-5A aceita; MYCT-5B integrada com aceite funcional parcial.
 **Relatório de fechamento:** [MYCT-4-FECHAMENTO-REPORT.md](MYCT-4-FECHAMENTO-REPORT.md).
 
 

@@ -6,7 +6,7 @@ não destrutiva e unidades de usuário entregues. [Relatório B1](docs/MYCT-5D-B
 e [contrato para B2](docs/MYCT-5D-B1-CLI.md). Instalação B1 no espaço de `sam`
 realizada sob autorização; **timer de 36h ativado e validado pelo proprietário**, confirmado ativo sem alteração
 nesta correção. Limite de entrada atualizado para **2.000.000.000 bytes**, com
-os demais limites de recursos preservados. O proprietário instalou o worker atualizado e confirmou uma análise CLI real de `abc`: CLEAN, 10,071 s, ~962 MiB RSS, base daily 28155 atual. [Aceite e medições](docs/MYCT-5D-B1-REPORT.md). **PR #20 autorizado para merge; B2 Android não iniciada.** Issue #18 permanece aberta.
+os demais limites de recursos preservados. O proprietário instalou o worker atualizado e confirmou uma análise CLI real de `abc`: CLEAN, 10,071 s, ~962 MiB RSS, base daily 28155 atual. [Aceite e medições](docs/MYCT-5D-B1-REPORT.md). **[PR #20](https://github.com/Samuel-Francisco-AS/My-CT/pull/20) integrado à `main` (merge `a5770afa45c3771437118536e8183d14e5dd0ce4`); B2 Android não iniciada.** Issue #18 permanece aberta.
 
 
 **MYCT-5C ACEITA pelo proprietário em 16/10/2026; PR #17 integrado à main.** Transmission 4.1.3 dedicado no Fedora, gerenciamento BitTorrent/magnet Android 0.5.4/code 11, download autônomo sem SSH, remover preservando dados, SFTP, pausa/retomada. Correção de nomes confirmada em aparelho físico: `<título real sanitizado>-<hash8>` após conclusão por hook nativo + RPC, sem migração de legados, sem interromper seeding. [Relatório](docs/MYCT-5C-BITTORRENT-REPORT.md). Não instalar CLI 0.5.3 antiga sobre o hook 0.5.4.
