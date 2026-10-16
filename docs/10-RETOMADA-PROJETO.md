@@ -81,7 +81,9 @@ Para parar **somente** esse cluster, se ele tiver sido iniciado manualmente: `pg
 
 ## Documentos e histórico
 
-- [MYCT-5C BitTorrent e fechamento](MYCT-5C-BITTORRENT-REPORT.md) — motor real, APK 0.5.4, pastas legíveis, evidências e dívidas.\n- [MYCT-5D Planejamento de inspeção](MYCT-5D-PLANEJAMENTO-VERIFICACAO-ARQUIVOS.md) — próximo ciclo aprovado, não iniciado.\n- [MYCT-5A Downloads](MYCT-5A-DOWNLOADS-REPORT.md) — CLI headless, resultados e aceite físico após saída do Android.
+- [MYCT-5C BitTorrent e fechamento](MYCT-5C-BITTORRENT-REPORT.md) — motor real, APK 0.5.4, pastas legíveis, evidências e dívidas.
+- [MYCT-5D Planejamento de inspeção](MYCT-5D-PLANEJAMENTO-VERIFICACAO-ARQUIVOS.md) — próximo ciclo aprovado, não iniciado.
+- [MYCT-5A Downloads](MYCT-5A-DOWNLOADS-REPORT.md) — CLI headless, resultados e aceite físico após saída do Android.
 - [MYCT-5B Android Downloads](MYCT-5B-ANDROID-DOWNLOADS-REPORT.md) — aceite parcial e pendências de refinamento.
 - [MYCT-4 Fechamento](MYCT-4-FECHAMENTO-REPORT.md) — estado conclusivo e evidências.
 - [MYCT-4 Core e helper](MYCT-4-BOOT-VAULT.md) — implementação, correção 203/EXEC e suporte.
