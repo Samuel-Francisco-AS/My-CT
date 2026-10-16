@@ -1,11 +1,14 @@
-# MYCT-5B — Downloads Android (aceite físico pendente)
+# MYCT-5B — Downloads Android (integrada com aceite funcional parcial)
 
 APK atual: `../artifacts/myct-5b-debug.apk`, `0.5.2-downloads`/code 9.
 Atualizar sobre a instalação existente, preservando assinatura e dados.
 Foco/IME da versão 0.5.1 aceitos no Moto. A versão 0.5.2 mantém também os
 botões estáveis durante polling e prioriza o toque sobre a leitura passiva.
-Novo aceite: observar Baixar/Atualizar por mais de 16 s, digitar no nome e
-confirmar que os toques produzem efeito enquanto a lista atualiza.
+O proprietário confirmou no Moto G06: histórico e download real, foco e teclado
+preservados, e botões sem piscadas na 0.5.2. Merge PR #16 concluído.
+Dívidas adiadas: Ver em Arquivos abrindo a pasta correta, cancelamento,
+reconexão da aba Downloads e efeito dos toques durante o polling, além de
+progresso lento; ver issue #9. Não declarar esses testes como aprovados.
 Cinco abas: **Terminal | Arquivos | Saúde | Cofre | Downloads**; deslize a barra
 horizontalmente em telas estreitas. Conecte pelo Terminal e abra Downloads.
 Cole URL HTTP/HTTPS pública e nome opcional; Baixar solicita execução no Fedora.
