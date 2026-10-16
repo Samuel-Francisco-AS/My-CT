@@ -9,6 +9,13 @@
 - Ao trocar abas ou desmontar a tela, salva a posição da pasta ainda exibida. Ao trocar de conexão, limpa o cache. Atualizar uma pasta sem sair dela não reinicia a rolagem deliberadamente.
 - Teste JVM direcionado em `FilesScrollAnchorTest.kt` cobre nome reordenado, item removido e lista vazia. Resta validação física com pasta grande no Moto G06, incluindo subir/voltar, troca de aba e reconectar.
 
+## R-02b — mostrar/ocultar arquivos começados por ponto
+
+- Botão simples `Mostrar ocultos` / `Ocultar ocultos` na aba Arquivos, **ocultos inicialmente**.
+- Exibição filtrada no Android (inclui diretórios como `.config`, `.ssh`), mas a listagem SFTP original continua completa. Não modifica, apaga nem renomeia itens.
+- Mantém posição por nome ao alternar o filtro; estado conservado no modelo durante a sessão do aplicativo, sem preferência persistente no disco.
+- Testes JVM para filtragem e âncora de scroll entre os dois modos. É necessário confirmar no Moto o comportamento visual ao entrar/sair de uma pasta e alternar o filtro.
+
 ## R-01 — medição dirigida, sem declarar cura antes da prova
 
 O diagnóstico MYCT-1P classificou a causa do lag como **não identificada**. A preferência `Entrada por caracteres = false` melhorou subjetivamente mas não eliminou lag. A escrita pelo SSH e o eco remoto continuam necessários; a fila de ações e a view não provam causalidade isoladamente.
