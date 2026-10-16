@@ -327,15 +327,15 @@ chegar à 0.5.6 já instalada, seria necessária atualização manual/autorizada
 **somente o adaptador `myct-av`**, com backup. Não foi instalada nesta tarefa.
 Timer/base/FreshClam/serviços/configurações permanecem intocados.
 
-### Menor evidência adicional para fechar a causa histórica (aguarda decisão)
+### Proposta anterior à autorização da reprodução (registro histórico)
 
 Preferir o **JSON original**, caso o proprietário o tenha preservado: exit_code,
 signal, incomplete_reason e trechos de engine_output sobre mmap/alocação/IO,
 sem nome/caminho completo. Não há API/histórico para recuperá-lo do app atual.
 
 Sem esse registro, confirmação específica requer uma nova execução autorizada,
-não simples aumento de limites. **Nenhuma reprodução grande está autorizada ou
-foi executada nesta tarefa.** Se o proprietário optar por ela, a proposta é uma
+não simples aumento de limites. **Até esse ponto do diagnóstico não havia reprodução grande autorizada ou
+executada; a autorização e o resultado posteriores estão registrados abaixo.** Se o proprietário optar por ela, a proposta é uma
 única chamada da CLI existente sobre o arquivo original, sem mudar parâmetros:
 
 ```sh
@@ -356,3 +356,147 @@ antes de qualquer execução. Alternativamente, manter a limitação documentada
 usar análise sob demanda nos arquivos que caibam nos recursos atuais.
 
 R-09/issue #9 não foi alterada. PR #21 continua sem merge e issue #18 aberta.
+
+## Reprodução única autorizada — falha de reserva virtual confirmada
+
+O proprietário autorizou expressamente **uma única** reprodução monitorada do
+mesmo MKV de 1.788.118.547 bytes, sem alteração de parâmetros/componentes. Foi
+feita uma chamada à **CLI instalada existente**, com argumento hexadecimal e sem
+repetição. O adaptador instalado ainda é o anterior à melhoria de mensagem do
+commit `9050cee`; o worker instalado coincide com o binário já aprovado.
+
+### Pré-checagem e preservação
+
+- Um único arquivo regular MKV com esse tamanho foi localizado por metadados,
+  sem seguir symlinks de diretórios nem expor nome/caminho.
+- ~**151,88 GB** disponíveis no filesystem temporário, mais de 6 GiB de RAM
+  disponível; nenhum ClamScan/FreshClam/worker de análise ativo.
+- Serviço de update `inactive/dead`, lock de trabalho livre; nenhuma chamada de
+  atualização foi feita. A CLI adquiriu seu lock normalmente.
+- Nenhum componente, limite, permissão ou unidade foi instalado/modificado.
+  A verificação usou stat/xattrs; **nenhum hash do vídeo foi calculado**.
+
+Um monitor externo somente de leitura amostrou os descendentes da CLI em `/proc`
+a cada ~200 ms. Capturou stdout/stderr localmente e publicou só campos e trechos
+sanitizados. Não havia arquivo adicional com conteúdo do vídeo criado pelo
+monitor; somente o temporário nativo inevitável do ClamScan. Um marcador local
+impediu lançamento acidental de segunda reprodução. O ponteiro temporário com o
+caminho privado foi descartado após o teste.
+
+### Resultado efetivo da única execução
+
+```json
+{
+  "state": "ERROR",
+  "exit_code": 2,
+  "signal": 0,
+  "incomplete_reason": "",
+  "duration_ms": 17959,
+  "peak_rss_kib": 984616,
+  "cpu_user_s": 10.2795,
+  "cpu_system_s": 3.4225,
+  "cli_status": 1
+}
+```
+
+Trechos pertinentes do motor, sem caminho privado:
+
+```text
+LibClamAV Warning: fmap: map allocation failed
+LibClamAV Error: CRITICAL: fmap() failed
+stdin: Can't allocate memory ERROR
+Total errors: 1
+Data scanned: 0.00 MB
+Data read: 1705.28 MB (ratio 0.00:1)
+```
+
+O número `Scanned files: 1` da saída do ClamAV **não significa análise completa**:
+o contador foi incrementado, mas o mapeamento falhou antes da varredura de
+conteúdo. Não há resultado de ausência de ameaça para esse arquivo.
+
+| Medição | Resultado |
+| --- | --- |
+| Parede do motor / chamada monitorada | 17,959 s / 18,022 s |
+| CPU total | 13,702 s (user + system) |
+| RSS high water do filho por wait4 | 984.616 KiB / **961,54 MiB** |
+| Pico VmSize amostrado | 1.017.784 KiB |
+| VmPeak informado pelo kernel | 1.029.452 KiB |
+| VmSize estável imediatamente antes da falha | **1.016.460 KiB / 1.040.855.040 bytes** |
+| Pico PSS amostrado | 967.417 KiB / 944,74 MiB |
+| VmSwap do ClamScan nas amostras | 0 KiB |
+| Amostras do processo | 86 |
+| Maior espaço temporário alocado observado | ~1,76 GB |
+| Espaço temporário disponível após terminar | ~151,88 GB |
+
+A amostragem pode perder picos; o pico temporário amostrado não representa o
+volume exato de IO nem prova que o temporário máximo ficou abaixo do tamanho da
+entrada. O ClamAV reportou leitura de toda a entrada, e não houve erro de escrita.
+As diferenças entre ~70,57 s na execução original e ~18 s nesta não são tratadas
+como benchmark ou correção: cache/IO e condições anteriores não foram controlados.
+Ambas falharam; não foi realizada outra tentativa.
+
+Limites lidos **do processo ClamScan durante a execução**, soft e hard:
+
+```text
+Max cpu time       120         120         seconds
+Max file size      2000000000  2000000000  bytes
+Max address space  2147483648  2147483648  bytes
+```
+
+O timeout do worker permaneceu 180 s; nada foi ampliado. Todos os metadados
+comparados do original permaneceram iguais: dispositivo/inode, tamanho, modo,
+uid/gid, atime/mtime/ctime, blocos alocados e valores de atributos estendidos.
+Preservação decorre também da abertura read-only/O_NOATIME e ausência de ação de
+escrita sobre o alvo; não se reivindica uma comparação de conteúdo por hash.
+O diretório temporário de scan foi removido, nenhum scanner permaneceu ativo,
+Core e Transmission continuaram ativos. Timer permaneceu `active/enabled` e os
+hashes das duas unidades são os mesmos já registrados neste relatório.
+
+### Diagnóstico confirmado para a reprodução
+
+O motor **falhou ao reservar o mapa virtual do arquivo**. Imediatamente antes,
+usava ~1,04 GB de VM. Somar o mapa de no mínimo 1.788.118.547 bytes exigiria
+**2.828.973.587 bytes (~2,635 GiB)**, antes de arredondamento/bitmap/outros custos:
+**pelo menos ~650 MiB acima do RLIMIT_AS de 2 GiB**. Esse teto impede a reserva.
+
+Uma alocação recusada não aumenta VmSize/VmPeak até o tamanho solicitado; por isso
+os indicadores observados podem continuar próximos de 1 GiB. RSS também pode
+permanecer ~962 MiB enquanto a reserva virtual falha. Não é necessário esgotar a
+RAM física do Fedora para que ENOMEM ocorra nesse limite do processo.
+
+Nesta reprodução não foi timeout, término por sinal, teto simples de entrada,
+falta de espaço temporário ou indicação de malware: houve erro explícito de
+alocação/fmap, `exit_code=2`, `signal=0`, motivo parcial vazio e orçamento virtual
+insuficiente para a reserva necessária. Não se descartam outros erros que possam
+aparecer em tentativas futuras com parâmetros diferentes. A reprodução explica
+o mesmo sintoma relatado no Android; não recupera retroativamente o JSON perdido
+da primeira tentativa de ~70 s.
+
+### Proposta proporcional — não aplicada
+
+1. **Ação mínima mantendo os recursos atuais:** conservar os limites e tratar
+   esse tamanho como inviável para análise completa neste orçamento/base. A
+   melhoria de mensagem já revisável no commit `9050cee` permite que a mesma
+   versão Android mostre falha de memória, sem inventar resultado. Para usá-la,
+   atualizar somente o adaptador Python dependerá de autorização própria;
+   nenhum worker/APK precisa mudar para essa mensagem. Isso **não** torna o MKV
+   analisável nem transforma ERROR em CLEAN/INCOMPLETE para aparentar sucesso.
+2. **Se analisar esse porte for uma necessidade real:** candidato a avaliar em
+   nova autorização é separar orçamento virtual de proteção de RAM: AS de
+   **3 GiB** é uma hipótese de ajuste baseada no mínimo medido de ~2,635 GiB,
+   com uma proteção independente de memória do grupo da análise (por exemplo,
+   teto de **2 GiB via cgroup**, que inclui mais que RSS). CPU 120 s, parede
+   180 s, entrada/temporários e expansão permaneceriam limitados. Esse controle
+   teria de ser específico à análise, sem alterar serviços existentes/timer nem
+   criar daemon. Não foi implementado nem validado; page cache, PCRE e parsers
+   podem ainda provocar reclaim, outra falha ou limite de tempo. Aumentar AS
+   sozinho não garante sucesso nem preserva sozinho o teto físico desejado.
+
+**Recomendação agora:** manter a configuração aprovada e revisar o diagnóstico;
+só iniciar mudança de orçamento/executor se o proprietário optar por suportar
+esse porte e autorizar um ciclo separado. Não escolher um novo teto universal de
+entrada pela medição de um único arquivo: o custo das assinaturas/parsers varia.
+
+Nenhuma correção de limites/recursos, instalação, nova compilação ou novo APK foi
+feita. Nenhuma segunda reprodução foi executada ou autorizada. Não repetir scans
+ou provas físicas já aceitas. PR #21 permanece aberto sem merge; issue #18 aberta.
