@@ -3,7 +3,7 @@
 16/10/2026 · Issue [#18](https://github.com/Samuel-Francisco-AS/My-CT/issues/18).
 Branch `myct-5d-b2-android-antivirus`, criada da `main` limpa/sincronizada em
 `b6cac9d`, após confirmar o merge B1/PR #20 (`a5770af`).
-**Implementação e testes automatizados concluídos; aceite físico no Moto G06 pendente.**
+**Provas físicas parciais confirmadas pelo proprietário; diagnóstico do arquivo grande abaixo. Fechamento/aceite global pendente.**
 Não confundir as provas do motor B1 ou os testes JVM abaixo com execução Android
 real autenticada. PR/branch devem permanecer abertos, sem merge até revisão.
 
@@ -125,7 +125,7 @@ SSH autenticado no aparelho ou preservação real de um alvo pelo Android.
 
 ## Fedora preservado
 
-Nenhum arquivo em `server/` ou `ops/` alterado; não houve deploy, instalação,
+Na entrega inicial B2 (`5de77e3`), nenhum arquivo em `server/` ou `ops/` foi alterado; não houve deploy, instalação,
 update de assinaturas, restart de serviço, sudo ou mudança de configuração.
 Somente leitura do timer confirmou **active/enabled**, OnUnitInactiveSec 36h.
 Hashes das unidades instaladas permaneceram:
@@ -156,7 +156,10 @@ os dados**. Não foi instalado APK pelo agente, nem conectado aparelho/emulador.
 Pré-requisito Fedora já atendido pela B1: CLI e worker atuais instalados e usuário
 SSH com acesso ao arquivo sob seu home. O APK não instala componentes no servidor.
 
-## Roteiro mínimo Moto G06 — pendente de execução/aceite
+## Roteiro mínimo Moto G06 — referência da candidata inicial
+
+As provas físicas já confirmadas estão registradas abaixo e não devem ser repetidas
+para este diagnóstico. A lista original fica como referência do escopo.
 
 1. Baixar APK e `.sha256` da pré-release; conferir em computador com
    `sha256sum -c myct-5d-b2-0.5.6-debug.apk.sha256`. Atualizar sobre a 0.5.5,
@@ -181,3 +184,175 @@ SSH com acesso ao arquivo sob seu home. O APK não instala componentes no servid
 **Retomada:** branch/PR B2 abertos; APK candidato 0.5.6/code 13; issue #18 aberta.
 Aceite depende de teste físico e confirmação expressa do proprietário. Não fazer
 merge, ampliar escopo ou iniciar automações/varredura residente por consequência.
+
+## Diagnóstico pontual do vídeo de 1.788.118.547 bytes — 16/10/2026
+
+### Provas físicas relatadas pelo proprietário (não repetidas pelo agente)
+
+APK 0.5.6/code 13 instalado no Moto G06: inspeção de PDF pequeno com MIME,
+tamanho/SHA-256; antivírus desse PDF CLEAN; cancelamento manual INCOMPLETE;
+consulta de assinaturas e atualização manual real SUCCESS, último sucesso
+avançando de 16:07 para 17:19, daily 28155 atualizada.
+
+Na primeira análise do vídeo, o proprietário observou ERROR após ~70,57 s, RSS
+próximo de 1 GiB, ClamAV 1.4.6 e mensagem “Falha de execução do clamscan”. A
+segunda tentativa foi cancelada e informou INCOMPLETE. **Não há evidência de
+malware nesse erro, nem resultado de análise completa do vídeo.** Nome, caminho
+privado e conteúdo do arquivo não foram consultados/copiados/publicados.
+
+### Fatos verificados sem nova análise do vídeo
+
+Branch correta, árvore inicialmente limpa, referência `5de77e3`; código do
+adaptador instalado e binário instalado iguais às cópias do checkout no momento
+da inspeção. Pacote Fedora `clamav-1.4.6-1.fc44.x86_64`.
+
+Limites efetivos do worker, sem alteração:
+
+| Limite | Valor |
+| --- | --- |
+| Entrada / max-filesize / tamanho PCRE | 2.000.000.000 bytes |
+| RLIMIT_AS, espaço de endereçamento total | 2.147.483.648 bytes / 2 GiB |
+| RLIMIT_FSIZE por arquivo temporário | 2.000.000.000 bytes |
+| RLIMIT_CPU soft/hard | 120 s / 120 s |
+| Prazo total do worker | 180 s |
+| Adaptador / leitor SSH Android | 190 s / 200 s |
+| Max-scansize para esse tamanho | 1.922.336.275 bytes (entrada + 128 MiB) |
+| Recursão / entradas | 8 / 1.000 |
+
+O [scanstdin da versão 1.4.6](https://github.com/Cisco-Talos/clamav/blob/clamav-1.4.6/clamscan/manager.c#L715)
+primeiro copia stdin integralmente para um temporário, depois chama a análise
+desse arquivo e remove o temporário. Não é uma análise streaming sem cópia em
+disco. Erros de escrita ou análise podem terminar com saída não zero; falha não
+é detecção. O adaptador também descarta o diretório temporário ao terminar.
+
+O [fmap da mesma versão](https://github.com/Cisco-Talos/clamav/blob/clamav-1.4.6/libclamav/fmap.c#L351)
+reserva um mapa anônimo arredondado em páginas, proporcional ao arquivo, além
+do bitmap e outras estruturas. Paginação/aging economiza páginas residentes,
+mas não elimina a reserva virtual. Falha dessa reserva produz aviso de alocação;
+o [scanner trata falha de fmap como CL_EMEM](https://github.com/Cisco-Talos/clamav/blob/clamav-1.4.6/libclamav/scanners.c#L5734).
+
+**RLIMIT_AS não é RSS.** `man getrlimit` instalado confirma que esse teto limita
+brk/mmap/mremap; ao excedê-lo as alocações podem falhar com ENOMEM sem consumir a
+RAM física restante. Só o mapa do vídeo deixaria **359.365.101 bytes (~342,72 MiB)**
+dos 2 GiB para assinaturas, bibliotecas, heap, pilhas e estruturas adicionais.
+O pico RSS informado pelo usuário não mede a VM corrente no ponto da falha.
+
+O diretório operacional continha apenas update.json, update.log e work.lock,
+sem histórico de scans. Não havia registros de ClamScan no journal de usuário
+consultado; consulta filtrada do kernel não retornou correspondências e não havia
+coredump acessível do ClamScan. Isso não prova ausência de eventos fora dos logs
+consultados. Saída do scan via SSH não é automaticamente persistida no journal.
+
+O filesystem temporário atual é Btrfs, com ~151,88 GB disponíveis; não comprova o
+espaço/cota existente na execução anterior. `statvfs` informou zero para **todos**
+os contadores de inodes; não foi interpretado como prova de esgotamento de inodes.
+A memória disponível atual era ~6,4 GiB; também não é medição da execução anterior
+nem contraprova de RLIMIT_AS. Não foi pesquisado o vídeo no home ou em torrents.
+
+### Prova mínima isolada: reserva virtual, sem scan e sem arquivo gigante
+
+Foi chamada somente a API `cl_fmap_open_handle` da **libclamav.so.12 instalada**
+em um processo Python descartável, com RLIMIT_AS=2 GiB. Callback de leitura
+retornaria EOF e contou invocações: **zero**. Não foram carregadas assinaturas,
+criados arquivos/temporários de alvo nem chamados ClamScan ou scan de conteúdo.
+Uma reserva anônima PROT_NONE de 1 GiB simulou ocupação de VM, sem tocar páginas.
+
+| Condição | Resultado da reserva via fmap |
+| --- | --- |
+| Mapa de 1.788.118.547 bytes, sem reserva adicional | Passou |
+| Mapa de 64 MiB, com reserva adicional de 1 GiB | Passou |
+| Mapa de 1.788.118.547 bytes, com reserva adicional de 1 GiB | Falhou |
+
+Diagnóstico real emitido: `LibClamAV Warning: fmap: map allocation failed`.
+VmSize inicial **264.320 KiB**, RSS **15.816 KiB**. Com a reserva adicional,
+VmSize **1.312.896 KiB**, RSS **15.956 KiB**. Pico RSS de todo o teste **16.608 KiB**
+(~16,2 MiB), tempo medido **0,002 s**. A operação sem reserva mostra que esse
+tamanho não é intrinsecamente recusado pelo fmap instalado; a falha controlada
+mostra a interferência do orçamento virtual. A reserva de 1 GiB é **sintética**:
+não é uma medição das assinaturas nem reprodução da análise/erro do MKV.
+
+### Hipóteses e conclusão possível
+
+| Hipótese | Avaliação |
+| --- | --- |
+| Reserva virtual + assinaturas ultrapassam RLIMIT_AS | **Principal, fortemente sustentada** pelo código, orçamento e prova isolada; não confirmada na execução histórica sem JSON/VM daquele instante |
+| ENOSPC/cota/permissão/erro de IO no temporário | Possível; espaço atual não exclui falha histórica. Necessita mensagem original do motor |
+| Teto de entrada ou max-filesize de 2 GB | O tamanho relatado está abaixo do teto; não explica sozinho a falha |
+| Temporário ultrapassa RLIMIT_FSIZE | Cópia simples do vídeo cabe no teto. Sinal SIGXFSZ seria normalmente INCOMPLETE; falta a saída original para avaliar outros temporários/erros de escrita |
+| Timeout total do worker / SSH | ~70,57 s é inferior a 180/190/200 s; o ramo observado não corresponde ao timeout normal |
+| RLIMIT_CPU / encerramento por sinal | Tempo de CPU não pode ser inferido apenas do elapsed; porém sinal reportado pelo worker seria classificado INCOMPLETE, não a mensagem ERROR observada |
+| Leitura incompleta de stdin / alteração do original | O worker confere offset e metadados; normalmente geraria incomplete_reason/INCOMPLETE. Sem JSON original não há prova retrospectiva |
+| Limitação de parser/formato ou outro erro interno | Continua possível; requer engine_output original para distinguir |
+
+**Conclusão:** o mecanismo de falha por espaço virtual foi demonstrado com custo
+mínimo; a causa individual do evento histórico permanece **não confirmada**.
+Não foi justificado aumentar memória/tempo, alterar ingestão ou repetir o MKV.
+Não há correção comprovada que torne essa análise grande completa. Aceitar até
+2 GB continua sendo autorização para solicitar análise, não garantia de conclusão.
+
+### Por que o Android mostrou somente a mensagem genérica
+
+O worker já retorna exit_code, signal, incomplete_reason e engine_output. A CLI,
+no ramo de código de saída diferente de 0/1, sem motivo parcial e sem sinal,
+substituía a explicação por “Falha de execução do clamscan”. O parser Android
+prioriza `message`; `engine_output` não é despejado na interface.
+Isso explica a perda de detalhe sem implicar falha no transporte JSON exit 1.
+O texto observado é compatível com esse ramo, mas **não substitui os campos brutos
+faltantes**. Exit 2 é compatível com falha de alocação/IO; não foi capturado do
+vídeo e não é declarado como fato da execução anterior.
+
+### Correção pequena realizada, sem alterar limites ou instalar componentes
+
+Somente `ops/myct-av` e seus testes foram ajustados para reconhecer diagnósticos
+explícitos de alocação/reserva, espaço/cota, tamanho e criação/escrita temporária.
+A mensagem usa frases fixas e inclui o exit code, sem ecoar caminhos/linhas privadas.
+`fmap() failed` isolado não é promovido a prova de ENOMEM; informa falha de mapeamento
+com causa não identificada. Falhas desconhecidas continuam sem causa inventada.
+
+**Classificação preservada:** ERROR continua ERROR nesses casos. Cancelamento,
+sinais, motivos de inspeção parcial, detecções parciais e UNAVAILABLE mantêm a
+precedência anterior. Não converter tudo em INCOMPLETE para aparentar aprovação;
+em hipótese alguma transformar falha em CLEAN. Essa melhoria explica futuras
+falhas, **não conserta nem confirma a causa do MKV**.
+
+Teste direcionado: `python3 -m unittest discover -s ops/tests -p test_av.py -v`:
+**12/12 PASS**, dez anteriores e dois novos testes, com várias entradas simuladas.
+Incluem mensagens de memória/IO desconhecidas, exclusão de caminhos privados,
+classificação original, detecções parciais, sinais/cancelamento e prioridade de
+base indisponível. Nenhum scan, PDF, EICAR, update ou benchmark aprovado foi repetido.
+
+**Worker C++ não mudou:** não precisa recompilar/reinstalar para esta melhoria.
+**Android não mudou:** nenhum novo APK/release foi gerado. Para a nova mensagem
+chegar à 0.5.6 já instalada, seria necessária atualização manual/autorizada de
+**somente o adaptador `myct-av`**, com backup. Não foi instalada nesta tarefa.
+Timer/base/FreshClam/serviços/configurações permanecem intocados.
+
+### Menor evidência adicional para fechar a causa histórica (aguarda decisão)
+
+Preferir o **JSON original**, caso o proprietário o tenha preservado: exit_code,
+signal, incomplete_reason e trechos de engine_output sobre mmap/alocação/IO,
+sem nome/caminho completo. Não há API/histórico para recuperá-lo do app atual.
+
+Sem esse registro, confirmação específica requer uma nova execução autorizada,
+não simples aumento de limites. **Nenhuma reprodução grande está autorizada ou
+foi executada nesta tarefa.** Se o proprietário optar por ela, a proposta é uma
+única chamada da CLI existente sobre o arquivo original, sem mudar parâmetros:
+
+```sh
+# PROPOSTA APENAS — NÃO EXECUTADA; requer autorização prévia.
+# O proprietário escolheria o caminho localmente, sem publicá-lo.
+MYCT_AV_PATH_HEX=$(python3 -c 'import sys; print(sys.argv[1].encode().hex())' "$MYCT_AV_TARGET")
+~/.local/bin/myct-av scan "$MYCT_AV_PATH_HEX"
+```
+
+Finalidade: capturar JSON bruto localmente e amostrar `/proc` do filho (VmSize,
+VmPeak, VmRSS e limites), mais espaço/cota/erro temporário. Publicar somente os
+campos de resultado, métricas e mensagens reconhecidas/sanitizadas, sem hash ou
+caminho privado. Custo esperado: cópia temporária de ~1,79 GB, VM até 2 GiB,
+RSS possivelmente próximo de 1 GiB como antes, até 120 s CPU / 180 s de worker
+(190 s adaptador); pode falhar novamente. Não é garantia de custo físico exato.
+Comando exato de captura/monitoramento deve ser revisado com a autorização,
+antes de qualquer execução. Alternativamente, manter a limitação documentada e
+usar análise sob demanda nos arquivos que caibam nos recursos atuais.
+
+R-09/issue #9 não foi alterada. PR #21 continua sem merge e issue #18 aberta.

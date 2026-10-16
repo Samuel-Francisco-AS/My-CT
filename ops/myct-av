@@ -117,6 +117,26 @@ def update_status():
     return {**info(), **data, 'running': running, 'service': s, 'progress': 'Aguardando análise em andamento.' if data.get('phase') == 'WAITING' and running else log}
 
 
+def execution_failure_message(code, output):
+    # Fixed summaries only: never echo private paths or arbitrary engine log lines.
+    causes = (
+        (r"fmap: map allocation failed|memory allocation error|cannot allocate memory|can't allocate memory",
+         "ClamScan informou falha de alocação/reserva de memória. O limite de espaço virtual do worker é 2 GiB; RSS não mede esse limite"),
+        (r"no space left on device|disk quota exceeded",
+         "ClamScan informou falta de espaço ou cota no armazenamento temporário"),
+        (r"file size limit exceeded",
+         "ClamScan informou que um arquivo temporário excedeu o limite de tamanho"),
+        (r"fmap\(\) failed",
+         "ClamScan não conseguiu mapear o arquivo; a causa específica não foi identificada"),
+        (r"can't write to |can't open .+ for writing",
+         "ClamScan não conseguiu criar/escrever um temporário; confira espaço e permissões"),
+    )
+    for pattern, message in causes:
+        if re.search(pattern, output, re.I):
+            return f"{message} (exit_code={code}). Análise não concluída."
+    return f"Falha de execução do clamscan (exit_code={code}). A causa não foi identificada."
+
+
 def classify(raw):
     if 'error' in raw:
         return ('INCOMPLETE' if raw['error'].startswith('INCOMPLETE:') else 'ERROR'), [], raw['error']
@@ -131,7 +151,7 @@ def classify(raw):
     if partial:
         reason = '; '.join(partial)
     if raw['exit_code'] not in (0, 1) and not reason and not raw['signal']:
-        return 'ERROR', detections, 'Falha de execução do clamscan.'
+        return 'ERROR', detections, execution_failure_message(raw['exit_code'], output)
     # Warnings, parse failures, skipped/empty input and abnormal exits never become CLEAN.
     if reason or raw['signal'] or re.search(r'warning|error|skipp|limit.*exceed', output, re.I):
         return 'INCOMPLETE', detections, reason or 'Inspeção parcial; consulte engine_output.'
