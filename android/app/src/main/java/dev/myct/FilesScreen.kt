@@ -54,19 +54,20 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
     var link by remember { mutableStateOf<RemoteEntry?>(null) }
     val listing = model.listing
     val status = model.status
-    val listState = rememberLazyListState()
+    // A state born at its saved anchor avoids briefly drawing the top of the new folder.
+    val listState = key(listing?.path) {
+        val saved = listing?.let { model.scrollPosition(it.path) }
+        rememberLazyListState(
+            initialFirstVisibleItemIndex = saved?.restoredIndex(listing?.entries.orEmpty()) ?: 0,
+            initialFirstVisibleItemScrollOffset = saved?.offset ?: 0
+        )
+    }
     fun openDirectory(path: String) {
         listing?.let { current ->
             model.rememberScroll(current.path, current.entries,
                 listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
         }
         model.load(path)
-    }
-    // Restoration happens after the new listing is composed, not while it is loading.
-    LaunchedEffect(model, listing?.path) {
-        val current = listing ?: return@LaunchedEffect
-        val saved = model.scrollPosition(current.path)
-        listState.scrollToItem(saved?.restoredIndex(current.entries) ?: 0, saved?.offset ?: 0)
     }
     DisposableEffect(model, listing?.path) {
         val current = listing
