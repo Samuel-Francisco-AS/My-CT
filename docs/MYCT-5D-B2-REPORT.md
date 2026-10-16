@@ -1,9 +1,9 @@
-# MYCT-5D-B2 — antivírus no Android, candidata para aceite
+# MYCT-5D-B2 — antivírus no Android, aceite operacional e fechamento
 
 16/10/2026 · Issue [#18](https://github.com/Samuel-Francisco-AS/My-CT/issues/18).
 Branch `myct-5d-b2-android-antivirus`, criada da `main` limpa/sincronizada em
 `b6cac9d`, após confirmar o merge B1/PR #20 (`a5770af`).
-**Provas físicas parciais confirmadas pelo proprietário; diagnóstico do arquivo grande abaixo. Fechamento/aceite global pendente.**
+**ACEITA operacionalmente pelo proprietário em 16/10/2026, com limitação de arquivos grandes documentada; PR #21 autorizado para integração à main.**
 Não confundir as provas do motor B1 ou os testes JVM abaixo com execução Android
 real autenticada. PR/branch devem permanecer abertos, sem merge até revisão.
 
@@ -500,3 +500,25 @@ entrada pela medição de um único arquivo: o custo das assinaturas/parsers var
 Nenhuma correção de limites/recursos, instalação, nova compilação ou novo APK foi
 feita. Nenhuma segunda reprodução foi executada ou autorizada. Não repetir scans
 ou provas físicas já aceitas. PR #21 permanece aberto sem merge; issue #18 aberta.
+
+
+## Fechamento e aceite expresso da MYCT-5D-B2 — 16/10/2026
+
+Após revisão do diagnóstico da execução monitorada, o proprietário **autorizou expressamente** o fechamento da MYCT-5D-B2, a atualização **manual** do adaptador `myct-av` com backup e o merge do PR #21. O aceite refere-se à entrega funcional observada no Moto G06, mantendo a limitação de arquivos grandes, e não à capacidade de examinar integralmente qualquer arquivo dentro do teto de entrada.
+
+**Evidência de uso real no Moto G06 (APK 0.5.6/code 13):**
+- Inspeção de PDF com tamanho, MIME e SHA-256; varredura ClamAV pontual concluída em CLEAN, sem qualquer afirmação de segurança absoluta.
+- Cancelamento de análise apresentando INCOMPLETE corretamente.
+- Opções exibindo ClamAV disponível, daily 28155 e status da base; atualização manual concluída em SUCCESS e registro de último sucesso avançando de 16:07 para 17:19.
+- Não houve prova física adicional de EICAR no Android nesta B2; os testes EICAR reais foram realizados no Fedora durante a B1.
+
+**Limite identificado:** o MKV de 1.788.118.547 bytes terminou em ERROR. Reprodução **única** e autorizada confirmou `fmap: map allocation failed`, `exit_code=2`, `signal=0`, ~961,54 MiB RSS, com pelo menos ~2,635 GiB de reserva virtual exigida contra `RLIMIT_AS=2 GiB`. Não houve detecção ou resultado CLEAN nesse arquivo. O teto de entrada de 2 GB é de **elegibilidade**, não garantia de inspeção completa. Não ampliar memória/CPU/tempo nem repetir o MKV por consequência do aceite.
+
+**Adaptação de mensagem:** o commit `9050cee` no PR #21 inclui diagnósticos sanitizados em `ops/myct-av`, com 12/12 testes direcionados PASS. **O script atualizado ainda NÃO foi instalado no Fedora pela assistente:** depende de execução manual do proprietário, autorizada agora, com backup e sem sudo. O worker C++20, o APK 0.5.6, o FreshClam, a base e o timer systemd de 36 horas não precisam ser reinstalados/reconfigurados. A troca do script melhora a mensagem futura de ERROR; não faz o vídeo tornar-se analisável.
+
+**Pendências intencionalmente separadas:**
+- Apresentação extensa do diálogo e caminhos/nomes grandes: [issue #9, R-09](https://github.com/Samuel-Francisco-AS/My-CT/issues/9), MYCT-R, não bloqueia este aceite.
+- Avaliação futura, **somente mediante novo pedido e autorização**, de VM maior (hipótese 3 GiB) com proteção independente do uso de RAM (ex.: cgroup específico), sem garantia de que a análise completa funcionará.
+- Não ampliar escopo para automação, varredura em background ou quarentena.
+
+**Decisão:** MYCT-5D-B2 aceita; PR #21 autorizado para merge; encerrar issue #18 após confirmação de integração. Registro de instalação manual do adaptador no Fedora permanecerá pendente até o proprietário executar e informar resultado. As instruções/histórico de “PR sem merge” acima se referem às etapas anteriores à autorização final.
