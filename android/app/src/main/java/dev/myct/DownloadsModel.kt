@@ -15,7 +15,8 @@ class DownloadsModel internal constructor(
     var busy by mutableStateOf(false)
         private set
     private var passiveRefresh by mutableStateOf(false)
-    val formEnabled get() = connected && (!busy || passiveRefresh)
+    val actionsEnabled get() = connected && (!busy || passiveRefresh)
+    val formEnabled get() = actionsEnabled
     val showOperationProgress get() = busy && !passiveRefresh
     var items by mutableStateOf(emptyList<ServerDownload>())
         private set
@@ -47,12 +48,17 @@ class DownloadsModel internal constructor(
     }
     private fun operate(action: DownloadAction, passive: Boolean = false) {
         val ssh = connection ?: return
-        if (busy) return
-        val epoch = generation
+        if (busy && (passive || !passiveRefresh)) return
+        // A click takes priority over polling. Await its channel cleanup before opening
+        // another one; never interrupt or replay an explicit start/cancel operation.
+        val previous = job.takeIf { busy }
+        val epoch = ++generation
+        previous?.cancel()
         passiveRefresh = passive
         busy = true
         job = scope.launch {
             try {
+                previous?.join()
                 val result = runInterruptible(Dispatchers.IO) { execute(ssh, action) }
                 val notice = when (action) {
                     DownloadAction.List -> null

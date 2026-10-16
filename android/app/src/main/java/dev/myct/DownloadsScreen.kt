@@ -47,8 +47,8 @@ fun DownloadsScreen(model: DownloadsModel, filesBusy: Boolean, openFiles: (Strin
                 singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = model.formEnabled,
                 keyboardOptions = KeyboardOptions(autoCorrectEnabled = false))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { model.start(url, name) }, enabled = model.connected && !model.busy && url.isNotBlank()) { Text("Baixar") }
-                TextButton(onClick = { model.refresh() }, enabled = model.connected && !model.busy) { Text("Atualizar") }
+                Button(onClick = { model.start(url, name) }, enabled = model.actionsEnabled && url.isNotBlank()) { Text("Baixar") }
+                TextButton(onClick = { model.refresh() }, enabled = model.actionsEnabled) { Text("Atualizar") }
             }
             // Keep the form geometry stable; passive polling must not steal focus or move it.
             Box(Modifier.fillMaxWidth().height(4.dp)) {
@@ -71,7 +71,7 @@ fun DownloadsScreen(model: DownloadsModel, filesBusy: Boolean, openFiles: (Strin
                         else LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
                     }
                     if (item.message.isNotBlank()) Text(item.message, style = MaterialTheme.typography.bodySmall)
-                    if (item.active) TextButton(onClick = { cancel = item }, enabled = model.connected && !model.busy && !model.stale) { Text("Cancelar…") }
+                    if (item.active) TextButton(onClick = { cancel = item }, enabled = model.actionsEnabled && !model.stale) { Text("Cancelar…") }
                     if (item.state == DownloadState.completed) {
                         TextButton(onClick = { openFiles(item.directory) }, enabled = model.connected && !filesBusy) { Text("Ver em Arquivos") }
                         if (filesBusy) Text("Aguarde a operação SFTP para abrir a pasta.", style = MaterialTheme.typography.bodySmall)
@@ -83,7 +83,7 @@ fun DownloadsScreen(model: DownloadsModel, filesBusy: Boolean, openFiles: (Strin
     cancel?.let { item ->
         AlertDialog(onDismissRequest = { cancel = null }, title = { Text("Cancelar transferência?") },
             text = { Text("${item.name}: o arquivo parcial será preservado no Fedora. Não há retomada nesta fase.") },
-            confirmButton = { TextButton(onClick = { cancel = null; model.cancel(item.id) }, enabled = model.connected && !model.busy) { Text("Cancelar download") } },
+            confirmButton = { TextButton(onClick = { cancel = null; model.cancel(item.id) }, enabled = model.actionsEnabled) { Text("Cancelar download") } },
             dismissButton = { TextButton(onClick = { cancel = null }) { Text("Continuar baixando") } })
     }
 }

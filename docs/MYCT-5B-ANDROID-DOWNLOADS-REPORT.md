@@ -35,9 +35,44 @@ deve ficar aberto e histórico/progresso continuar atualizando. Fazer fluxo curt
 de Ver em Arquivos, cancelamento confirmado e reconexão; não repetir testes da
 MYCT-5A já aceitos. PR permanece em rascunho até confirmação do proprietário.
 
-APK atual: `artifacts/myct-5b-0.5.1-debug.apk` (também em
+APK da correção 0.5.1 (histórico): `artifacts/myct-5b-0.5.1-debug.apk` (também em
 `artifacts/myct-5b-debug.apk`). A entrega inicial e suas medidas abaixo são
 históricas; os resultados e hash da correção constam no fim deste relatório.
+
+
+## Correção residual dos botões — 16/10/2026, 0.5.2 / code 9
+
+[Feedback mais recente da Luna/proprietário](https://github.com/Samuel-Francisco-AS/My-CT/pull/16#issuecomment-6216066103):
+**foco e teclado da 0.5.1 aceitos no Moto**, porém Baixar/Atualizar ainda
+oscilavam a cada polling e um toque durante `busy` passivo podia ser ignorado.
+Aceite global permanece pendente da correção residual.
+
+Alteração limitada ao modelo/tela Downloads, teste e versão: `actionsEnabled`
+distingue leitura passiva de operação explícita. Baixar/Atualizar/Cancelar
+permanecem habilitados durante polling, mantendo as condições de conexão, URL
+não vazia e estado válido já existentes. Campos continuam com a mesma política
+de edição da 0.5.1 e o formulário preserva a caixa de altura fixa.
+
+Ao receber ação explícita durante polling, o modelo invalida a geração antiga,
+cancela somente o job da leitura, aguarda seu término/fechamento de canal e
+executa a ação exatamente uma vez. Resultados antigos não sobrescrevem a ação.
+Outra ação explícita ou polling não interrompe nem duplica uma ação já aceita.
+Não há fila de downloads, replay ou fechamento da sessão SSH. Polling continua
+em 4 s apenas com aba/Activity visíveis e conexão ativa; transporte e timeouts
+não foram alterados. Nenhuma mudança em servidor, SFTP, Saúde, Cofre ou serviços.
+
+Teste de quatro ciclos atualizado para verificar botões e campos habilitados.
+Teste adicional cobre clique em Atualizar, Baixar e Cancelar durante leitura
+passiva bloqueada: interrupção/fechamento antes da ação, uma única execução,
+bloqueio de clique duplicado e resposta antiga descartada. Os testes são JVM
+com transporte simulado; não equivalem ao novo aceite visual no Moto.
+
+**Gate físico curto:** atualizar sem desinstalar, preencher URL pública de teste,
+observar Baixar/Atualizar por **mais de 16 s**, digitar nome mantendo foco/IME e
+tocar ambos os botões enquanto o histórico atualiza. Conferir efeito do toque
+(pedido/resultado ou mensagem clara), sem oscilação causada pelo polling ou
+pedido duplicado. PR continua draft, sem merge. Não repetir a prova MYCT-5A.
+A seção final deste relatório registra o novo APK, hash e resultados.
 
 
 ## Aceite definido antes da implementação
@@ -276,3 +311,27 @@ de avaliar o aceite físico.
   O tag identifica o commit exato desta correção/documentação.
 - **Foco/IME real, Ver em Arquivos, cancelamento e reconexão no Moto: aguardando
   o novo fluxo curto do proprietário.** PR #16 permanece rascunho e sem merge.
+
+
+## Resultado da correção residual (0.5.2, 16/10/2026)
+
+- `./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --offline
+  --console=plain`: aprovado. **59 contabilizados, 58 PASS / 1 opcional ignorado**,
+  zero falhas/erros. Lint zero erros / 6 avisos de versões já existentes.
+- Novo teste cobre os três tipos de clique durante polling; teste de quatro
+  ciclos agora verifica a política correta de botões habilitados. Cancelamento,
+  desconexão, reconexão e saída da aba continuam cobertos pela suíte Android.
+- APK `dev.myct`, **0.5.2-downloads / code 9**, confirmado com `aapt`; tamanho
+  **13.436.917 bytes**, SHA-256
+  `1517811269a155b58caee045dc9e427b06d9e0b3d2cf870f1b67bf2646c49846`.
+  `apksigner` confirmou a mesma assinatura da 0.5.1. Atualizar sem desinstalar.
+- [APK e checksum publicados como prévia](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5b-v0.5.2-rc1).
+  Tag aponta para o commit exato da correção. Cópias locais em
+  `artifacts/myct-5b-0.5.2-debug.apk` e `artifacts/myct-5b-debug.apk`.
+- Build/testes/lint medidos: 84,34 s; CPU acumulada 266,48 s; RSS máximo
+  1.807.528 KiB (aproximadamente 1,72 GiB), sem swap. Sem novas dependências ou
+  alteração dos limites Gradle. Evidências em `artifacts/myct-5b-validation/0.5.2/`.
+- ADB sem aparelho conectado; **aceite visual residual pendente no Moto G06**.
+  Foco/IME já aceitos na 0.5.1, conforme feedback do proprietário, preservados
+  pela política de campos. Servidores e provas físicas anteriores não alterados
+  nem repetidos. PR #16 continua rascunho e sem merge.

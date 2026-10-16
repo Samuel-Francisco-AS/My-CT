@@ -49,7 +49,7 @@ class DownloadsModelTest {
             } finally { scope.cancel() }
         }
     }
-    @Test fun passivePollingKeepsFormEditableWhileActionsRemainLockedAcrossFourCycles() {
+    @Test fun passivePollingKeepsFormAndButtonsEnabledAcrossFourCycles() {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         val entered = java.util.concurrent.Semaphore(0)
         val release = java.util.concurrent.Semaphore(0)
@@ -66,10 +66,10 @@ class DownloadsModelTest {
             repeat(4) {
                 model.refresh(passive = true)
                 assertTrue(entered.tryAcquire(2, TimeUnit.SECONDS))
-                assertTrue(model.busy) // Baixar/Atualizar/Cancelar retain their existing locks.
+                assertTrue(model.busy) // A query is in flight, but it must not disable the buttons.
+                assertTrue(model.actionsEnabled)
                 assertTrue(model.formEnabled)
                 assertFalse(model.showOperationProgress)
-                model.refresh(); model.cancel(id); model.start("https://example.com/", "test")
                 release.release()
                 await { !model.busy }
                 assertEquals((it + 1).toLong(), model.items.single().bytes)
@@ -79,12 +79,64 @@ class DownloadsModelTest {
             model.refresh() // An explicit action still owns the form and visible progress.
             assertTrue(entered.tryAcquire(2, TimeUnit.SECONDS))
             assertFalse(model.formEnabled)
+            assertFalse(model.actionsEnabled)
             assertTrue(model.showOperationProgress)
             model.attach(null)
             assertFalse(model.formEnabled)
             assertFalse(model.showOperationProgress)
             assertFalse(model.busy)
         } finally { release.release(); scope.cancel() }
+    }
+
+    @Test fun userClickPreemptsPollingClosesItsChannelAndRunsExactlyOnce() {
+        val start = DownloadAction.Start("https://example.com/", "test")
+        for (action in listOf(DownloadAction.List, start, DownloadAction.Cancel(id))) {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+            val pollingEntered = CountDownLatch(1)
+            val pollingClosed = CountDownLatch(1)
+            val actionEntered = CountDownLatch(1)
+            val releaseAction = CountDownLatch(1)
+            val calls = java.util.concurrent.ConcurrentLinkedQueue<DownloadAction>()
+            val model = DownloadsModel(scope) { _, command ->
+                calls.add(command)
+                if (calls.size == 1) {
+                    pollingEntered.countDown()
+                    try { Thread.sleep(10000) } finally { pollingClosed.countDown() }
+                    record("failed") // Canceled polling must never publish this stale response.
+                } else {
+                    check(pollingClosed.count == 0L)
+                    if (calls.size == 2) {
+                        actionEntered.countDown()
+                        check(releaseAction.await(2, TimeUnit.SECONDS))
+                    }
+                    if (command is DownloadAction.Start) id else record("canceled")
+                }
+            }
+            fun click() = when (action) {
+                DownloadAction.List -> model.refresh()
+                is DownloadAction.Start -> model.start(action.url, action.name)
+                is DownloadAction.Cancel -> model.cancel(action.id)
+            }
+            try {
+                model.attach(SshConnection()); model.refresh(passive = true)
+                assertTrue(pollingEntered.await(2, TimeUnit.SECONDS))
+                assertTrue(model.actionsEnabled)
+                click()
+                assertTrue(actionEntered.await(2, TimeUnit.SECONDS))
+                assertFalse(model.actionsEnabled)
+                assertTrue(model.showOperationProgress)
+                click(); model.refresh(passive = true) // No duplicate action or polling overlap.
+                assertEquals(listOf(DownloadAction.List, action), calls.toList())
+                releaseAction.countDown()
+                await { !model.busy }
+                val expected = if (action == DownloadAction.List) listOf(DownloadAction.List, action)
+                    else listOf(DownloadAction.List, action, DownloadAction.List)
+                assertEquals(expected, calls.toList())
+                assertEquals(DownloadState.canceled, model.items.single().state)
+                assertFalse(model.stale)
+                assertTrue(model.actionsEnabled)
+            } finally { releaseAction.countDown(); scope.cancel() }
+        }
     }
 
     @Test fun malformedServerReplyEndsBusyStateAndMarksHistoryStale() {
