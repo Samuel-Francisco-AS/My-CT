@@ -2,7 +2,7 @@
 
 **MYCT-5C ACEITA pelo proprietário em 16/10/2026; PR #17 integrado à main.** Transmission 4.1.3 dedicado no Fedora, gerenciamento BitTorrent/magnet Android 0.5.4/code 11, download autônomo sem SSH, remover preservando dados, SFTP, pausa/retomada. Correção de nomes confirmada em aparelho físico: `<título real sanitizado>-<hash8>` após conclusão por hook nativo + RPC, sem migração de legados, sem interromper seeding. [Relatório](docs/MYCT-5C-BITTORRENT-REPORT.md). Não instalar CLI 0.5.3 antiga sobre o hook 0.5.4.
 
-**MYCT-5D-A candidata implementada:** [relatório](docs/MYCT-5D-A-REPORT.md), branch `myct-5d-a-file-inspection`, APK 0.5.5/code 12. **Sem instalação/deploy nem aceite físico.** Próximo passo: proprietário instalar helper `myct-inspect`/APK e validar fluxo Arquivos → Verificar arquivo no Moto. [Issue #18](https://github.com/Samuel-Francisco-AS/My-CT/issues/18). MYCT-5D-B/ClamAV permanece posterior com autorização para dependências. Não reabrir dívidas #9 nem automações #4 sem solicitação.
+**MYCT-5D-A ACEITA fisicamente em 16/10/2026:** [relatório](docs/MYCT-5D-A-REPORT.md), [PR #19](https://github.com/Samuel-Francisco-AS/My-CT/pull/19) autorizado para merge; APK 0.5.5/code 12, helper `myct-inspect`, seis testes mínimos aprovados no Moto G06. Não repetir aceite; ao retomar conferir `main` após merge. [Issue #18](https://github.com/Samuel-Francisco-AS/My-CT/issues/18) permanece aberta porque MYCT-5D-B/ClamAV não começou e requer autorização de instalação. Não reabrir dívidas #9 nem automações #4 sem solicitação.
 
 Estas orientações destinam-se a Codex e outros agentes que trabalhem neste repositório. **Leia README.md e docs/04-PLANEJAMENTO-INAUGURAL.md antes de propor implementação.**
 

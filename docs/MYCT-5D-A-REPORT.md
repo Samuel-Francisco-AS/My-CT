@@ -1,9 +1,26 @@
 # MYCT-5D-A — inspeção e integridade de arquivo individual
 
 16/10/2026 · Issue [#18](https://github.com/Samuel-Francisco-AS/My-CT/issues/18).
-**Candidata implementada; aceite físico no Moto G06 pendente.** Base `73255f8`,
+**ACEITA fisicamente pelo proprietário no Moto G06 em 16/10/2026.** Base `73255f8`,
 `main` limpa e sincronizada por fast-forward antes da branch
-`myct-5d-a-file-inspection`. Sem merge, instalação ou deploy no Fedora.
+`myct-5d-a-file-inspection`. Antes da validação física, nenhum merge ou instalação tinha sido executado pelo agente. A validação ocorreu com APK 0.5.5/code 12 e helper disponível no Fedora; fechamento no PR #19.
+
+## Fechamento — aceite físico no Moto G06 (16/10/2026)
+
+**Aceite expresso do proprietário nesta conversa, com quatro capturas de tela anexadas.** Foram confirmados os seis testes combinados para o núcleo 5D-A:
+
+1. Na aba Arquivos, localização do arquivo regular de prova no diretório Downloads.
+2. Inspeção via **Verificar arquivo**, identificando conteúdo `abc`, **3 bytes**, MIME `text/plain` e SHA-256 esperado `ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad`.
+3. Cópia e inserção de checksum correto → **CORRESPONDE**.
+4. Alteração de um dígito hexadecimal → **DIVERGENTE**.
+5. Limpeza do campo opcional → **NÃO INFORMADO**.
+6. Encerramento do relatório com **terminal SSH ainda funcionando**.
+
+**Resultado:** MYCT-5D-A **PASS** no fluxo mínimo real Fedora → SSH → APK 0.5.5/code 12 → relatório/checksum. As capturas foram fornecidas na conversa de aceite e não são arquivos versionados no repositório. Não confundir este aceite com ensaio físico de todas as situações adversas, inspeção de torrents/HTTP individuais, hash de arquivo gigante ou cancelamento prolongado. Esses testes ampliados não são necessários para declarar concluído o recorte aprovado.
+
+**Fechamento autorizado:** integrar [PR #19](https://github.com/Samuel-Francisco-AS/My-CT/pull/19) à `main` e posteriormente sincronizar o checkout Fedora. Nenhum serviço, download em andamento, seeding, banco ou cofre será alterado pelo merge. **MYCT-5D-B (ClamAV) não iniciada** e requer autorização explícita. A issue #18 permanece aberta para 5D-B e opções futuras de recheck de peças; dívidas da #9 permanecem separadas.
+
+---
 
 ## Entrega
 
@@ -93,7 +110,7 @@ git diff --check
   simulado; corrigida a fixture, confirmou pacotes SSH EOF/close sem desconectar
   PTY/sessão. Nenhuma mudança de produção foi necessária para esse ajuste.
 
-## APK candidato
+## APK utilizado no aceite físico
 
 `0.5.5-file-inspection`, code **12**, pacote `dev.myct`, debug.
 Release de pré-lançamento: [myct-5d-a-v0.5.5-rc1](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5d-a-v0.5.5-rc1).
@@ -107,7 +124,7 @@ Assinatura SHA-256 do certificado conferida igual à 0.5.4
 (`b788958be4c919889fc30813f13f1aceb5b6b69670514c82e16288f4b60b83b3`). Instalar por atualização, sem desinstalar/limpar dados.
 APK não instala o helper nem modifica o servidor.
 
-## Instalação manual do helper (a executar pelo proprietário)
+## Instalação manual do helper (instruções de referência)
 
 Nenhum comando abaixo foi executado como instalação nesta entrega. Depois de
 revisar/obter a branch/PR no Fedora:
@@ -125,7 +142,7 @@ atualização do `myct-download`/hook ou alteração de Core/Cofre. Checkout Git
 atualiza executáveis instalados. Para remover a funcionalidade futuramente,
 remover apenas esse helper mediante decisão do proprietário; não há serviço.
 
-## Roteiro Moto G06 (aceite ainda pendente)
+## Roteiro Moto G06 (histórico de teste)
 
 1. Baixar APK e `.sha256` da release; conferir com `sha256sum -c` no diretório
    dos assets. Instalar sobre 0.5.4 pelo gerenciador Android, ou opcionalmente
@@ -147,5 +164,4 @@ remover apenas esse helper mediante decisão do proprietário; não há serviço
 8. Registrar versão, resultados e problemas. Não considerar esta candidata aceita
    fisicamente até o proprietário confirmar inspeção/comparação real no Moto.
 
-Retomada: validar instalação/fluxo no Moto, registrar aceite ou correção pontual,
-revisar PR sem merge automático. 5D-B, issue #9 e automações #4 continuam adiadas.
+Retomada: MYCT-5D-A aceita fisicamente; PR #19 autorizado para merge à `main`. 5D-B, issue #9 e automações #4 continuam adiadas.
