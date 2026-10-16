@@ -3,7 +3,7 @@ Estas orientações destinam-se a Codex e outros agentes que trabalhem neste rep
 
 ## Estado atual e retomada
 
-**15/10/2026, após merges dos PRs #10–#15:** Fedora 44 headless, Core C++20 via serviço systemd `myct-core.service` como `sam` (executável implantado em `/usr/local/bin/myct-core`), Dashboard Saúde Android por túnel SSH, terminal interativo e arquivos SFTP/SAF. PostgreSQL dedicado permanece independente da telemetria. O Core **foi comprovado após reboot real** sem partida manual. O app tem **Terminal | Arquivos | Saúde | Cofre**. A aba Cofre desbloqueia a coleção `login` do GNOME Keyring, por senha digitada exclusivamente pelo proprietário no app em PTY SSH secundário; proprietário comprovou desbloqueio pelo Moto G06 e autenticação posterior do Copilot CLI. O fluxo não depende da Narys nem concede acesso individual a agentes.
+**16/10/2026, após merges dos PRs #10–#16:** Fedora 44 headless, Core C++20 via serviço systemd `myct-core.service` como `sam` (executável implantado em `/usr/local/bin/myct-core`), Dashboard Saúde Android por túnel SSH, terminal interativo e arquivos SFTP/SAF. PostgreSQL dedicado permanece independente da telemetria. O Core **foi comprovado após reboot real** sem partida manual. O app tem **Terminal | Arquivos | Saúde | Cofre | Downloads**. A aba Cofre desbloqueia a coleção `login` do GNOME Keyring, por senha digitada exclusivamente pelo proprietário no app em PTY SSH secundário; proprietário comprovou desbloqueio pelo Moto G06 e autenticação posterior do Copilot CLI. O fluxo não depende da Narys nem concede acesso individual a agentes.
 
 **Fonte de verdade:** [guia de retomada](docs/10-RETOMADA-PROJETO.md), [fechamento MYCT-4/4B](docs/MYCT-4-FECHAMENTO-REPORT.md), [Core e helper](docs/MYCT-4-BOOT-VAULT.md) e [Android Cofre](docs/MYCT-4B-ANDROID-VAULT.md). Não afirmar que o Core ainda é iniciado manualmente, nem declarar o desbloqueio Android pendente. A instalação no Fedora continua separada do Git: editar `server/myct-core` ou `ops/myct-vault` **não** atualiza os executáveis já instalados. Novas alterações exigem operação explícita autorizada.
 
@@ -11,6 +11,15 @@ Estas orientações destinam-se a Codex e outros agentes que trabalhem neste rep
 
 **MYCT-5A integrada e aceita:** HTTP(S) via CLI C++20/curl e unidades transitórias do systemd de usuário; testes Fedora aprovados. O proprietário comprovou continuação após sair do SSH e fechar o app, com arquivo de 262144 bytes e SHA-256 idêntico à fixture. Ver [relatório MYCT-5A](docs/MYCT-5A-DOWNLOADS-REPORT.md). Torrent e rotinas servidor-side continuam não implementadas. Lag Android, UX rígida, retorno ao topo em navegação SFTP e teste de transferência em background são dívidas da [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9), **adiadas** até solicitação específica. Engenharia proporcional à utilidade real, sem superdimensionar controles para produto comercial.
 
+**MYCT-5B integrada com aceite parcial:** PR #16 mesclado em 16/10/2026.
+Quinta aba Downloads via SSH/CLI, APK `0.5.2-downloads` (code 9).
+O proprietário confirmou histórico/download HTTP real no Moto, foco/IME
+preservado e botões sem piscadas. **Não declarar como fisicamente validados**
+Ver em Arquivos, cancelamento, reconexão da aba Downloads, toques durante
+polling nem progresso lento. São dívida da issue #9 e do relatório
+`docs/MYCT-5B-ANDROID-DOWNLOADS-REPORT.md`; não bloquear próxima fase.
+Não confundir a instalação manual de `~/.local/bin/myct-download` com
+atualização automática pelo Git. O Motor MYCT-5A continua aceito.
 ## Mandato
 Criar utilidade comprovada em um servidor Fedora headless com recursos limitados e cliente Android nativo. Preservar a intenção do proprietário, a saúde do PC e a possibilidade de continuidade sem agentes pagos.
 
