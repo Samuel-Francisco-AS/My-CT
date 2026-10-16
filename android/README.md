@@ -1,3 +1,15 @@
+# My-CT Android — MYCT-5C aceita (0.5.4/code 11)
+
+**Estado em 16/10/2026:** Downloads → Torrents integrada, aceita fisicamente no Moto G06: magnet, progresso, pausa/retomada, remoção sem apagar dados, Ver em Arquivos por SFTP e continuidade no Fedora depois de encerrar SSH. Um torrent **novo** recebe pasta legível com título real dos metadados e hash8 **quando termina**, via hook/RPC do Transmission no Fedora. Torrents antigos conservam pastas hash. A operação e o seeding não dependem da conexão Android.
+
+**APK para instalar sobre o existente, sem desinstalar:** [release MYCT-5C 0.5.4](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5c-v0.5.4-rc1). O SHA-256 publicado é `599c8ffc4ea3d0653c5ad95fb91c08186f239a4cdeafd7aaa7a3f7194c72abac`. O executor atualizou `~/.local/bin/myct-torrent`, instalou `~/.local/bin/myct-torrent-done` e ativou a nomeação no daemon My-CT; Git pull **não** reinstala estas cópias. `.torrent` via SAF e reboot específico do motor não foram validados. [Relatório e fechamento](../docs/MYCT-5C-BITTORRENT-REPORT.md).
+
+**Próxima MYCT-5D, ainda não iniciada:** [issue #18](https://github.com/Samuel-Francisco-AS/My-CT/issues/18) / [plano de inspeção](../docs/MYCT-5D-PLANEJAMENTO-VERIFICACAO-ARQUIVOS.md).
+
+---
+
+## Histórico MYCT-5B (0.5.2)
+
 # MYCT-5B — Downloads Android (integrada com aceite funcional parcial)
 
 APK atual: `../artifacts/myct-5b-debug.apk`, `0.5.2-downloads`/code 9.
@@ -339,3 +351,16 @@ O aplicativo possui **Terminal | Arquivos | Saúde | Cofre**. Com SSH conectado,
 **Aceite físico em 15/10/2026:** proprietário instalou o APK atualizado sobre MYCT-3C, comprovou consulta de estado locked após reboot do Fedora, desbloqueou com sucesso pelo Moto G06 e utilizou credenciais do cofre para autenticar o Copilot CLI. PRs #13 e #14 mesclados à `main`. Não é necessário recompilar/instalar APK para consultas normais.
 
 O desbloqueio **não** é automático depois do reboot. Para operar, conectar Android via SSH, abrir Cofre, consultar estado e desbloquear quando for necessário. [Fechamento MYCT-4/4B](../docs/MYCT-4-FECHAMENTO-REPORT.md) · [Detalhes do protocolo e limites](../docs/MYCT-4B-ANDROID-VAULT.md).
+
+## MYCT-5C — candidata BitTorrent
+
+Downloads → Torrents tem gates reais confirmados pelo proprietário no APK 0.5.3:
+adição, transferência sem SSH/app, consulta, pausa/retomada, SFTP e remoção
+preservando dados. Transmission 4.1.3 e unidade dedicada já instalados no Fedora.
+
+A correção **0.5.4-torrents/code 11** aceita pastas legíveis no SFTP. Para torrents
+novos, o título real dos metadados é aplicado ao concluir, por hook nativo e
+RPC do motor. Torrents/pastas antigos não são migrados. Atualizar APK sem
+desinstalar; mesma assinatura. Nomeação comprovada com 64 KiB no Fedora;
+**essa correção ainda precisa do aceite no Moto**. `.torrent` SAF continua adiado.
+[Relatório e atualização CLI/hook](../docs/MYCT-5C-BITTORRENT-REPORT.md).

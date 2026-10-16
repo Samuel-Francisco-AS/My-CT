@@ -16,7 +16,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 @Composable
-fun DownloadsScreen(model: DownloadsModel, filesBusy: Boolean, openFiles: (String) -> Unit, modifier: Modifier = Modifier) {
+fun HttpDownloadsScreen(model: DownloadsModel, filesBusy: Boolean, openFiles: (String) -> Unit, modifier: Modifier = Modifier) {
     val activity = checkNotNull(LocalActivity.current as? androidx.activity.ComponentActivity)
     var url by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }

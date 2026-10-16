@@ -1,8 +1,12 @@
 # My-CT
 
+**MYCT-5C aprovada (16/10/2026, PR #17):** BitTorrent/magnet pelo Transmission 4.1.3 no Fedora e controles no APK **0.5.4/code 11**. O proprietário confirmou no Moto G06 download sem SSH, pausa/retomada, remoção preservando arquivo, SFTP e **nome de pasta pelo título real ao concluir**, usando hook/RPC do Transmission. Seeding preservado; sem migração das pastas antigas. [Relatório de fechamento](docs/MYCT-5C-BITTORRENT-REPORT.md) · [release 0.5.4](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5c-v0.5.4-rc1).
+
+**Próxima: MYCT-5D, planejada e não iniciada** — [issue #18](https://github.com/Samuel-Francisco-AS/My-CT/issues/18) / [plano](docs/MYCT-5D-PLANEJAMENTO-VERIFICACAO-ARQUIVOS.md), começando por inspeção de arquivos (formato/tamanho/SHA-256) e posteriormente antivírus sob demanda, mediante autorização. Dívidas Android continuam na #9; automações futuras na #4.
+
 **My-CT** é uma iniciativa de infraestrutura pessoal: um servidor Linux doméstico, administrado por um aplicativo Android nativo, capaz de executar tarefas, disponibilizar arquivos e realizar downloads sem depender de uma sessão gráfica.
 
-> **Estado em 15/10/2026 — MYCT-4/4B integradas e validadas no Fedora e Moto G06.** Core C++20 iniciado automaticamente pelo systemd e comprovado após reboot; Saúde Android funciona por túnel SSH sem início manual; PostgreSQL local é independente. App Android nativo com **Terminal | Arquivos | Saúde | Cofre** e transferências bidirecionais SFTP. A aba Cofre consulta o GNOME Keyring `login` e permite desbloqueio humano em canal SSH/PTY separado. Proprietário comprovou desbloqueio no Moto e Copilot CLI autenticado por credenciais existentes. [PR #13](https://github.com/Samuel-Francisco-AS/My-CT/pull/13) e [PR #14](https://github.com/Samuel-Francisco-AS/My-CT/pull/14) mesclados. MYCT-5A acrescenta CLI HTTP/HTTPS headless **aceita fisicamente após fechar SSH e Android, com hash correto** ([relatório](docs/MYCT-5A-DOWNLOADS-REPORT.md)); torrent e rotinas autônomas ainda não existem; lag, UX/scroll SFTP e prova em background seguem adiados na [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9). [Relatório de fechamento MYCT-4](docs/MYCT-4-FECHAMENTO-REPORT.md) · [Guia de retomada](docs/10-RETOMADA-PROJETO.md).
+> **Registro histórico em 15/10/2026 — MYCT-4/4B integradas e validadas no Fedora e Moto G06.** Core C++20 iniciado automaticamente pelo systemd e comprovado após reboot; Saúde Android funciona por túnel SSH sem início manual; PostgreSQL local é independente. App Android nativo com **Terminal | Arquivos | Saúde | Cofre** e transferências bidirecionais SFTP. A aba Cofre consulta o GNOME Keyring `login` e permite desbloqueio humano em canal SSH/PTY separado. Proprietário comprovou desbloqueio no Moto e Copilot CLI autenticado por credenciais existentes. [PR #13](https://github.com/Samuel-Francisco-AS/My-CT/pull/13) e [PR #14](https://github.com/Samuel-Francisco-AS/My-CT/pull/14) mesclados. MYCT-5A acrescenta CLI HTTP/HTTPS headless **aceita fisicamente após fechar SSH e Android, com hash correto** ([relatório](docs/MYCT-5A-DOWNLOADS-REPORT.md)); naquela data, torrent e rotinas autônomas ainda não existiam; lag, UX/scroll SFTP e prova em background seguem adiados na [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9). [Relatório de fechamento MYCT-4](docs/MYCT-4-FECHAMENTO-REPORT.md) · [Guia de retomada](docs/10-RETOMADA-PROJETO.md).
 
 
 **MYCT-5B integrada à main (PR #16, 16/10/2026):** Android
@@ -55,6 +59,8 @@ As escolhas específicas de bibliotecas, contratos e divisão de entregas são *
 | [Trilha de refinamento](docs/09-TRILHA-REFINAMENTO-ANDROID.md) | Lag, scroll SFTP, UX, validações em background e demais dívidas adiadas |
 | [Downloads MYCT-5A](docs/MYCT-5A-DOWNLOADS-REPORT.md) | CLI HTTP/HTTPS, testes Fedora, uso e aceite real SSH/Moto |
 | [Android MYCT-5B](docs/MYCT-5B-ANDROID-DOWNLOADS-REPORT.md) | Quinta aba Downloads, APK 0.5.2, aceite parcial e validações futuras |
+| [Fechamento MYCT-5C](docs/MYCT-5C-BITTORRENT-REPORT.md) | BitTorrent, aceite físico, nomeação e pendências |
+| [Próxima fase MYCT-5D](docs/MYCT-5D-PLANEJAMENTO-VERIFICACAO-ARQUIVOS.md) | Inspeção de arquivos e antivírus sob demanda planejados |
 | [Guia de retomada](docs/10-RETOMADA-PROJETO.md) | Estado atual do Core systemd, Cofre Android e continuidade |
 | [Core/PostgreSQL MYCT-3B](docs/MYCT-3B-POSTGRES-REPORT.md) | Evidência Fedora: build, banco, isolamento, consumo e recuperação |
 | [Fechamento MYCT-3A/3B](docs/MYCT-3AB-FECHAMENTO-REPORT.md) | PRs #10/#11, SHAs, provas e pendências |
@@ -71,6 +77,7 @@ As escolhas específicas de bibliotecas, contratos e divisão de entregas são *
 - [#2 — Marco A: inventário Fedora e Core C++/PostgreSQL](https://github.com/Samuel-Francisco-AS/My-CT/issues/2)
 - [#3 — Marco B: APK com SSH real e SFTP](https://github.com/Samuel-Francisco-AS/My-CT/issues/3)
 - [#4 — Marco C: downloads e primeira automação](https://github.com/Samuel-Francisco-AS/My-CT/issues/4)
+- [#18 — MYCT-5D: verificação de arquivos](https://github.com/Samuel-Francisco-AS/My-CT/issues/18)
 - [#9 — Refinamento Android adiado](https://github.com/Samuel-Francisco-AS/My-CT/issues/9)
 
 Estas issues são pontos de acompanhamento **revisáveis**, não marcos com datas imutáveis.
@@ -94,4 +101,4 @@ Os PRs #13 e #14 foram mesclados à `main`. [Relatório final](docs/MYCT-4-FECHA
 
 ## Ponto de partida
 
-A CLI C++20 `myct-download` entrega HTTP/HTTPS via curl e execução transitória no systemd de usuário; build, uso e cancelamento no [relatório MYCT-5A](docs/MYCT-5A-DOWNLOADS-REPORT.md). Testes reais no Fedora passaram; **continuidade após desconexão SSH/fechamento do app e integridade de 262144 bytes foram comprovadas pelo proprietário**. A aba Downloads 0.5.2 está integrada ao Android com aceite físico parcial, conforme [relatório MYCT-5B](docs/MYCT-5B-ANDROID-DOWNLOADS-REPORT.md). Torrent/magnet e rotinas servidor-side continuam não implementados. O refinamento Android (lag, navegação, scroll SFTP e transferência em segundo plano) é uma trilha separada, adiada na [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9); não iniciar por conta própria. Priorizar um fluxo útil por vez e preservar serviços, dados e credenciais existentes.
+A CLI C++20 `myct-download` entrega HTTP/HTTPS via curl e execução transitória no systemd de usuário; build, uso e cancelamento no [relatório MYCT-5A](docs/MYCT-5A-DOWNLOADS-REPORT.md). Testes reais no Fedora passaram; **continuidade após desconexão SSH/fechamento do app e integridade de 262144 bytes foram comprovadas pelo proprietário**. A aba Downloads 0.5.2 está integrada ao Android com aceite físico parcial, conforme [relatório MYCT-5B](docs/MYCT-5B-ANDROID-DOWNLOADS-REPORT.md). BitTorrent/magnet foi integrado e aceito na MYCT-5C, inclusive nomes legíveis confirmados no Moto G06; rotinas automatizadas da MYCT-6 seguem pendentes. O refinamento Android (lag, navegação, scroll SFTP e transferência em segundo plano) é uma trilha separada, adiada na [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9); não iniciar por conta própria. Priorizar um fluxo útil por vez e preservar serviços, dados e credenciais existentes.

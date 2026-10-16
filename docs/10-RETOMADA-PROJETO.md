@@ -1,6 +1,14 @@
-# My-CT — guia de retomada após MYCT-5B
+# My-CT — guia de retomada após MYCT-5C
 
-**Atualizado:** 16/10/2026 · **Fonte de verdade:** `main` após integração do PR #16. MYCT-5A aceita; MYCT-5B integrada com aceite funcional parcial.
+**MYCT-5C aceita em 16/10/2026 — PR #17, APK 0.5.4/code 11.** Fedora 44 com Transmission 4.1.3 como serviço dedicado e RPC loopback; downloads/magnets e seeding continuam sem SSH/Android. Proprietário comprovou no Moto G06 adicionar, listar, pausar/retomar, remover preservando arquivo, Ver em Arquivos por SFTP e continuidade do download sem SSH. Também confirmou que o **novo torrent ganhou pasta com título real sanitizado + hash8 ao terminar**, após correção por hook/RPC, sem migrar pastas existentes. [Fechamento MYCT-5C](MYCT-5C-BITTORRENT-REPORT.md) · [PR #17](https://github.com/Samuel-Francisco-AS/My-CT/pull/17) · [APK 0.5.4](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5c-v0.5.4-rc1).
+
+**Próxima fase: MYCT-5D — PLANEJADA e NÃO INICIADA.** [Issue #18](https://github.com/Samuel-Francisco-AS/My-CT/issues/18) · [plano de inspeção de arquivos](MYCT-5D-PLANEJAMENTO-VERIFICACAO-ARQUIVOS.md). Primeiro inspecionar formato/tamanho/SHA-256 no Fedora a partir do Moto (5D-A); depois considerar antivírus ClamAV sob demanda com autorização expressa (5D-B). Abrir **branch nova somente depois de sincronizar a `main`**. Sem instalar pacotes nem alterar serviços no fechamento.
+
+**Dívidas não bloqueantes:** `.torrent` via SAF, prova de upload real a peer externo e reboot específico do Transmission/hook; refinamentos da [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9); automações da [issue #4](https://github.com/Samuel-Francisco-AS/My-CT/issues/4) / MYCT-6. Não refazer provas aprovadas sem necessidade. **CLI/hook 0.5.4 foram instalados no Fedora pelo executor**, mas checkout Git não os atualiza automaticamente. Não substituir por versão 0.5.3; preservar registros e pastas em seeding.
+
+---
+
+**Atualizado:** 16/10/2026 · **Fonte de verdade:** `main` após encerramento do PR #17; histórico 5A/5B abaixo. MYCT-5A aceita; MYCT-5B integrada com aceite funcional parcial.
 **Relatório de fechamento:** [MYCT-4-FECHAMENTO-REPORT.md](MYCT-4-FECHAMENTO-REPORT.md).
 
 
@@ -27,7 +35,7 @@ entrega. [Relatório e roteiro Moto](MYCT-5B-ANDROID-DOWNLOADS-REPORT.md).
 - **PostgreSQL:** persistência libpq via cluster dedicado/sockets Unix sem TCP validada na MYCT-3B, mas independente do Dashboard e não iniciada pelo serviço Core. Preservar `~/.local/share/myct/postgres`.
 - **Android:** cinco abas **Terminal | Arquivos | Saúde | Cofre | Downloads**. O Cofre mostra locked/unlocked/unavailable do GNOME Keyring `login`, solicita desbloqueio humano via PTY SSH secundário privado (a senha não passa pelo Core). Proprietário comprovou desbloqueio real via Moto e **Copilot CLI autenticando** depois com credenciais existentes. `gh auth status` também confirmou acesso via keyring. `myct-vault status|unlock` funciona independentemente da Narys.
 - **Build/testes:** Core 3/3 testes, helper cofre 6/6 após ajuste final (confirmação do proprietário), APK de diagnóstico 48 testes PASS/1 opcional ignorado, lint 0 erros/6 avisos de versões, build assinado compatível com MYCT-3C. Teste real do fluxo de Cofre prevalece sobre simulação.
-- **MYCT-5A aceita:** CLI C++20 `myct-download` para HTTP/HTTPS, curl existente, unidades transitórias do systemd de usuário e metadados locais sem PostgreSQL. O proprietário confirmou transferência de 262144 bytes após desconectar SSH e fechar o app, com SHA-256 idêntico à fixture. O binário pode ser compilado no checkout; instalação estável no PATH é opcional e não foi feita pelo agente. [Uso e evidências](MYCT-5A-DOWNLOADS-REPORT.md). Torrent/magnet e automações continuam não implementados; a aba Downloads está integrada com aceite parcial e dívidas registradas.
+- **MYCT-5A aceita:** CLI C++20 `myct-download` para HTTP/HTTPS, curl existente, unidades transitórias do systemd de usuário e metadados locais sem PostgreSQL. O proprietário confirmou transferência de 262144 bytes após desconectar SSH e fechar o app, com SHA-256 idêntico à fixture. O binário pode ser compilado no checkout; instalação estável no PATH é opcional e não foi feita pelo agente. [Uso e evidências](MYCT-5A-DOWNLOADS-REPORT.md). Torrent/magnet foi entregue e aceito na MYCT-5C; as automações continuam planejadas, e as dívidas da aba HTTP anterior permanecem registradas.
 - **Dívidas Android adiadas:** lag do terminal, fluidez de interface, scroll SFTP que retorna ao topo e teste de transferência em segundo plano — [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9). Não iniciar refinamento sem solicitação.
 
 ## Verificação rápida no Fedora
@@ -73,6 +81,8 @@ Para parar **somente** esse cluster, se ele tiver sido iniciado manualmente: `pg
 
 ## Documentos e histórico
 
+- [MYCT-5C BitTorrent e fechamento](MYCT-5C-BITTORRENT-REPORT.md) — motor real, APK 0.5.4, pastas legíveis, evidências e dívidas.
+- [MYCT-5D Planejamento de inspeção](MYCT-5D-PLANEJAMENTO-VERIFICACAO-ARQUIVOS.md) — próximo ciclo aprovado, não iniciado.
 - [MYCT-5A Downloads](MYCT-5A-DOWNLOADS-REPORT.md) — CLI headless, resultados e aceite físico após saída do Android.
 - [MYCT-5B Android Downloads](MYCT-5B-ANDROID-DOWNLOADS-REPORT.md) — aceite parcial e pendências de refinamento.
 - [MYCT-4 Fechamento](MYCT-4-FECHAMENTO-REPORT.md) — estado conclusivo e evidências.
