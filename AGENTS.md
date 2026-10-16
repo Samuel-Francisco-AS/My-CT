@@ -1,26 +1,20 @@
 # AGENTS.md — colaboração segura no My-CT
 
-**MYCT-5C candidata atualizada (16/10/2026):** Transmission 4.1.3 instalado e
-ativo; proprietário comprovou no Fedora/Moto adição, download sem SSH, consulta,
-pausa/retomada, SFTP e remoção preservando dados (comentários PR #17).
-Correção de nomes na mesma branch `myct-5c-bittorrent`: novos torrents usam
-pasta por hash durante download e `<título real sanitizado>-<hash8>` ao concluir,
-via hook nativo + RPC do motor. **Sem migração dos existentes**, sem mudar
-seeding/banda. Prova real de 64 KiB passou no Fedora; novo APK
-`0.5.4-torrents`/code 11 necessário para os caminhos legíveis, aceite dessa
-correção no Moto pendente. `.torrent` SAF continua adiado. PR draft, sem merge.
-[Relatório e retomada](docs/MYCT-5C-BITTORRENT-REPORT.md).
+**MYCT-5C ACEITA pelo proprietário em 16/10/2026; integrar PR #17.** Transmission 4.1.3 dedicado no Fedora, gerenciamento BitTorrent/magnet Android 0.5.4/code 11, download autônomo sem SSH, remover preservando dados, SFTP, pausa/retomada. Correção de nomes confirmada em aparelho físico: `<título real sanitizado>-<hash8>` após conclusão por hook nativo + RPC, sem migração de legados, sem interromper seeding. [Relatório](docs/MYCT-5C-BITTORRENT-REPORT.md). Não instalar CLI 0.5.3 antiga sobre o hook 0.5.4.
+
+**Próximo passo após merge e sincronização local:** MYCT-5D-A (formato, tamanho, SHA-256, checksum) — [issue #18](https://github.com/Samuel-Francisco-AS/My-CT/issues/18) / [planejamento](docs/MYCT-5D-PLANEJAMENTO-VERIFICACAO-ARQUIVOS.md). MYCT-5D-B (ClamAV sob demanda) é posterior e depende de autorização para instalar dependências; não iniciar nada da 5D durante o fechamento da 5C. Não reabrir dívidas #9 nem automações #4 sem solicitação.
+
 Estas orientações destinam-se a Codex e outros agentes que trabalhem neste repositório. **Leia README.md e docs/04-PLANEJAMENTO-INAUGURAL.md antes de propor implementação.**
 
 ## Estado atual e retomada
 
-**16/10/2026, após merges dos PRs #10–#16:** Fedora 44 headless, Core C++20 via serviço systemd `myct-core.service` como `sam` (executável implantado em `/usr/local/bin/myct-core`), Dashboard Saúde Android por túnel SSH, terminal interativo e arquivos SFTP/SAF. PostgreSQL dedicado permanece independente da telemetria. O Core **foi comprovado após reboot real** sem partida manual. O app tem **Terminal | Arquivos | Saúde | Cofre | Downloads**. A aba Cofre desbloqueia a coleção `login` do GNOME Keyring, por senha digitada exclusivamente pelo proprietário no app em PTY SSH secundário; proprietário comprovou desbloqueio pelo Moto G06 e autenticação posterior do Copilot CLI. O fluxo não depende da Narys nem concede acesso individual a agentes.
+**16/10/2026, após merges dos PRs #10–#17 (5C):** Fedora 44 headless, Core C++20 via serviço systemd `myct-core.service` como `sam` (executável implantado em `/usr/local/bin/myct-core`), Dashboard Saúde Android por túnel SSH, terminal interativo e arquivos SFTP/SAF. PostgreSQL dedicado permanece independente da telemetria. O Core **foi comprovado após reboot real** sem partida manual. O app tem **Terminal | Arquivos | Saúde | Cofre | Downloads**. A aba Cofre desbloqueia a coleção `login` do GNOME Keyring, por senha digitada exclusivamente pelo proprietário no app em PTY SSH secundário; proprietário comprovou desbloqueio pelo Moto G06 e autenticação posterior do Copilot CLI. O fluxo não depende da Narys nem concede acesso individual a agentes.
 
 **Fonte de verdade:** [guia de retomada](docs/10-RETOMADA-PROJETO.md), [fechamento MYCT-4/4B](docs/MYCT-4-FECHAMENTO-REPORT.md), [Core e helper](docs/MYCT-4-BOOT-VAULT.md) e [Android Cofre](docs/MYCT-4B-ANDROID-VAULT.md). Não afirmar que o Core ainda é iniciado manualmente, nem declarar o desbloqueio Android pendente. A instalação no Fedora continua separada do Git: editar `server/myct-core` ou `ops/myct-vault` **não** atualiza os executáveis já instalados. Novas alterações exigem operação explícita autorizada.
 
 **Restrições MYCT-4:** não compartilhar senha/cofre/token com agentes, não automatizar desbloqueio após reboot, não criar/reinicializar coleção ou relaxar verificação do GNOME Keyring interno/hash. Preservar SSH, SELinux, systemd, PostgreSQL e Narys sem novas mudanças não autorizadas. Os PRs #13 e #14 foram integrados à `main`; sem repetição automática dos testes físicos já aceitos.
 
-**MYCT-5A integrada e aceita:** HTTP(S) via CLI C++20/curl e unidades transitórias do systemd de usuário; testes Fedora aprovados. O proprietário comprovou continuação após sair do SSH e fechar o app, com arquivo de 262144 bytes e SHA-256 idêntico à fixture. Ver [relatório MYCT-5A](docs/MYCT-5A-DOWNLOADS-REPORT.md). BitTorrent foi acrescentado na candidata MYCT-5C, conforme estado acima; rotinas servidor-side continuam não implementadas. Lag Android, UX rígida, retorno ao topo em navegação SFTP e teste de transferência em background são dívidas da [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9), **adiadas** até solicitação específica. Engenharia proporcional à utilidade real, sem superdimensionar controles para produto comercial.
+**MYCT-5A integrada e aceita:** HTTP(S) via CLI C++20/curl e unidades transitórias do systemd de usuário; testes Fedora aprovados. O proprietário comprovou continuação após sair do SSH e fechar o app, com arquivo de 262144 bytes e SHA-256 idêntico à fixture. Ver [relatório MYCT-5A](docs/MYCT-5A-DOWNLOADS-REPORT.md). BitTorrent foi concluído na MYCT-5C, com provas físicas no Fedora e Moto; rotinas servidor-side continuam não implementadas. Lag Android, UX rígida, retorno ao topo em navegação SFTP e teste de transferência em background são dívidas da [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9), **adiadas** até solicitação específica. Engenharia proporcional à utilidade real, sem superdimensionar controles para produto comercial.
 
 **MYCT-5B integrada com aceite parcial:** PR #16 mesclado em 16/10/2026.
 Quinta aba Downloads via SSH/CLI, APK `0.5.2-downloads` (code 9).
