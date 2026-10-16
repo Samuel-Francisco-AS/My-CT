@@ -2,7 +2,7 @@
 
 ## Encerramento — aceite físico do proprietário (16/10/2026)
 
-**MYCT-5C ACEITA no Fedora 44 e Moto G06.** PR [#17](https://github.com/Samuel-Francisco-AS/My-CT/pull/17), candidata final **0.5.4-torrents / code 11**. Este fechamento é posterior às seções históricas abaixo e substitui qualquer anotação anterior de "teste pendente". O merge para `main` e a exclusão das branches são os passos administrativos finais.
+**MYCT-5C ACEITA no Fedora 44 e Moto G06.** PR [#17](https://github.com/Samuel-Francisco-AS/My-CT/pull/17), candidata final **0.5.4-torrents / code 11**. Este fechamento é posterior às seções históricas abaixo e substitui qualquer anotação anterior de "teste pendente". **Merge realizado:** [PR #17](https://github.com/Samuel-Francisco-AS/My-CT/pull/17) integrado à `main` em `30d909be5c4ba17dbf46c2008c42448c3c08b9c9`. As branches de trabalho podem ser removidas pelo proprietário após sincronizar o Fedora, conforme bloco Git fornecido. A exclusão das branches não remove arquivos, serviço, seeding, hook ou registros do Transmission.
 
 **Provas físicas relatadas pelo proprietário na conversa, e consolidadas no PR:**
 1. Transmission 4.1.3 dedicado ao usuário, serviço systemd ativo, RPC `127.0.0.1:19091`, CLI real `~/.local/bin/myct-torrent` consultando o daemon.
