@@ -4,8 +4,9 @@
 CLI `myct-av` + worker C++20, base dedicada atualizada realmente, análise
 não destrutiva e unidades de usuário entregues. [Relatório B1](docs/MYCT-5D-B1-REPORT.md)
 e [contrato para B2](docs/MYCT-5D-B1-CLI.md). Instalação B1 no espaço de `sam`
-realizada sob autorização; **timer instalado mas desabilitado**, ativação permanente
-requer confirmação. PR sem merge até validação do proprietário. Android permanece
+realizada sob autorização; **timer de 36h ativado e validado pelo proprietário**, confirmado ativo sem alteração
+nesta correção. Limite de entrada atualizado para **2.000.000.000 bytes**, com
+os demais limites de recursos preservados. PR sem merge até validação do proprietário. Android permanece
 0.5.5/code 12; B2 não iniciada. Issue #18 continua aberta.
 
 

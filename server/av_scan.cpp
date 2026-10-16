@@ -19,7 +19,12 @@ int main(int argc, char** argv) {
         check(prctl(PR_SET_PDEATHSIG,SIGTERM)==0 && getppid()==adapter,"Adaptador desconectado.");
         Fd file{openHomeFile(decode(argv[1]),true)};
         struct stat before{},after{}; check(fstat(file.n,&before)==0,"stat falhou.");
-        check(before.st_size<=64LL*1024*1024,"INCOMPLETE: limite de arquivo de 64 MiB.");
+        check(before.st_size<=2000000000LL,"INCOMPLETE: limite de arquivo de 2000000000 bytes (2 GB decimais).");
+        // ClamScan spools stdin in full before scanning. Total scan accounting
+        // includes the input itself; reserve only 128 MiB beyond it for expansion.
+        const auto scanBudget=before.st_size+128LL*1024*1024;
+        // ClamAV warns if RLIMIT_FSIZE < maxfilesize, even on small input.
+        const rlim_t tempLimit=2000000000;
         std::string home=getpwuid(getuid())->pw_dir;
         // Parent adapter owns the locks and private temporary directory.
         std::string db=home+"/.local/share/myct/clamav-db";
@@ -32,14 +37,14 @@ int main(int argc, char** argv) {
             prctl(PR_SET_PDEATHSIG,SIGKILL); if(getppid()!=parent) _exit(125);
             setpgid(0,0);
             dup2(file.n,0); dup2(output.n,1); dup2(output.n,2);
-            rlimit mem{2ULL*1024*1024*1024,2ULL*1024*1024*1024},cpu{120,120},disk{256*1024*1024,256*1024*1024};
+            rlimit mem{2ULL*1024*1024*1024,2ULL*1024*1024*1024},cpu{120,120},disk{rlim_t(tempLimit),rlim_t(tempLimit)};
             if(setrlimit(RLIMIT_AS,&mem) || setrlimit(RLIMIT_CPU,&cpu) || setrlimit(RLIMIT_FSIZE,&disk)) _exit(125);
             nice(10);
             std::vector<std::string> args={"/usr/bin/clamscan","--database="+db,
                 "--tempdir="+std::string(tmp),"--allmatch=yes","--alert-exceeds-max=yes",
                 "--alert-encrypted=yes","--alert-broken=yes","--alert-broken-media=yes",
-                "--max-filesize=64M","--max-scansize=128M","--max-files=1000",
-                "--max-recursion=8","--max-scantime=0","--bytecode-timeout=1000",
+                "--max-filesize=2000000000","--max-scansize="+std::to_string(scanBudget),"--max-files=1000",
+                "--max-recursion=8","--pcre-max-filesize=2000000000","--max-scantime=0","--bytecode-timeout=1000",
                 "--follow-dir-symlinks=0","--follow-file-symlinks=0","-"};
             std::vector<char*> av; for(auto& s:args) av.push_back(s.data()); av.push_back(nullptr);
             setenv("LC_ALL","C",1); execv(av[0],av.data()); _exit(127);
@@ -70,6 +75,10 @@ int main(int argc, char** argv) {
         while((n=read(input.n,b,sizeof b))>0) {
             if(log.size()+n<=65536) log.append(b,n); else reason="Limite de saída atingido.";
         }
+        // stdin shares this open-file offset. ClamScan 1.4.6's fread loop does
+        // not check ferror: never accept OK if it stopped before consuming input.
+        if(reason.empty() && lseek(file.n,0,SEEK_CUR)!=before.st_size)
+            reason="INCOMPLETE: o motor não consumiu toda a entrada.";
         if(fstat(file.n,&after)!=0 || before.st_size!=after.st_size ||
            before.st_mtim.tv_sec!=after.st_mtim.tv_sec || before.st_mtim.tv_nsec!=after.st_mtim.tv_nsec ||
            before.st_ctim.tv_sec!=after.st_ctim.tv_sec || before.st_ctim.tv_nsec!=after.st_ctim.tv_nsec ||

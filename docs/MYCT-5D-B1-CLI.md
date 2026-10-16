@@ -100,3 +100,38 @@ e evitando duas cargas grandes na RAM. Uma segunda análise retorna INCOMPLETE /
 BUSY; atualização espera a análise limitada terminar. Pedidos simultâneos de
 `update` convergem para a mesma unidade oneshot. O lock também cobre invocação
 direta do worker interno `_update-worker`, que não faz parte do contrato Android.
+
+## Limites efetivos após a correção de 2 GB (16/10/2026)
+
+Aceita arquivo individual com tamanho **até 2.000.000.000 bytes**, inclusivo
+(2 GB decimais, não 2 GiB). Acima disso retorna INCOMPLETE antes de carregar o
+motor/copiar stdin. Estar dentro do limite permite solicitar a análise;
+**não garante que ela termine nem que todo o conteúdo seja inspecionado**.
+
+- `--max-filesize=2000000000` e `--pcre-max-filesize=2000000000`.
+- `--max-scansize=<tamanho da entrada + 134217728>` em bytes; máximo
+  **2.134.217.728**. A contabilidade do motor inclui a entrada e conteúdos
+  internos/normalizados, portanto sobra no máximo 128 MiB além da entrada.
+- Recursão 8, entradas 1.000, bytecode 1.000 ms, CPU 120 s, tempo total 180 s,
+  espaço de endereçamento 2 GiB, saída 64 KiB e Nice +10 mantidos.
+- `RLIMIT_FSIZE=2000000000` somente no filho: necessário porque ClamScan copia
+  stdin integralmente para temporário e compara esse limite com maxfilesize.
+  Pode haver escrita temporária de até 2 GB da entrada, além da expansão limitada;
+  não é leitura streaming sem custo de disco. Original continua O_NOATIME/read-only; o offset compartilhado confirma que
+  todos os bytes foram consumidos, caso contrário o resultado é INCOMPLETE.
+
+ClamAV 1.4.6 limita internamente maxfilesize a 2.147.483.645 bytes; o limite My-CT
+fica abaixo dele. Sem patch do motor, substituição por daemon ou contorno do
+limite de memória. PCRE acompanha o teto de entrada para evitar omitir suas
+assinaturas apenas pelo antigo limite padrão de 100 MiB; os limites de trabalho
+PCRE e de recursos do processo continuam aplicáveis.
+
+Memória/mapeamento, tempo, CPU, volume expandido, recursão, entradas, criptografia,
+formatos não totalmente inspecionados ou cancelamento podem impedir conclusão.
+Limites/sinais/avisos continuam INCOMPLETE, detecções parciais são preservadas;
+falha de execução/carregamento continua ERROR/UNAVAILABLE conforme a causa.
+Nenhum desses casos é promovido a CLEAN. O JSON/CLI e o adaptador instalado
+permanecem compatíveis; basta atualizar o worker C++20.
+
+Timer de assinaturas **ativo e habilitado**, validado pelo proprietário; esta
+correção não altera unidades, agenda, configuração FreshClam ou base dedicada.

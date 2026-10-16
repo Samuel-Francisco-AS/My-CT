@@ -204,3 +204,13 @@ Servidor 18/18; operacionais 22/22. Medição ~11 s e ~962 MiB RSS, sem pressão
 observada, Core/Transmission ativos. Timer instalado, inativo/desabilitado;
 aguarda confirmação específica. APK não alterado, B2 não iniciada, PR sem merge.
 [Relatório completo e retomada](MYCT-5D-B1-REPORT.md).
+
+### 2026-10-16 — B1: correção pontual de tamanho no PR #20
+
+Entrada até 2000000000 bytes; orçamento de varredura entrada + 128 MiB.
+Worker recompilado no checkout, sem substituir instalação. Teste real 80 MiB
+CLEAN, benigno/EICAR aprovados, expansão excedente INCOMPLETE e preservação
+comprovada. Fronteiras numéricas por arquivos esparsos, sem análise gigante.
+Servidor 19/19, operacionais 23/23. Timer já habilitado/validado pelo proprietário;
+estado active/enabled e hashes preservados, sem operação nas unidades.
+PR sem merge, B2 não iniciada. Comando de atualização só do worker no relatório B1.

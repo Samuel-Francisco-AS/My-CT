@@ -82,7 +82,7 @@ with tempfile.TemporaryDirectory(prefix='myct-av-proof-', dir=HOME) as tmp:
     assert results['archive_limit']['state'] == 'INCOMPLETE', results['archive_limit']
     huge = root / 'oversized'
     with huge.open('wb') as f:
-        f.truncate(65 * 1024**2)
+        f.truncate(2000000001)
     results['size_limit'] = run(huge)
     assert results['size_limit']['state'] == 'INCOMPLETE'
     link = root / 'link'; link.symlink_to(benign)

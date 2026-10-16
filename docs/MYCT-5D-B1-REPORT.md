@@ -47,10 +47,12 @@ em diretório privado por chamada e são descartados no encerramento normal,
 cancelamento e falhas tratadas. SIGKILL/pane do host pode deixar temporários
 internos abandonados; não há limpeza automática ampla do home.
 
-Limites fixos: **64 MiB** de entrada, **128 MiB** expandidos por contêiner,
+Limites atuais: **2.000.000.000 bytes** de entrada; `max-scansize` é o tamanho
+da entrada mais **134.217.728 bytes**, reservando até 128 MiB para conteúdos
+internos/normalizados além da entrada,
 **1.000** entradas, **8** níveis de recursão, **180 s** totais incluindo carga,
-**120 s** de CPU, **2 GiB** de espaço de endereçamento, **256 MiB** por arquivo
-interno criado pelo filho e **64 KiB** de saída do motor. Nice +10. Um lock
+**120 s** de CPU, **2 GiB** de espaço de endereçamento, **2.000.000.000 bytes**
+por arquivo interno criado pelo filho e **64 KiB** de saída do motor. Nice +10. Um lock
 exclusivo impede cargas simultâneas de análise/atualização. O timeout interno
 `max-scantime` do ClamAV é desativado: o timeout externo mata a execução e produz
 INCOMPLETE, evitando aceitar um timeout interno silencioso como CLEAN.
@@ -120,11 +122,13 @@ Nice +10, IO idle, prazo total de 25 min incluindo espera pelo scanner; FreshCla
 serialização do systemd impede FreshClam simultâneo sobre a base e sobreposição
 com carga de assinaturas pelo scanner.
 
-**Timer instalado, inativo e desabilitado nesta entrega.** Somente após confirmação
-do proprietário, ativar:
+**Estado atual: timer habilitado e ativo pelo proprietário, que relatou validação
+do intervalo de 36h.** A correção de limite apenas consultou seu estado e hashes,
+sem habilitar/desabilitar, reiniciar ou alterar unidades. A entrega inicial abaixo
+continua registrada como histórico; nenhuma nova ativação é necessária.
 
 ```sh
-systemctl --user enable --now myct-av-update.timer
+systemctl --user show myct-av-update.timer -p ActiveState -p UnitFileState -p TimersMonotonic
 systemctl --user list-timers myct-av-update.timer
 ```
 
@@ -235,10 +239,125 @@ reboot, espera de 36h, falha real de rede, ensaio de todos os formatos compactad
 ou integração Android B2. Falhas/timeout são cobertos proporcionalmente por
 classificação simulada e cancelamento real. Nenhum teste aguarda instalação de
 pacotes; todos os pacotes necessários já estavam instalados pelo proprietário.
-**Pendências para aceite:** revisão do proprietário sobre utilidade/consumo e
-confirmação separada para ativação permanente do timer. Manter PR sem merge até
+**Pendências para aceite:** revisão do proprietário sobre a correção de limite,
+utilidade e consumo. O timer já foi ativado/validado por ele. Manter PR sem merge até
 sua validação. Não iniciar B2 por consequência desta entrega.
 
 Referências técnicas: [configuração FreshClam](https://docs.clamav.net/manual/Usage/Configuration.html),
 [gestão de assinaturas](https://docs.clamav.net/manual/Usage/SignatureManagement.html),
 `man clamscan`, `man freshclam.conf`, `man systemd.timer` instalados no Fedora.
+
+## Correção pontual — até 2 GB decimais (16/10/2026, mesmo PR #20)
+
+Substitui o teto de 64 MiB por **2.000.000.000 bytes inclusivos**. Não é uma
+promessa de análise completa até esse tamanho: CPU, tempo, memória e orçamento
+de expansão continuam limitados. `maxfilesize` e `pcre-max-filesize` passam a
+2000000000; `maxscansize` é tamanho da entrada + 134217728, no máximo 2134217728.
+Recursão 8, entradas 1000, bytecode 1000 ms, AS 2 GiB, CPU 120 s, parede 180 s,
+Nice +10 e limite de saída são mantidos. O adaptador `ops/myct-av`, base dedicada,
+serviço/locks de atualização e unidades systemd não foram modificados.
+
+Inspeção do código oficial **da versão 1.4.6** confirmou:
+
+- [maxfilesize é limitado internamente a INT_MAX−2](https://github.com/Cisco-Talos/clamav/blob/clamav-1.4.6/libclamav/others.c),
+  ou 2147483645 bytes. O My-CT não tenta ultrapassá-lo.
+- [scanstdin copia toda a entrada para um temporário](https://github.com/Cisco-Talos/clamav/blob/clamav-1.4.6/clamscan/manager.c)
+  antes da varredura. O contador unsigned int comporta o limite decimal escolhido.
+- [A verificação PCRE tem seu próprio teto de tamanho](https://github.com/Cisco-Talos/clamav/blob/clamav-1.4.6/libclamav/matcher.c).
+  Ele acompanha agora o teto de entrada, mantendo os limites de trabalho/memória
+  existentes. Não omitir PCRE apenas pelo padrão anterior de 100 MiB.
+
+O primeiro ensaio de 80 MiB retornou corretamente INCOMPLETE porque ClamScan
+avisou que RLIMIT_FSIZE era menor que maxfilesize. Hipótese/teste mínimo:
+ClamScan compara os limites globais mesmo quando a entrada cabe no temporário.
+Foi necessário definir **RLIMIT_FSIZE=2000000000** no filho para corresponder a
+maxfilesize. Isto limita cada arquivo temporário, não modifica configuração global
+ou o original. O orçamento agregado de conteúdo inspecionado continua entrada +
+128 MiB, em vez de permitir expansão ilimitada. Uma solicitação de 2 GB via stdin
+pode escrever temporariamente esses 2 GB no SSD; não houve ensaio gigante nesta
+correção. Não mudar o caminho de ingestão nem relaxar preservação para evitar esse
+comportamento nativo. O worker também confere o offset compartilhado do descritor
+após o filho: se o motor não consumiu todos os bytes, retorna INCOMPLETE mesmo
+que tenha emitido OK (o loop fread do scanstdin não verifica ferror). Falta de recursos/espaço ou falha do motor jamais é CLEAN.
+
+Timeout/CPU não foram ampliados: o teste real acima do antigo limite cabe nos
+valores atuais, e aumentá-los não resolveria os limites de memória/mapeamento para
+arquivos próximos de 2 GB. Uma análise grande pode terminar INCOMPLETE ou falhar
+por recursos; não há garantia de processamento integral de toda entrada aceita.
+
+Validação específica:
+
+```sh
+make -C server test
+python3 -m unittest discover -s ops/tests -v
+python3 ops/av/validate_large.py
+```
+
+O runner real usa o **binário compilado no checkout**, mantendo o adaptador,
+locks e base dedicada; não substitui o worker instalado nem solicita atualização
+de assinaturas. O teste numérico usa arquivos esparsos e aborta após validar o
+tamanho, antes de iniciar ClamScan: 65 MiB e exatamente 2000000000 aceitos;
+2000000001 recusado com prefixo INCOMPLETE. São provas reais da validação do worker,
+**não** análises reais de 2 GB. Nenhuma cópia gigante de stdin foi criada.
+
+Atualização manual de **somente o worker instalado**, após revisão (ainda não
+executada pelo agente nesta correção):
+
+```sh
+cd ~/Projetos/My-CT
+make -C server myct-av-scan
+MYCT_AV_BACKUP="$HOME/.local/bin/myct-av-scan.bak-$(date +%Y%m%d-%H%M%S-%N)"
+cp -p -- "$HOME/.local/bin/myct-av-scan" "$MYCT_AV_BACKUP"
+install -m0700 server/myct-av-scan "$HOME/.local/bin/myct-av-scan.new"
+mv -f -- "$HOME/.local/bin/myct-av-scan.new" "$HOME/.local/bin/myct-av-scan"
+```
+
+Executar quando não houver análise ativa. A substituição final por rename mantém
+qualquer inode antigo já aberto e não precisa de restart/reload de serviço/timer.
+Não executar o instalador geral, não copiar unidades nem alterar a base.
+
+Resultados da correção (Fedora real, ClamAV 1.4.6/daily 28155):
+
+| Fixture | Resultado | Motor incl. carga | Pico RSS | CPU user + system |
+| --- | --- | --- | --- | --- |
+| Arquivo esparso de 80 MiB / 83.886.080 bytes | CLEAN | 22,330 s | 1.056.368 KiB | 21,373 + 0,824 s |
+| Benigna pequena | CLEAN | 10,202 s | 984.648 KiB | 9,707 + 0,459 s |
+| EICAR | DETECTED | 10,185 s | 984.752 KiB | 9,721 + 0,428 s |
+| ZIP com entrada de 129 MiB (arquivo comprimido ~128 KiB) | INCOMPLETE / MaxScanSize | 10,271 s | 984.680 KiB | 9,705 + 0,531 s |
+| EOF no scanner de 80 MiB | INCOMPLETE | <0,01 s | 148 KiB | <0,001 s |
+
+O scanner realmente leu/copiou os 80 MiB de stdin; a fixture original era esparsa
+para evitar escrever esses dados duas vezes desnecessariamente no SSD. Todas as
+fixtures passaram pela comparação SHA-256, inode, tamanho, modo, uid/gid,
+atime/mtime/ctime e valores dos atributos estendidos antes/depois. Temporários
+descartados. O teste de cancelamento desta correção usa EOF imediato; a prova de
+cancelamento durante carga já consta da entrega inicial. Timeout de 180 s e
+preservação de detecções parciais são **simulados** no teste de classificação,
+sem ocupar CPU por três minutos só para repetir esse mecanismo.
+
+Servidor **19/19 PASS** (inclui o teste de três fronteiras esparsas);
+operacionais **23/23 PASS** (inclui detecção parcial com timeout).
+O teto exato de 2 GB não foi analisado integralmente e o consumo acima não deve
+ser extrapolado como garantia para 2 GB. PSS não foi novamente amostrado nesta
+correção; RSS é o pico do filho medido por wait4. Durante a carga observada havia
+5.870 MiB disponíveis; após a bateria 6.571 MiB. Swap observada em 3–4 MiB,
+sem pressão relevante; Saúde respondeu ok e Transmission permaneceu ativo.
+
+Estado final do timer: **active/enabled**, OnUnitInactiveSec **1d 12h**.
+Hashes SHA-256 das unidades instaladas conferidos antes/depois:
+
+```text
+c5b2f7ad735e15340a3530510fba384b520681791d8640978abb5a6591700de7  myct-av-update.timer
+9d536360bfa7cfb584db1a8801b2ed720301d6a00dabf21eff04659ac20f5b63  myct-av-update.service
+```
+
+Não houve operação de habilitar/desabilitar, restart, reload, recriação ou escrita
+nas unidades instaladas. O relato de validação do timer é do proprietário; o
+agente confirmou estado/propriedades sem repetir espera física de 36h.
+PR #20 permanece aberto sem merge, na branch existente. B2 não iniciada.
+
+Após acrescentar a conferência do offset de stdin, a bateria real específica foi
+reexecutada com sucesso: 80 MiB CLEAN em **22,163 s**, pico **1.056.344 KiB RSS**,
+CPU **21,317 + 0,785 s**; benigno CLEAN (10,192 s), EICAR DETECTED (10,194 s),
+expansão INCOMPLETE (10,277 s), EOF INCOMPLETE. Todas as comparações de preservação
+passaram novamente. Worker instalado permaneceu com seu hash original.

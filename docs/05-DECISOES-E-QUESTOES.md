@@ -259,3 +259,15 @@ Instalação/atualização real de B1 autorizadas; timer entregue desabilitado,
 ativação permanente depende de confirmação. Consumo real ~1 GiB e ~11 s por
 análise pequena, sem pressão observada. PR sem merge até validação.
 [Entrega, provas e limites](MYCT-5D-B1-REPORT.md).
+
+## 2026-10-16 — correção B1: entrada de 2 GB decimais
+
+Pedido do proprietário no mesmo PR #20: até 2000000000 bytes inclusivos, abaixo
+de INT_MAX−2 do ClamAV 1.4.6. `maxfilesize` e teto de tamanho PCRE em 2000000000;
+`maxscansize` em entrada + 128 MiB, preservando expansão limitada. RLIMIT_FSIZE
+do filho precisa ser 2000000000 porque stdin é copiado integralmente pelo motor
+e um limite menor gera aviso. Memória 2 GiB, CPU 120 s, parede 180 s, recursão e
+entradas preservados; aceitar o pedido não promete inspeção completa. Teste real
+80 MiB CLEAN, ~22,33 s e ~1,01 GiB RSS; ZIP excedente INCOMPLETE. Timer já ativado
+e validado pelo proprietário, confirmado ativo e sem alteração nesta correção.
+[Detalhes e comando para atualizar somente o worker](MYCT-5D-B1-REPORT.md).

@@ -32,10 +32,15 @@ class AntivirusContract(unittest.TestCase):
 
     def test_warnings_signals_timeout_and_error_never_clean(self):
         for data in (raw(text='stdin: OK\nScanned files: 1\nWARNING: scan issue'),
-                     raw(signal=9), raw(reason='cancelled'), raw(2, 'execution failed')):
+                     raw(signal=9), raw(reason='cancelled'), raw(reason='Limite total de 180 segundos.'),
+                     raw(reason='INCOMPLETE: o motor não consumiu toda a entrada.'), raw(2, 'execution failed')):
             self.assertNotEqual(av.classify(data)[0], 'CLEAN')
         self.assertEqual(av.classify({'error': 'INCOMPLETE: oversized'})[0], 'INCOMPLETE')
         self.assertEqual(av.classify({'error': 'permission denied'})[0], 'ERROR')
+
+    def test_partial_result_keeps_detections(self):
+        result = av.classify(raw(1, 'stdin: Eicar-Signature FOUND\n', reason='Limite total de 180 segundos.'))
+        self.assertEqual(result[:2], ('INCOMPLETE', ['Eicar-Signature']))
 
     def test_engine_and_database_failure(self):
         self.assertEqual(av.classify(raw(127, ''))[0], 'UNAVAILABLE')
