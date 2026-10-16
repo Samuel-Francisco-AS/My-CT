@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 """Small SSH-facing Transmission 4.1+ adapter; no daemon, third-party modules or shell."""
 import base64
+from contextlib import contextmanager
+import fcntl
 import http.client
 import ipaddress
 import json
@@ -9,6 +11,8 @@ from pathlib import Path
 import re
 import socket
 import sys
+import time
+import unicodedata
 from urllib.parse import parse_qs, urlsplit
 
 ENDPOINT_PORT = 19091
@@ -75,19 +79,133 @@ class Rpc:
                 conn.close()
         raise Failure('Falha na negociação RPC.')
 
+def naming_file(key):
+    if not re.fullmatch('[0-9a-f]{40}', key):
+        raise Failure('Hash inválido.')
+    path = Path.home() / '.local/share/myct/torrent-names'
+    if path.resolve() != path:
+        raise Failure('Registro de nomes redirecionado por symlink.')
+    return path / (key + '.json')
+
+@contextmanager
+def naming_lock(key):
+    path = naming_file(key)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with path.with_suffix('.lock').open('a') as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        yield
+
+def read_naming(key):
+    path = naming_file(key)
+    if not path.exists():
+        return None
+    if path.is_symlink():
+        raise Failure('Registro de nomes inválido.')
+    data = json.loads(path.read_text())
+    target = data.get('target')
+    if target is not None and (not isinstance(target, str) or
+            not safe_named_component(target, key)):
+        raise Failure('Destino registrado inválido.')
+    if data.get('state') not in {'pending', 'submitted', 'done', 'blocked'}:
+        raise Failure('Estado de nomeação inválido.')
+    return data
+
+def write_naming(key, data):
+    path = naming_file(key)
+    temp = path.with_suffix('.tmp')
+    # Called under the per-hash lock. Atomic metadata update, never torrent data.
+    with temp.open('w') as stream:
+        json.dump(data, stream, ensure_ascii=True)
+        stream.flush()
+        os.fsync(stream.fileno())
+    temp.replace(path)
+    fd = os.open(path.parent, os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+def safe_named_component(value, key):
+    return (len(value.encode('utf-8')) <= 160 and
+            value.endswith('-' + key[:8]) and not value.startswith('.') and
+            all(unicodedata.category(c)[0] in 'LNM' or c in ' ._-()' for c in value))
+
+def readable_name(title, key):
+    title = unicodedata.normalize('NFC', title)
+    title = ''.join(c if unicodedata.category(c)[0] in 'LNM' or c in ' ._-()' else '-' for c in title)
+    title = re.sub(r'[-\s]+', '-', title).strip(' .-_')
+    title = title.encode('utf-8')[:120].decode('utf-8', errors='ignore').rstrip(' .-_') or 'torrent'
+    if title.split('.')[0].upper() in {'CON', 'PRN', 'AUX', 'NUL', *(f'COM{i}' for i in range(1,10)), *(f'LPT{i}' for i in range(1,10))}:
+        title = 'torrent-' + title
+    return title + '-' + key[:8]
+
 def records(rpc, ids=None):
     args = {'fields': FIELDS}
     if ids is not None:
         args['ids'] = ids
     rows = rpc.call('torrent_get', args)['torrents']
     root = destination()
-    # One directory per immutable hash prevents different torrents colliding by name.
     def managed(row):
         key = row.get('hash_string', '')
-        return (re.fullmatch('[0-9a-f]{40}', key) is not None
-                and row.get('download_dir') == str(root / key)
-                and (root / key).resolve() == root / key)
+        if re.fullmatch('[0-9a-f]{40}', key) is None:
+            return False
+        allowed = [root / key]  # Legacy directories remain valid and are never migrated.
+        data = read_naming(key)
+        if data and data.get('target'):
+            allowed.append(root / data['target'])
+        return any(row.get('download_dir') == str(path) and path.resolve() == path for path in allowed)
     return [row for row in rows if managed(row)]
+
+def organize(rpc, key):
+    with naming_lock(key):
+        data = read_naming(key)
+        if data is None:
+            return {'naming': 'legacy-untouched'}
+        rows = records(rpc, [key])
+        if len(rows) != 1:
+            return {'naming': 'torrent-absent-or-external'}
+        row = rows[0]
+        # A submitted operation is never sent twice, even after a timeout/crash.
+        if data['state'] != 'pending':
+            if data.get('target') and row['download_dir'] == str(destination() / data['target']):
+                data['state'] = 'done'
+                write_naming(key, data)
+            return {'naming': data['state']}
+        if row.get('metadata_percent_complete') != 1 or row.get('left_until_done') != 0:
+            return {'naming': 'waiting-for-completion'}
+        if row['download_dir'] != str(destination() / key) or row.get('error', 0) == 3:
+            return {'naming': 'waiting-for-valid-source'}
+        target = destination() / readable_name(row['name'], key)
+        # Reserve an empty directory exclusively. Never merge with existing data.
+        try:
+            target.mkdir(mode=0o700)
+        except FileExistsError:
+            write_naming(key, {'state': 'blocked', 'target': None, 'reason': 'destination-exists'})
+            return {'naming': 'blocked-destination-exists'}
+        data = {'state': 'submitted', 'target': target.name}
+        write_naming(key, data)
+        rpc.call('torrent_set_location', {'ids': [key], 'location': str(target), 'move': True})
+        # RPC acceptance is asynchronous. Confirm from daemon; never move files ourselves.
+        for _ in range(20):
+            current = records(rpc, [key])
+            if len(current) == 1 and current[0]['download_dir'] == str(target):
+                data['state'] = 'done'
+                write_naming(key, data)
+                break
+            time.sleep(0.1)
+        return {'naming': data['state']}
+
+def enable_naming(rpc):
+    hook = Path.home() / '.local/bin/myct-torrent-done'
+    current = rpc.call('session_get', {'fields': ['config_dir', 'script_torrent_done_enabled', 'script_torrent_done_filename']})
+    if current['config_dir'] != str(Path.home() / '.config/myct-transmission'):
+        raise Failure('Instância dedicada My-CT não confirmada.')
+    if current.get('script_torrent_done_filename') not in ('', str(hook)):
+        raise Failure('Hook existente preservado; nomeação não ativada.')
+    if not hook.is_file() or hook.is_symlink() or not os.access(hook, os.X_OK):
+        raise Failure('Instale myct-torrent-done antes de ativar nomeação.')
+    rpc.call('session_set', {'script_torrent_done_enabled': True, 'script_torrent_done_filename': str(hook)})
+    return {'naming': 'enabled-on-completion'}
 
 def run(args, rpc):
     if args == ['list']:
@@ -96,16 +214,28 @@ def run(args, rpc):
         value = magnet(args[1])
         xt = parse_qs(urlsplit(value).query)['xt'][0].split(':')[-1]
         key = xt.lower() if len(xt) == 40 else base64.b32decode(xt.upper()).hex()
-        root = destination() / key
-        if root.resolve() != root:
-            raise Failure('Destino redirecionado; operação recusada.')
-        root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        result = rpc.call('torrent_add', {'filename': value, 'download_dir': str(root), 'paused': False})
-        duplicate = 'torrent_duplicate' in result
-        item = result.get('torrent_duplicate') if duplicate else result.get('torrent_added')
-        if not item or not re.fullmatch('[0-9a-fA-F]{40}', item['hash_string']):
-            raise Failure('Resposta de inclusão inválida; consulte antes de repetir.')
-        return {'duplicate': duplicate, 'id': item['id'], 'hash': item['hash_string']}
+        with naming_lock(key):
+            data = read_naming(key)
+            root = destination() / (data['target'] if data and data.get('target') else key)
+            if root.resolve() != root:
+                raise Failure('Destino redirecionado; operação recusada.')
+            fresh = not root.exists() and data is None
+            root.mkdir(parents=True, exist_ok=True, mode=0o700)
+            # Register eligibility before allowing a new torrent to finish. Duplicates untouched.
+            result = rpc.call('torrent_add', {'filename': value, 'download_dir': str(root), 'paused': True})
+            duplicate = 'torrent_duplicate' in result
+            item = result.get('torrent_duplicate') if duplicate else result.get('torrent_added')
+            if not item or item.get('hash_string', '').lower() != key:
+                raise Failure('Resposta de inclusão inválida; consulte antes de repetir.')
+            if not duplicate:
+                if fresh:
+                    write_naming(key, {'state': 'pending', 'target': None})
+                rpc.call('torrent_start', {'ids': [key]})
+            return {'duplicate': duplicate, 'id': item['id'], 'hash': item['hash_string']}
+    if args == ['enable-naming']:
+        return enable_naming(rpc)
+    if len(args) == 2 and args[0] == 'organize':
+        return organize(rpc, args[1].lower())
     if len(args) == 2 and args[0] in {'pause', 'resume', 'remove', 'status'}:
         key = args[1]
         if not re.fullmatch('[0-9a-fA-F]{40}', key):

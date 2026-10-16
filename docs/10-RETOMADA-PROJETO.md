@@ -1,11 +1,15 @@
 # My-CT — guia de retomada após MYCT-5B
 
-**MYCT-5C candidata (16/10/2026):** branch `myct-5c-bittorrent`, APK
-`0.5.3-torrents`/code 10, Downloads → HTTP/HTTPS | Torrents. Integração
-Transmission 4.1+ por SSH/CLI e RPC loopback preparada; **motor ausente,
-instalação/ativação e prova real Fedora/Moto pendentes**. Não declarar aceite
-nem ativar serviços sem autorização. Remoção preserva dados; seeding explícito;
-`.torrent` SAF complementar não implementado. [Relatório e retomada](MYCT-5C-BITTORRENT-REPORT.md).
+**MYCT-5C candidata atualizada (16/10/2026):** Transmission 4.1.3 instalado e
+ativo; proprietário comprovou no Fedora/Moto adição, download sem SSH, consulta,
+pausa/retomada, SFTP e remoção preservando dados (comentários PR #17).
+Correção de nomes na mesma branch `myct-5c-bittorrent`: novos torrents usam
+pasta por hash durante download e `<título real sanitizado>-<hash8>` ao concluir,
+via hook nativo + RPC do motor. **Sem migração dos existentes**, sem mudar
+seeding/banda. Prova real de 64 KiB passou no Fedora; novo APK
+`0.5.4-torrents`/code 11 necessário para os caminhos legíveis, aceite dessa
+correção no Moto pendente. `.torrent` SAF continua adiado. PR draft, sem merge.
+[Relatório e retomada](MYCT-5C-BITTORRENT-REPORT.md).
 
 **Atualizado:** 16/10/2026 · **Fonte de verdade:** `main` após integração do PR #16. MYCT-5A aceita; MYCT-5B integrada com aceite funcional parcial.
 **Relatório de fechamento:** [MYCT-4-FECHAMENTO-REPORT.md](MYCT-4-FECHAMENTO-REPORT.md).

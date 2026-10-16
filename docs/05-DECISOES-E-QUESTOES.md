@@ -219,3 +219,16 @@ entre torrents distintos; remoção preserva dados. Seeding do motor é explíci
 na UI; não alterar limites silenciosamente. `.torrent` SAF fica complementar.
 Pacote/ativação ainda dependem do proprietário, sem prova real do motor.
 [Arquitetura, instalação, riscos e gates](MYCT-5C-BITTORRENT-REPORT.md).
+
+## 16/10/2026 — correção MYCT-5C: título real na conclusão, por RPC
+
+Decisão solicitada pelo proprietário no PR #17: nomes legíveis para novos
+torrents, sem migrar existentes nem prejudicar seeding. Usar hook nativo de
+conclusão e `torrent_set_location(move=true)` com título `torrent_get.name`
+confirmado por metadados, sufixo hash8 e registro privado por hash. Adiar o nome
+final até conclusão evita worker/timer para aguardar metadados e funciona sem
+Android. Nenhum serviço novo; nenhuma renomeação de arquivo interno, mudança
+em ratio/banda ou efeito de escrita em list/status. Colisões e RPC ambíguo não
+repetem move automaticamente. CLI e hook atualizados na instância dedicada por
+RPC, sem restart. APK 0.5.4/code 11 necessário para aceitar o caminho legível.
+[Prova real, instalação e limites](MYCT-5C-BITTORRENT-REPORT.md).

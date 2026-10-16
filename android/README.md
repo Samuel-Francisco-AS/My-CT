@@ -342,9 +342,13 @@ O desbloqueio **não** é automático depois do reboot. Para operar, conectar An
 
 ## MYCT-5C — candidata BitTorrent
 
-APK `0.5.3-torrents`/code 10 acrescenta **Downloads → Torrents**: magnet,
-consulta, pausa/retomada, remoção preservando dados e acesso SFTP. Exige
-Transmission 4.1+ e `~/.local/bin/myct-torrent` no Fedora; pacote/ativação ainda
-pendentes nesta candidata. Não houve validação física. Instalação manual,
-configuração loopback e roteiro no [relatório MYCT-5C](../docs/MYCT-5C-BITTORRENT-REPORT.md).
-HTTP/HTTPS e aceites anteriores permanecem nos registros próprios.
+Downloads → Torrents tem gates reais confirmados pelo proprietário no APK 0.5.3:
+adição, transferência sem SSH/app, consulta, pausa/retomada, SFTP e remoção
+preservando dados. Transmission 4.1.3 e unidade dedicada já instalados no Fedora.
+
+A correção **0.5.4-torrents/code 11** aceita pastas legíveis no SFTP. Para torrents
+novos, o título real dos metadados é aplicado ao concluir, por hook nativo e
+RPC do motor. Torrents/pastas antigos não são migrados. Atualizar APK sem
+desinstalar; mesma assinatura. Nomeação comprovada com 64 KiB no Fedora;
+**essa correção ainda precisa do aceite no Moto**. `.torrent` SAF continua adiado.
+[Relatório e atualização CLI/hook](../docs/MYCT-5C-BITTORRENT-REPORT.md).

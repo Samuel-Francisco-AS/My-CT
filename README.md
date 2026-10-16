@@ -1,11 +1,15 @@
 # My-CT
 
-**MYCT-5C candidata (16/10/2026):** branch `myct-5c-bittorrent`, APK
-`0.5.3-torrents`/code 10, Downloads → HTTP/HTTPS | Torrents. Integração
-Transmission 4.1+ por SSH/CLI e RPC loopback preparada; **motor ausente,
-instalação/ativação e prova real Fedora/Moto pendentes**. Não declarar aceite
-nem ativar serviços sem autorização. Remoção preserva dados; seeding explícito;
-`.torrent` SAF complementar não implementado. [Relatório e retomada](docs/MYCT-5C-BITTORRENT-REPORT.md).
+**MYCT-5C candidata atualizada (16/10/2026):** Transmission 4.1.3 instalado e
+ativo; proprietário comprovou no Fedora/Moto adição, download sem SSH, consulta,
+pausa/retomada, SFTP e remoção preservando dados (comentários PR #17).
+Correção de nomes na mesma branch `myct-5c-bittorrent`: novos torrents usam
+pasta por hash durante download e `<título real sanitizado>-<hash8>` ao concluir,
+via hook nativo + RPC do motor. **Sem migração dos existentes**, sem mudar
+seeding/banda. Prova real de 64 KiB passou no Fedora; novo APK
+`0.5.4-torrents`/code 11 necessário para os caminhos legíveis, aceite dessa
+correção no Moto pendente. `.torrent` SAF continua adiado. PR draft, sem merge.
+[Relatório e retomada](docs/MYCT-5C-BITTORRENT-REPORT.md).
 
 **My-CT** é uma iniciativa de infraestrutura pessoal: um servidor Linux doméstico, administrado por um aplicativo Android nativo, capaz de executar tarefas, disponibilizar arquivos e realizar downloads sem depender de uma sessão gráfica.
 
@@ -101,4 +105,4 @@ Os PRs #13 e #14 foram mesclados à `main`. [Relatório final](docs/MYCT-4-FECHA
 
 ## Ponto de partida
 
-A CLI C++20 `myct-download` entrega HTTP/HTTPS via curl e execução transitória no systemd de usuário; build, uso e cancelamento no [relatório MYCT-5A](docs/MYCT-5A-DOWNLOADS-REPORT.md). Testes reais no Fedora passaram; **continuidade após desconexão SSH/fechamento do app e integridade de 262144 bytes foram comprovadas pelo proprietário**. A aba Downloads 0.5.2 está integrada ao Android com aceite físico parcial, conforme [relatório MYCT-5B](docs/MYCT-5B-ANDROID-DOWNLOADS-REPORT.md). BitTorrent/magnet tem implementação candidata MYCT-5C, ainda sem validação do motor real; rotinas servidor-side continuam não implementadas. O refinamento Android (lag, navegação, scroll SFTP e transferência em segundo plano) é uma trilha separada, adiada na [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9); não iniciar por conta própria. Priorizar um fluxo útil por vez e preservar serviços, dados e credenciais existentes.
+A CLI C++20 `myct-download` entrega HTTP/HTTPS via curl e execução transitória no systemd de usuário; build, uso e cancelamento no [relatório MYCT-5A](docs/MYCT-5A-DOWNLOADS-REPORT.md). Testes reais no Fedora passaram; **continuidade após desconexão SSH/fechamento do app e integridade de 262144 bytes foram comprovadas pelo proprietário**. A aba Downloads 0.5.2 está integrada ao Android com aceite físico parcial, conforme [relatório MYCT-5B](docs/MYCT-5B-ANDROID-DOWNLOADS-REPORT.md). BitTorrent/magnet tem implementação candidata MYCT-5C com gates reais confirmados pelo proprietário e correção de nomes validada no Fedora; rotinas servidor-side continuam não implementadas. O refinamento Android (lag, navegação, scroll SFTP e transferência em segundo plano) é uma trilha separada, adiada na [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9); não iniciar por conta própria. Priorizar um fluxo útil por vez e preservar serviços, dados e credenciais existentes.

@@ -25,6 +25,18 @@ class TorrentsTest {
             assertThrows(IllegalArgumentException::class.java) { parseTorrents(it) }
         }
     }
+    @Test fun acceptsRegisteredStyleReadablePathsAndStillRejectsEscape() {
+        val original = "/Downloads/My-CT/Torrents/$hash"
+        for (folder in listOf("Título-real-aaaaaaaa", "中文-𐐀-ação.txt-aaaaaaaa")) {
+            val item = parseTorrents(record(6).replace(original, "/Downloads/My-CT/Torrents/$folder")).single()
+            assertTrue(item.directory.endsWith(folder))
+        }
+        for (folder in listOf(".hidden-aaaaaaaa", "title-bbbbbbbb", "nested/title-aaaaaaaa", "title-aaaaaaaa/..", "a\\b-aaaaaaaa", "x".repeat(170)+"-aaaaaaaa")) {
+            assertThrows(IllegalArgumentException::class.java) {
+                parseTorrents(record(6).replace(original, "/Downloads/My-CT/Torrents/$folder"))
+            }
+        }
+    }
     @Test fun magnetIsSingleQuotedArgumentAndControlsAreClosed() {
         val root = Files.createTempDirectory("myct-torrent-args").toFile()
         try {

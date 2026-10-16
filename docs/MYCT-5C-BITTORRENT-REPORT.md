@@ -1,5 +1,181 @@
 # MYCT-5C — BitTorrent/magnet por SSH
 
+## Correção 0.5.4 — nomes reais, sem migrar existentes (16/10/2026)
+
+**Estado atual:** os gates essenciais MYCT-5C foram comprovados pelo proprietário
+após a publicação inicial: motor real, adição pelo Moto, download sem SSH,
+consulta, pausa/retomada, SFTP e remoção preservando arquivos. Fontes:
+[comentários e decisão de nomes no PR #17](https://github.com/Samuel-Francisco-AS/My-CT/pull/17#issuecomment-6218182578)
+(ver também os demais comentários do PR). A correção de nomes descrita abaixo
+foi comprovada no Fedora; **novo APK ainda exige validação dessa correção no Moto**.
+PR continua rascunho, sem merge. O registro inicial ao final é histórico:
+Transmission não está mais ausente.
+
+### Aceite e solução mínima
+
+Antes de implementar: somente torrents novos, título real confirmado pelo motor,
+sufixo curto, nada de renomear arquivos internos, preservar localização dos
+existentes e seeding, nenhuma dependência do Android e nenhum serviço novo.
+
+A opção adotada é **finalizar o nome ao concluir o download**, quando os metadados
+já estão completos. Antes disso a pasta permanece por hash. Isso evita um worker
+residente, timer ou polling adicional para esperar metadados; é uma escolha
+explícita de simplicidade. Não usa `dn` como título final.
+
+O hook nativo de conclusão `myct-torrent-done` chama `myct-torrent organize HASH`.
+A CLI consulta `torrent_get.name` e `metadata_percent_complete == 1` +
+`left_until_done == 0`, calcula `<título-sanitizado>-<hash8>` e envia
+`torrent_set_location` com `move:true`. Não há `mv`, rename manual dos dados ou
+`torrent_rename_path`. Somente o Transmission move os dados e atualiza referências;
+a árvore relativa e o infohash permanecem iguais. O seeding não é pausado pela
+nomeação, nem seus limites alterados. Referências oficiais:
+[hook de conclusão](https://github.com/transmission/transmission/blob/4.1.3/docs/Scripts.md#on-torrent-completion),
+[RPC de localização](https://github.com/transmission/transmission/blob/4.1.3/docs/rpc-spec.md#36-moving-a-torrent).
+
+Unicode NFC útil preservado; separadores, controles, bidi e caracteres especiais
+viram hífen, nomes reservados recebem prefixo, títulos vazios recebem `torrent`.
+Título limitado a 120 bytes UTF-8, mais sufixo; caracteres Unicode suplementares
+também aceitos pelo Android. Destinos precisam ser filhos diretos de Torrents,
+sem symlinks. A pasta final é reservada vazia com mkdir exclusivo; se já existir,
+**não mescla nem substitui**: registra `blocked` e conserva a pasta original.
+Hash8 não é garantia matemática contra colisão: qualquer colisão é recusada.
+
+Registro privado em `~/.local/share/myct/torrent-names/HASH.json` só é criado para
+inclusão realmente nova, sem diretório anterior e sem registro anterior. Adiciona
+pausado, grava elegibilidade e só então inicia: um arquivo pequeno não conclui
+antes do registro. Duplicatas não são reiniciadas nem se tornam elegíveis.
+Torrent/pasta anterior sem registro **nunca é migrado**, mesmo se o hook receber
+um evento de conclusão dele. Readição de torrent com registro mantém o destino
+registrado, sem inventar uma nova pasta por `dn`.
+
+`records()` continua aceitando `root/HASH` e aceita o caminho legível **somente
+quando corresponde ao registro daquele hash**; não basta estar abaixo de Torrents.
+Consulta passiva não move nada e não grava registro. Android usa o `download_dir`
+real recebido para SFTP, aceitando as duas formas e recusando escapes.
+
+Lock por hash + gravação atômica/fsync protegem a transição `pending → submitted
+→ done`. Estado `submitted` é gravado **antes** do RPC: se a resposta ficar
+ambígua, nenhum novo move é reenviado automaticamente. Reexecução só confirma
+localização atual; `blocked`/`submitted` precisam de inspeção do proprietário se
+não houver conclusão. O motor pode parar esse torrent se uma falha real de disco
+ocorrer durante move; não forçar retomada nem mover manualmente para esconder erro.
+Sem limpeza automática de pastas vazias/registro, migração em lote ou retry infinito.
+
+### Instalação efetivamente executada nesta correção
+
+No inventário desta retomada: Transmission `4.1.3-1.fc44`, unidade dedicada ativa,
+RPC `127.0.0.1:19091`, hook de conclusão previamente desativado e vazio. A cópia
+instalada da CLI foi comparada ao commit anterior antes de ser atualizada.
+Dentro da correção/teste solicitados pelo proprietário foram executados:
+
+```sh
+install -Dm0700 ops/myct-torrent "$HOME/.local/bin/myct-torrent"
+install -Dm0700 ops/torrent/myct-torrent-done "$HOME/.local/bin/myct-torrent-done"
+~/.local/bin/myct-torrent enable-naming
+```
+
+`enable-naming` confirma `config_dir == ~/.config/myct-transmission`, recusa
+substituir outro hook e usa apenas `session_set` para habilitar o hook na instância
+My-CT. Não toca no daemon global, unidade systemd, settings.json em execução,
+Core, SSHD, firewall, banco ou Cofre. **Não houve restart nem interrupção dos
+existentes.** Instalação nova por `prepare.py` já inclui o hook nos settings.
+Na instância existente a ativação é em runtime; o Transmission salva settings no
+encerramento normal ([código oficial](https://github.com/transmission/transmission/blob/4.1.3/daemon/daemon.cc#L953)).
+Não se testou reinício/reboot. Se houver kill abrupto ou reload de configuração
+antiga, conferir `session_get` e repetir `enable-naming` antes de novos downloads.
+Não editar settings vivos nem reiniciar os torrents existentes só para testar isso.
+
+Reversão da automação: desabilitar apenas `script_torrent_done_enabled` por
+`session_set` na instância dedicada. Manter CLI atual, registros e pastas legíveis
+para que continuem consultáveis. Não instalar CLI 0.5.3 sobre esta configuração:
+seu filtro antigo rejeita pastas legíveis. Nada deve ser movido de volta em lote.
+
+### Prova real e limites
+
+Fixture própria CC0, **65.536 bytes**, servida por HTTP webseed em loopback;
+Transmission real recebeu os metadados e fez download/verificação de peças.
+Não implementamos cliente/tracker BitTorrent nem instalamos dependências.
+Magnet inicial tinha `dn=ERRADO-SUGESTAO-MAGNET`; título real dos metadados:
+`MYCT prova ação 4209c56e.txt`, hash `a8146ba725c5e302aefed8c93a9e311380dc6606`.
+
+- Callback do daemon, sem sessão Android, mudou a localização automaticamente de
+  `Torrents/a8146ba725c5e302aefed8c93a9e311380dc6606` para
+  **`Torrents/MYCT-prova-ação-4209c56e.txt-a8146ba7`**.
+- `metadata_percent_complete:1`, `percent_done:1`, `status:6`, `error:0`; arquivo
+  interno continuou `MYCT prova ação 4209c56e.txt`, mesmo conteúdo e tamanho.
+- SHA-256: `5460f7d30ff4d442a7e8cfa666e894795adce417580732e5c0b2985a0f9fb249`.
+- Duplicata com outro `dn` não mudou localização/estado. Pausa chegou a 0;
+  `torrent_verify` preservou 100% sem erro; retomada chegou a **6 (seeding)**.
+  Outra chamada de organize não moveu novamente.
+- Remoção da fixture pela CLI preservou o arquivo/hash no caminho legível.
+  Somente os torrents sintéticos criados pelo teste foram removidos da lista;
+  arquivos de teste permanecem. Diretórios e estados dos torrents preexistentes
+  foram comparados antes/depois e ficaram idênticos. Ratio/limites de banda
+  também foram comparados, sem mudança.
+- **Não foi medido upload para peer externo**: a fixture controlada usou webseed
+  local, não swarm público. Não equivale a novo aceite no Moto ou reboot.
+
+Hipótese/teste mínimo inicial: `torrent_add` duplicado com metainfo preencheria
+um magnet pendente. Resultado: continuou sem metadados; tentativa encerrada em
+70 s. Não alteramos o produto para contornar isso. A fixture real então removeu
+**apenas o próprio magnet sintético** e o reincluiu com metainfo, conservando o
+registro novo. Isso exercitou conclusão/move reais; não é suporte `.torrent`
+na UI nem prova de descoberta pública de metadados. A tentativa incompleta foi
+removida da lista, sem excluir dados.
+
+Fixture opt-in reproduzível (adiciona 64 KiB ao motor real; requer CLI/hook já
+instalados/ativados, preserva arquivo e deixa a fixture em seeding):
+
+```sh
+python3 ops/tests/integration_torrent_naming.py --run-real-fixture
+```
+
+Logs/JSON antes/depois, controles, hipóteses e medidas locais em
+`artifacts/myct-5c-validation/0.5.4/`, sem títulos privados no relatório público.
+A fixture levou 5,30 s; RSS do processo de teste 22.804 KiB, não memória do daemon.
+Amostra RSS do Transmission existente: 29.408 KiB; cgroup inclui cache de arquivos,
+não confundir com RSS. Não é benchmark de seeding prolongado.
+
+### Validação e APK da correção
+
+- Android final: **67 PASS / 1 opcional ignorado**, zero falhas/erros;
+  assembleDebug/testDebugUnitTest/lintDebug offline aprovados. Lint sem erros,
+  seis avisos existentes. Novo teste aceita Unicode/caminhos legíveis e recusa
+  escape, separadores, sufixo incompatível e tamanho excessivo.
+- Python: **13/13 PASS**, incluindo registro somente para novos diretórios antes
+  de iniciar, metadados pendentes, título real, legado intacto, colisões/symlinks,
+  uma única relocation e resultado RPC ambíguo sem reenvio.
+- Fixture real, controles e invariantes antes/depois: **PASS** conforme seção acima.
+- Terminal upstream: 21 arquivos verificados, dois patches preservados.
+  `git diff --check` aprovado. Nenhum aparelho conectado nesta correção.
+- Core/HTTP/Cofre não foram alterados; suas provas físicas anteriores não foram
+  repetidas. Testes Android preservam também a suíte HTTP existente.
+
+APK `artifacts/myct-5c-0.5.4-debug.apk`, pacote `dev.myct`,
+**0.5.4-torrents / code 11**, 13749736 bytes. SHA-256:
+`599c8ffc4ea3d0653c5ad95fb91c08186f239a4cdeafd7aaa7a3f7194c72abac`.
+`apksigner` confirmou a assinatura debug anterior
+`b788958be4c919889fc30813f13f1aceb5b6b69670514c82e16288f4b60b83b3`.
+[APK e checksum](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5c-v0.5.4-rc1).
+Build/testes/lint: 81,95 s, CPU acumulada 345,50 s e RSS máximo
+1.693.068 KiB (~1,61 GiB), sem swap, limites Gradle inalterados. Logs/medidas
+em `artifacts/myct-5c-validation/0.5.4/`. SHA da correção identificado pelo tag da prévia; commits no PR #17.
+
+### Retomada e aceite curto no Moto
+
+Atualizar para APK 0.5.4/code 11 **sem desinstalar**. A CLI/hook já foram atualizados
+neste Fedora. Conferir os torrents antigos em suas pastas atuais; adicionar um
+novo magnet pequeno/legal, esperar conclusão e confirmar pasta com título real
+no SFTP, pausa/retomada e seeding. Sem migração das pastas antigas. Não repetir
+os gates anteriores por obrigação. `.torrent` SAF continua fora desta correção.
+
+
+## Registro histórico da candidata 0.5.3
+
+As seções abaixo preservam o inventário e bloqueios da entrega inicial, superados
+pelos gates relatados nos comentários do PR e na correção acima.
+
+
 Data: 16/10/2026. Branch: `myct-5c-bittorrent`, criada de `origin/main`
 `83e053737ff782ecf523bf31776fec9da55889dd` (PR #16).
 **Implementação candidata; teste do motor real bloqueado por pacote ausente.

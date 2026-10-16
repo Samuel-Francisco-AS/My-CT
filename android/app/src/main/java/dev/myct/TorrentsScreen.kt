@@ -53,6 +53,7 @@ internal fun TorrentsScreen(model: TorrentsModel, filesBusy: Boolean, openFiles:
         item {
             Text("Torrents · Fedora", style = MaterialTheme.typography.titleMedium)
             Text("Continua no Fedora ao fechar o app. Concluído pode continuar compartilhando (seeding); use Pausar para parar. Limites do motor são preservados.", style = MaterialTheme.typography.bodySmall)
+            Text("Novos torrents: pasta por hash durante o download; título real ao concluir. Pastas anteriores são mantidas.", style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(magnet, { if (it.length <= 8192) magnet = it }, label = { Text("Magnet legal e confiável") },
                 singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = model.formEnabled,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false))

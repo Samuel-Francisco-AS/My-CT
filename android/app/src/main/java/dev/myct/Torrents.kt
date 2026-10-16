@@ -20,8 +20,13 @@ internal fun parseTorrents(text: String): List<ServerTorrent> {
         val row = rows.getJSONObject(index)
         val hash = row.getString("hash_string"); require(torrentHash.matches(hash))
         val directory = row.getString("download_dir")
-        require(directory.startsWith('/') && directory.endsWith("/Downloads/My-CT/Torrents/${hash.lowercase()}") &&
-            directory.split('/').none { it == "." || it == ".." } && directory.none { it.isISOControl() })
+        val folder = directory.substringAfterLast('/')
+        val legacy = folder == hash.lowercase()
+        val named = folder.endsWith("-${hash.take(8).lowercase()}") && folder.toByteArray(Charsets.UTF_8).size <= 160 &&
+            !folder.startsWith('.') && folder.codePoints().allMatch { Character.isLetterOrDigit(it) || Character.getType(it) in
+                setOf(Character.NON_SPACING_MARK.toInt(), Character.COMBINING_SPACING_MARK.toInt(), Character.ENCLOSING_MARK.toInt()) || it in intArrayOf(32, 46, 95, 45, 40, 41) }
+        require(directory.startsWith('/') && directory.substringBeforeLast('/').endsWith("/Downloads/My-CT/Torrents") &&
+            (legacy || named) && directory.split('/').none { it == "." || it == ".." } && directory.none { it.isISOControl() })
         val metadata = row.optDouble("metadata_percent_complete", Double.NaN)
         val known = metadata.isFinite() && metadata >= 1.0
         val total = if (known) number(row, "total_size") else null

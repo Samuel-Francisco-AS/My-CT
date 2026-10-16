@@ -1,11 +1,15 @@
 # AGENTS.md — colaboração segura no My-CT
 
-**MYCT-5C candidata (16/10/2026):** branch `myct-5c-bittorrent`, APK
-`0.5.3-torrents`/code 10, Downloads → HTTP/HTTPS | Torrents. Integração
-Transmission 4.1+ por SSH/CLI e RPC loopback preparada; **motor ausente,
-instalação/ativação e prova real Fedora/Moto pendentes**. Não declarar aceite
-nem ativar serviços sem autorização. Remoção preserva dados; seeding explícito;
-`.torrent` SAF complementar não implementado. [Relatório e retomada](docs/MYCT-5C-BITTORRENT-REPORT.md).
+**MYCT-5C candidata atualizada (16/10/2026):** Transmission 4.1.3 instalado e
+ativo; proprietário comprovou no Fedora/Moto adição, download sem SSH, consulta,
+pausa/retomada, SFTP e remoção preservando dados (comentários PR #17).
+Correção de nomes na mesma branch `myct-5c-bittorrent`: novos torrents usam
+pasta por hash durante download e `<título real sanitizado>-<hash8>` ao concluir,
+via hook nativo + RPC do motor. **Sem migração dos existentes**, sem mudar
+seeding/banda. Prova real de 64 KiB passou no Fedora; novo APK
+`0.5.4-torrents`/code 11 necessário para os caminhos legíveis, aceite dessa
+correção no Moto pendente. `.torrent` SAF continua adiado. PR draft, sem merge.
+[Relatório e retomada](docs/MYCT-5C-BITTORRENT-REPORT.md).
 Estas orientações destinam-se a Codex e outros agentes que trabalhem neste repositório. **Leia README.md e docs/04-PLANEJAMENTO-INAUGURAL.md antes de propor implementação.**
 
 ## Estado atual e retomada
@@ -16,7 +20,7 @@ Estas orientações destinam-se a Codex e outros agentes que trabalhem neste rep
 
 **Restrições MYCT-4:** não compartilhar senha/cofre/token com agentes, não automatizar desbloqueio após reboot, não criar/reinicializar coleção ou relaxar verificação do GNOME Keyring interno/hash. Preservar SSH, SELinux, systemd, PostgreSQL e Narys sem novas mudanças não autorizadas. Os PRs #13 e #14 foram integrados à `main`; sem repetição automática dos testes físicos já aceitos.
 
-**MYCT-5A integrada e aceita:** HTTP(S) via CLI C++20/curl e unidades transitórias do systemd de usuário; testes Fedora aprovados. O proprietário comprovou continuação após sair do SSH e fechar o app, com arquivo de 262144 bytes e SHA-256 idêntico à fixture. Ver [relatório MYCT-5A](docs/MYCT-5A-DOWNLOADS-REPORT.md). Torrent e rotinas servidor-side continuam não implementadas. Lag Android, UX rígida, retorno ao topo em navegação SFTP e teste de transferência em background são dívidas da [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9), **adiadas** até solicitação específica. Engenharia proporcional à utilidade real, sem superdimensionar controles para produto comercial.
+**MYCT-5A integrada e aceita:** HTTP(S) via CLI C++20/curl e unidades transitórias do systemd de usuário; testes Fedora aprovados. O proprietário comprovou continuação após sair do SSH e fechar o app, com arquivo de 262144 bytes e SHA-256 idêntico à fixture. Ver [relatório MYCT-5A](docs/MYCT-5A-DOWNLOADS-REPORT.md). BitTorrent foi acrescentado na candidata MYCT-5C, conforme estado acima; rotinas servidor-side continuam não implementadas. Lag Android, UX rígida, retorno ao topo em navegação SFTP e teste de transferência em background são dívidas da [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9), **adiadas** até solicitação específica. Engenharia proporcional à utilidade real, sem superdimensionar controles para produto comercial.
 
 **MYCT-5B integrada com aceite parcial:** PR #16 mesclado em 16/10/2026.
 Quinta aba Downloads via SSH/CLI, APK `0.5.2-downloads` (code 9).

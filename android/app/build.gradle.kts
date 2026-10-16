@@ -10,8 +10,8 @@ android {
         applicationId = "dev.myct"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.5.3-torrents"
+        versionCode = 11
+        versionName = "0.5.4-torrents"
     }
     buildFeatures { compose = true }
     compileOptions {
