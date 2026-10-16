@@ -47,6 +47,10 @@ class FilesModel(private val app: Application) {
     internal fun scrollPosition(path: String): FilesScrollAnchor? = scrollHistory[path]
     private var control by mutableStateOf<TransferControl?>(null)
     val busy get() = control != null
+    // Display preference only; SFTP still lists all entries and never changes server files.
+    var showHiddenFiles by mutableStateOf(false)
+        private set
+    fun toggleHiddenFiles() { showHiddenFiles = !showHiddenFiles }
     var status by mutableStateOf(FileStatus())
         private set
     var listing by mutableStateOf<RemoteListing?>(null)
