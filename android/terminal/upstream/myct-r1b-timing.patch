@@ -2,8 +2,7 @@ diff --git a/android/terminal/src/main/java/com/termux/view/TerminalView.java b/
 index f47c28a..d9eaa02 100644
 --- a/android/terminal/src/main/java/com/termux/view/TerminalView.java
 +++ b/android/terminal/src/main/java/com/termux/view/TerminalView.java
-@@ -336,6 +336,14 @@ public final class TerminalView extends View {
- 
+@@ -337,4 +337,12 @@ public final class TerminalView extends View {
              @Override
              public boolean finishComposingText() {
 +                long started = performanceStart();
@@ -16,9 +15,7 @@ index f47c28a..d9eaa02 100644
 +            private boolean finishComposingTextInternal() {
                  if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) mClient.logInfo(LOG_TAG, "IME: finishComposingText()");
                  super.finishComposingText();
- 
-@@ -346,6 +354,14 @@ public final class TerminalView extends View {
- 
+@@ -347,4 +355,12 @@ public final class TerminalView extends View {
              @Override
              public boolean commitText(CharSequence text, int newCursorPosition) {
 +                long started = performanceStart();
@@ -31,9 +28,7 @@ index f47c28a..d9eaa02 100644
 +            private boolean commitTextInternal(CharSequence text, int newCursorPosition) {
                  if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) {
                      mClient.logInfo(LOG_TAG, "IME: commitText(\"" + text + "\", " + newCursorPosition + ")");
-                 }
-@@ -361,6 +377,14 @@ public final class TerminalView extends View {
- 
+@@ -362,4 +378,12 @@ public final class TerminalView extends View {
              @Override
              public boolean deleteSurroundingText(int leftLength, int rightLength) {
 +                long started = performanceStart();
@@ -46,9 +41,7 @@ index f47c28a..d9eaa02 100644
 +            private boolean deleteSurroundingTextInternal(int leftLength, int rightLength) {
                  if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) {
                      mClient.logInfo(LOG_TAG, "IME: deleteSurroundingText(" + leftLength + ", " + rightLength + ")");
-                 }
-@@ -452,7 +476,27 @@ public final class TerminalView extends View {
-         return mEmulator == null ? 1 : mEmulator.getScreen().getActiveRows() + mTopRow - mEmulator.mRows;
+@@ -453,5 +477,25 @@ public final class TerminalView extends View {
      }
  
 +    private long mPendingScreenUpdateAt;
@@ -74,9 +67,7 @@ index f47c28a..d9eaa02 100644
 +    private void updateScreenInternal() {
          if (mEmulator == null) return;
  
-         int rowsInHistory = mEmulator.getScreen().getActiveTranscriptRows();
-@@ -752,6 +796,16 @@ public final class TerminalView extends View {
-      */
+@@ -753,4 +797,14 @@ public final class TerminalView extends View {
      @Override
      public boolean onKeyDown(int keyCode, KeyEvent event) {
 +        long started = performanceStart();
@@ -91,9 +82,7 @@ index f47c28a..d9eaa02 100644
 +    private boolean onKeyDownInternal(int keyCode, KeyEvent event) {
          if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
              mClient.logInfo(LOG_TAG, "onKeyDown(keyCode=" + keyCode + ", isSystem()=" + event.isSystem() + ", event=" + event + ")");
-         if (mEmulator == null) return true;
-@@ -987,6 +1041,16 @@ public final class TerminalView extends View {
- 
+@@ -988,4 +1042,14 @@ public final class TerminalView extends View {
      @Override
      protected void onDraw(Canvas canvas) {
 +        long started = performanceStart();
@@ -108,13 +97,11 @@ index f47c28a..d9eaa02 100644
 +    private void drawTerminalInternal(Canvas canvas) {
          if (mEmulator == null) {
              canvas.drawColor(0XFF000000);
-         } else {
 diff --git a/android/terminal/src/main/java/com/termux/view/TerminalViewClient.java b/android/terminal/src/main/java/com/termux/view/TerminalViewClient.java
 index d6b49b8..f68446f 100644
 --- a/android/terminal/src/main/java/com/termux/view/TerminalViewClient.java
 +++ b/android/terminal/src/main/java/com/termux/view/TerminalViewClient.java
-@@ -65,6 +65,13 @@ public interface TerminalViewClient {
- 
+@@ -66,4 +66,11 @@ public interface TerminalViewClient {
      void onEmulatorSet();
  
 +    // My-CT: bounded, opt-in numerical diagnostics. No text or key codes cross these hooks.
@@ -126,4 +113,3 @@ index d6b49b8..f68446f 100644
 +
  
      void logError(String tag, String message);
- 
