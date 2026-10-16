@@ -54,27 +54,35 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
     var link by remember { mutableStateOf<RemoteEntry?>(null) }
     val listing = model.listing
     val status = model.status
-    // A state born at its saved anchor avoids briefly drawing the top of the new folder.
-    val listState = key(listing?.path) {
+    val showHidden = model.showHiddenFiles
+    val visibleEntries = remember(listing?.entries, showHidden) {
+        visibleSftpEntries(listing?.entries.orEmpty(), showHidden)
+    }
+    // Key by directory and visibility: never draw an old scroll index in a filtered list.
+    val listState = key(listing?.path, showHidden) {
         val saved = listing?.let { model.scrollPosition(it.path) }
         rememberLazyListState(
-            initialFirstVisibleItemIndex = saved?.restoredIndex(listing?.entries.orEmpty()) ?: 0,
+            initialFirstVisibleItemIndex = saved?.restoredIndex(visibleEntries) ?: 0,
             initialFirstVisibleItemScrollOffset = saved?.offset ?: 0
         )
     }
-    fun openDirectory(path: String) {
+    fun saveScroll() {
         listing?.let { current ->
-            model.rememberScroll(current.path, current.entries,
+            model.rememberScroll(current.path, visibleEntries,
                 listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
         }
+    }
+    fun openDirectory(path: String) {
+        saveScroll()
         model.load(path)
     }
-    DisposableEffect(model, listing?.path) {
+    DisposableEffect(model, listing?.path, showHidden) {
         val current = listing
+        val currentEntries = visibleEntries
         onDispose {
             // Navigating already saved the old folder; avoid storing a clamped new-list position.
             if (current != null && model.listing?.path == current.path) {
-                model.rememberScroll(current.path, current.entries,
+                model.rememberScroll(current.path, currentEntries,
                     listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
             }
         }
@@ -97,6 +105,17 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
                 TextButton(enabled = !model.busy && listing != null, onClick = {
                     if (model.beginUploadSelection()) upload.launch(arrayOf("*/*"))
                 }) { Text("Enviar…") }
+            }
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                TextButton(onClick = { saveScroll(); model.toggleHiddenFiles() }) {
+                    Text(if (showHidden) "Ocultar arquivos ."
+                        else "Mostrar arquivos .")
+                }
+                listing?.let {
+                    Text("${visibleEntries.size} de ${it.entries.size} itens",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             Text("Com notificações permitidas, a transferência continua em segundo plano enquanto o serviço e a rede permanecerem ativos. Sem serviço, mantenha o app visível. Sem retomada automática.",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -126,7 +145,7 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
                 }) { Text("Abrir arquivo baixado") }
             }
             LazyColumn(Modifier.weight(1f), state = listState) {
-                items(listing?.entries ?: emptyList(), key = { it.name }) { entry ->
+                items(visibleEntries, key = { it.name }) { entry ->
                     ListItem(headlineContent = { Text(entry.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
                         supportingContent = {
                             Text("${when (entry.kind) { RemoteKind.DIRECTORY -> "Pasta"; RemoteKind.LINK -> "Link simbólico"; RemoteKind.FILE -> "Arquivo · ${formatFileSize(entry.size)}"; RemoteKind.OTHER -> "Tipo especial (sem transferência)" }} · ${dateFormat.format(Date(entry.modified * 1000))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
