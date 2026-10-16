@@ -22,7 +22,7 @@ O diagnóstico MYCT-1P classificou a causa do lag como **não identificada**. A 
 
 - Adicionadas duas métricas numéricas efêmeras em `Opções → Medições locais`: duração **write+flush** por ação de envio, e duração **append** do emulador por bloco recebido (média/máximo), ambas reiniciadas em nova tentativa de conexão.
 - As métricas anteriores de espera na fila IO e espera para a thread main permanecem. A medição **não** cobre RTT/eco, bytes aguardando no pipe, quadros efetivamente desenhados, nem o tempo interno do teclado Android. Não corresponde a latência ponta a ponta.
-- Não alterar batching de teclado, TCP_NODELAY, motor JSch, callbacks/renderer, nem inserir eco local até haver diferença física reproduzível. Não registrar conteúdo ou segredo no diagnóstico.
+- A primeira candidata acrescentou somente medição. A continuação autorizada pelo proprietário implementa as otimizações pontuais abaixo; TCP_NODELAY, JSch, renderer e eco remoto preservados. Não registrar conteúdo ou segredo no diagnóstico.
 
 ## Experimento físico mínimo
 
@@ -32,4 +32,87 @@ O diagnóstico MYCT-1P classificou a causa do lag como **não identificada**. A 
 4. Arquivos: em pasta com muitos itens, rolar até o meio, abrir subpasta, tocar `↑ Pai`; verificar item e deslocamento aproximado. Repetir com alternância de abas e atualização; nova sessão pode começar no topo.
 5. Confirmar que terminal, Ctrl-C, tmux, arquivo simples e SFTP continuam utilizáveis.
 
-**Estado:** implementação remota para revisão; Kotlin completo e APK não compilados neste ambiente. Não foi feito teste físico. **Não fazer merge nem declarar R-01/R-02 concluídos** sem revisão, build e teste no Moto.
+## R-01 — candidata de otimização 0.5.7 (code 14)
+
+Partida: branch `myct-r1-terminal-files`, HEAD `e9cbd65`, Git limpo e
+sincronizado após fetch. PR #22 aberto como draft. Nenhuma instalação de
+bibliotecas, alteração de Fedora ou coleta de conteúdo.
+
+Hipóteses, mudanças e provas mínimas:
+
+| Custo demonstrável no código | Mudança | Prova / limite |
+| --- | --- | --- |
+| Cada codepoint passa por char[], Strings, UTF-8 e cópia defensiva | `TerminalSession.writeCodePoint` codifica em um único byte[] de propriedade do transporte | Teste de limites UTF-8, acentos, combinante, emoji, Alt e inválidos; não mede GC no Moto |
+| Um commit da IME gera uma ação por codepoint, pressionando a fila limitada a 64 ações | Escopo síncrono em `sendTextToTerminal`: combina texto já disponível na mesma chamada; descarrega ao retornar ou após ~4 KiB | Fixture de 110 codepoints passa de 110 envios a 1; não espera próximo evento/frame/timer. Não elimina o limite para commits enormes ou escritor bloqueado |
+| Enter/DEL/controles não podem ficar retidos pelo escopo | Descarrega texto anterior antes de enviar controle, Escape/Alt ou sequência mapeada | Testes verificam entrega antes de `endInputEvent` e ordem byte a byte; exclusões IME continuam pelo KeyEvent upstream |
+| Cópia de cada bloco recebido antes de `withContext(Main)` que já aguarda append | `append(bytes, count)` consome o buffer reutilizado antes da próxima leitura | Teste com UTF-8 repartido entre leituras e cauda não utilizada; emulador continua exclusivamente na main |
+| Fechar Opções reinicia InputConnection mesmo sem mudar preferência | `restartInput` somente se o valor aplicado difere do escolhido | Inspeção do efeito; confirmação de composição/foco no Moto pendente |
+
+Não há nova coroutine por tecla, atraso deliberado, eco local ou mudança na
+escrita JSch: um escritor mantém ordem e `write+flush` por ação. JSch já usa
+TCP_NODELAY no caminho direto conforme MYCT-1P. A sincronização IO→main foi
+preservada: removê-la exigiria outra estratégia de propriedade/backpressure,
+sem evidência física que justifique esse risco. `TerminalCallbacks` não registra
+conteúdo; o parser/renderer e as transformações por codepoint da view são
+preservados, inclusive LF→CR, Ctrl, Shift e os caminhos de composição upstream.
+Não há afirmação de que a causa principal do lag tenha sido isolada.
+
+R-02/R-02b não foram reimplementados. Testes existentes de filtro/âncora fazem
+parte da validação; aparência e ausência de salto continuam dependentes do Moto.
+
+## Validação desta candidata
+
+Comando executado, sem instalar dependências:
+
+```sh
+JAVA_HOME=/opt/android-studio/jbr ANDROID_HOME=/home/sam/Android/Sdk \
+  android/gradlew -p android :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --offline --console=plain
+python3 android/terminal/upstream/verify.py
+git diff --check
+```
+
+- Build completo: **SUCCESS**, 1m54s; JVM: **98 testes, 97 aprovados, 1 ignorado**
+  (handshake SSH local opt-in), zero falhas. Adaptador: 8; âncoras/filtro SFTP: 5.
+- Lint: **0 erros, 2 avisos de versões e 1 hint** preexistente em TorrentsScreen.
+  Gradle também avisou pressão de metaspace ao finalizar; build passou com os
+  limites existentes, sem ajuste de recursos. `/usr/bin/time -v`: pico RSS
+  2.033 MiB, CPU acumulada 554s, zero swaps; custo do build, não do app no Moto.
+- Upstream: **21 arquivos verificados**, dois arquivos com patches documentados;
+  `myct-r1-ime.patch` aplica sobre a view com o patch clipboard MYCT-1R.
+- APK: [0.5.7-r1-terminal/code 14, pré-release candidata](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-r1-v0.5.7-rc1),
+  local `artifacts/myct-r1-0.5.7-debug.apk` (12.9 MiB). `applicationId=dev.myct`; `apksigner verify --print-certs` confirmou
+  assinatura idêntica ao APK 0.5.6 local: SHA-256 do certificado
+  `b788958be4c919889fc30813f13f1aceb5b6b69670514c82e16288f4b60b83b3`.
+  Atualização preserva dados/pins; não se verificou a instalação no aparelho.
+- SHA-256 do APK: `540277f0da8b919ddaba8cc9a979d24200317413a03d6f7885f733565b4aafe0`.
+- Sonda desktop existente (`bash android/diagnostics/run-component-probe.sh`),
+  uma execução após o build: ASCII mediana/p95 0,070/0,094 µs;
+  DEL 0,187/0,368 µs; pipe JSch 11,190/17,797 µs. Não compara builds A/B,
+  não inclui Android/IME/rede e não demonstra ganho perceptível.
+- Logs locais em `artifacts/myct-r1-validation/`, fora do Git; sem dados do terminal.
+  Os testes exercitam adaptador/parser e bytes sintéticos, **não** uma IME Android
+  real, socket autenticado ou rede Moto→Fedora.
+
+Nenhum Moto apareceu em
+`adb devices -l`; não houve instalação nem teste físico nesta execução.
+**Não declarar melhora perceptível, nem R-01/R-02 aceitos, antes do proprietário.**
+
+### Comparação física curta (proprietário)
+
+1. Atualizar por cima da instalação existente, sem desinstalar nem apagar dados.
+   Registrar teclado/versão e valor de Entrada por caracteres. Começar em false;
+   comparar true depois, sem mudar outras condições.
+2. Na mesma rede/Fedora, alternar candidata e Termux **via SSH**, com mesma IME,
+   fora do tmux primeiro. Três rodadas curtas: digitar continuamente uma frase
+   descartável, inserir espaços, apagar rápido/segurar Backspace, digitar
+   `ação`, acento composto e emoji. Conferir ausência de duplicação/perda.
+3. Em shell livre, executar `printf 'ok\\n'` e comandos comuns; observar Enter
+   imediato e Ctrl-C. Repetir em `nano` (buffer descartável, sair sem salvar) e
+   na sessão tmux escolhida pelo proprietário; conferir setas/Ctrl/Alt.
+4. Abrir/fechar Opções sem mudar IME, depois alternar true/false; conferir foco,
+   composição e teclado. Anotar percepção e métricas agregadas por conexão,
+   sem texto, senha ou saída privada. Máximos não equivalem a RTT/p95/E2E.
+5. Arquivos: pasta longa → subpasta → Pai; trocar aba e mostrar/ocultar dotfiles.
+   Confirmar posição, ausência de salto e acesso SFTP normal.
+
+PR #22 deve permanecer **draft**, issue #9 aberta e main sem merge.

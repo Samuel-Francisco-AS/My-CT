@@ -364,3 +364,12 @@ RPC do motor. Torrents/pastas antigos não são migrados. Atualizar APK sem
 desinstalar; mesma assinatura. Nomeação comprovada com 64 KiB no Fedora;
 **essa correção ainda precisa do aceite no Moto**. `.torrent` SAF continua adiado.
 [Relatório e atualização CLI/hook](../docs/MYCT-5C-BITTORRENT-REPORT.md).
+
+## MYCT-R1 — candidata de latência/arquivos
+
+APK `../artifacts/myct-r1-0.5.7-debug.apk`, **0.5.7-r1-terminal/code 14**,
+`dev.myct`, mesma assinatura debug conferida contra 0.5.6. Atualizar sem
+desinstalar/apagar dados. Otimiza codificação, commit síncrono IME e cópia na
+recepção; preserva preferência de entrada por caracteres. Build/JVM/lint offline
+aprovados, mas melhora perceptível e regressões IME/TUI/SFTP exigem Moto G06.
+[Relatório, artefato e roteiro físico](../docs/MYCT-R1-TERMINAL-FILES.md).

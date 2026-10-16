@@ -1,10 +1,10 @@
 {
-  "reason": "MYCT-1R: explicit user clipboard separated from OSC; mouse paste confirmation",
+  "reason": "MYCT-1R: explicit user clipboard separated from OSC; mouse paste confirmation; MYCT-R1: synchronous IME commit scope (no timer), immediate controls",
   "files": [
     {
       "local": "src/main/java/com/termux/view/TerminalView.java",
       "upstreamSha256": "8395c02329a36bdf9608e941349da50002d3a1dd6245cc289393a6a65e1a761a",
-      "patchedSha256": "9fb9b7ba22563ca7749fdca586924b4349ac888e4293d7ec021028f0bb5d3726"
+      "patchedSha256": "f22c6416abd1451a275cb0db827b571fe59d4cd181375f105f32c76574ae17d0"
     },
     {
       "local": "src/main/java/com/termux/view/textselection/TextSelectionCursorController.java",

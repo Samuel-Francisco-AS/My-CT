@@ -166,13 +166,13 @@ class TerminalModel(application: Application) {
                                 val count = current.input.read(bytes)
                                 if (count < 0) break
                                 if (count > 0) {
-                                    val chunk = bytes.copyOf(count)
                                     val queuedAt = System.nanoTime()
                                     withContext(Dispatchers.Main) {
                                         diagnostics.delivered(queuedAt)
                                         if (id == generation) {
                                             val started = System.nanoTime()
-                                            screen.append(chunk)
+                                            // withContext waits for append before this buffer is reused.
+                                            screen.append(bytes, count)
                                             diagnostics.appended(System.nanoTime() - started)
                                         }
                                     }

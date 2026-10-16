@@ -205,10 +205,12 @@ private fun TerminalApp(model: TerminalModel) {
             model.terminal?.let { session ->
                 var view by remember(session) { mutableStateOf<TerminalView?>(null) }
                 val fontPx = with(LocalDensity.current) { model.fontSizeSp.sp.toPx().roundToInt() }
+                var appliedCharBasedInput by remember(view) { mutableStateOf(model.enforceCharBasedInput) }
                 LaunchedEffect(view, model.enforceCharBasedInput, settings) {
-                    if (!settings) view?.let { terminalView ->
+                    if (!settings && appliedCharBasedInput != model.enforceCharBasedInput) view?.let { terminalView ->
                         terminalView.requestFocus()
                         (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).restartInput(terminalView)
+                        appliedCharBasedInput = model.enforceCharBasedInput
                     }
                 }
                 val clipboardActions = rememberUpdatedState(object : TerminalSession.UserClipboard {
