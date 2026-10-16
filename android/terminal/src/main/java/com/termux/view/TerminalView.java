@@ -336,6 +336,14 @@ public final class TerminalView extends View {
 
             @Override
             public boolean finishComposingText() {
+                long started = performanceStart();
+                try { return finishComposingTextInternal(); }
+                finally {
+                    if (started != 0) mClient.onInputTiming(0, started, System.nanoTime() - started, 0, 0);
+                }
+            }
+
+            private boolean finishComposingTextInternal() {
                 if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) mClient.logInfo(LOG_TAG, "IME: finishComposingText()");
                 super.finishComposingText();
 
@@ -346,6 +354,14 @@ public final class TerminalView extends View {
 
             @Override
             public boolean commitText(CharSequence text, int newCursorPosition) {
+                long started = performanceStart();
+                try { return commitTextInternal(text, newCursorPosition); }
+                finally {
+                    if (started != 0) mClient.onInputTiming(1, started, System.nanoTime() - started, 0, 0);
+                }
+            }
+
+            private boolean commitTextInternal(CharSequence text, int newCursorPosition) {
                 if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) {
                     mClient.logInfo(LOG_TAG, "IME: commitText(\"" + text + "\", " + newCursorPosition + ")");
                 }
@@ -361,6 +377,14 @@ public final class TerminalView extends View {
 
             @Override
             public boolean deleteSurroundingText(int leftLength, int rightLength) {
+                long started = performanceStart();
+                try { return deleteSurroundingTextInternal(leftLength, rightLength); }
+                finally {
+                    if (started != 0) mClient.onInputTiming(2, started, System.nanoTime() - started, leftLength, rightLength);
+                }
+            }
+
+            private boolean deleteSurroundingTextInternal(int leftLength, int rightLength) {
                 if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) {
                     mClient.logInfo(LOG_TAG, "IME: deleteSurroundingText(" + leftLength + ", " + rightLength + ")");
                 }
@@ -452,7 +476,27 @@ public final class TerminalView extends View {
         return mEmulator == null ? 1 : mEmulator.getScreen().getActiveRows() + mTopRow - mEmulator.mRows;
     }
 
+    private long mPendingScreenUpdateAt;
+    @Override
+    protected void onWindowVisibilityChanged(int visibility) {
+        super.onWindowVisibilityChanged(visibility);
+        mPendingScreenUpdateAt = 0; // Do not count time spent offscreen as foreground draw delay.
+    }
+
+    private long performanceStart() {
+        return mClient != null && mClient.shouldMeasurePerformance() ? System.nanoTime() : 0;
+    }
+
     public void onScreenUpdated() {
+        long started = performanceStart();
+        if (started != 0 && mPendingScreenUpdateAt == 0) mPendingScreenUpdateAt = started;
+        try { updateScreenInternal(); }
+        finally {
+            if (started != 0) mClient.onScreenUpdateTiming(started, System.nanoTime() - started);
+        }
+    }
+
+    private void updateScreenInternal() {
         if (mEmulator == null) return;
 
         int rowsInHistory = mEmulator.getScreen().getActiveTranscriptRows();
@@ -752,6 +796,16 @@ public final class TerminalView extends View {
      */
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        long started = performanceStart();
+        long age = started == 0 ? 0 : Math.max(0, SystemClock.uptimeMillis() - event.getEventTime()) * 1000000L;
+        try { return onKeyDownInternal(keyCode, event); }
+        finally {
+            if (started != 0) mClient.onKeyTiming(started, System.nanoTime() - started, age,
+                keyCode == KeyEvent.KEYCODE_DEL, event.getRepeatCount() > 0);
+        }
+    }
+
+    private boolean onKeyDownInternal(int keyCode, KeyEvent event) {
         if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
             mClient.logInfo(LOG_TAG, "onKeyDown(keyCode=" + keyCode + ", isSystem()=" + event.isSystem() + ", event=" + event + ")");
         if (mEmulator == null) return true;
@@ -987,6 +1041,16 @@ public final class TerminalView extends View {
 
     @Override
     protected void onDraw(Canvas canvas) {
+        long started = performanceStart();
+        long updateAt = mPendingScreenUpdateAt;
+        mPendingScreenUpdateAt = 0;
+        try { drawTerminalInternal(canvas); }
+        finally {
+            if (started != 0) mClient.onDrawTiming(started, System.nanoTime() - started, updateAt);
+        }
+    }
+
+    private void drawTerminalInternal(Canvas canvas) {
         if (mEmulator == null) {
             canvas.drawColor(0XFF000000);
         } else {

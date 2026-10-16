@@ -373,3 +373,11 @@ desinstalar/apagar dados. Otimiza codificação, commit síncrono IME e cópia n
 recepção; preserva preferência de entrada por caracteres. Build/JVM/lint offline
 aprovados, mas melhora perceptível e regressões IME/TUI/SFTP exigem Moto G06.
 [Relatório, artefato e roteiro físico](../docs/MYCT-R1-TERMINAL-FILES.md).
+
+MYCT-R1B: candidata **0.5.8-r1b-diagnostics/code 15**, atualizável sobre 0.5.7.
+O proprietário relatou ausência de melhora perceptível na 0.5.7. A nova versão
+acrescenta **Opções → Amostrar engasgos · 60 s** (opt-in); após reproduzir o
+sintoma, aguarde 60 s e abra **Medições locais**. Histogramas, frequências,
+profundidade e bins numéricos ajudam a distinguir fila/IME/draw; não medem RTT
+nem apresentação. Preserva política SSH, controles e SFTP. Detalhes e APK no
+[relatório MYCT-R1/R1B](../docs/MYCT-R1-TERMINAL-FILES.md).

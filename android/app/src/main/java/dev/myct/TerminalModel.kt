@@ -9,7 +9,6 @@ import androidx.compose.runtime.setValue
 import com.termux.terminal.KeyHandler
 import com.termux.terminal.TerminalSession
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
 import java.nio.CharBuffer
 import java.nio.charset.StandardCharsets
 
@@ -28,7 +27,7 @@ class TerminalModel(application: Application) {
         private set
     var ctrl by mutableStateOf(false)
         private set
-    val callbacks = SessionCallbacks()
+    val callbacks = SessionCallbacks { diagnostics }
     private val prefs = application.getSharedPreferences("ssh-pins", 0)
     var host by mutableStateOf(prefs.getString("last-host", "") ?: "")
     var port by mutableStateOf(prefs.getString("last-port", "22") ?: "22")
@@ -37,7 +36,8 @@ class TerminalModel(application: Application) {
         private set
     var fontSizeSp by mutableIntStateOf(prefs.getInt("font-size-sp", 12).coerceIn(10, 20))
         private set
-    val diagnostics = TerminalDiagnostics()
+    var diagnostics = TerminalDiagnostics()
+        private set
     val files = FilesModel(application)
     val health = HealthModel()
     val vault = VaultModel()
@@ -61,11 +61,7 @@ class TerminalModel(application: Application) {
     private var generation = 0
     private var connection: SshConnection? = null
     private var job: Job? = null
-    private var pending: Channel<Action>? = null
-    private sealed interface Action {
-        data class Write(val bytes: ByteArray, val queuedAt: Long = System.nanoTime()) : Action
-        data class Resize(val cols: Int, val rows: Int, val width: Int, val height: Int) : Action
-    }
+    private var pending: TerminalActionQueue? = null
     fun pinForHost(): String? = prefs.getString("pin:${host.trim()}:${port.toIntOrNull()}", null)
     fun forgetPin() {
         prefs.edit { remove("pin:${host.trim()}:${port.toIntOrNull()}") }
@@ -97,11 +93,12 @@ class TerminalModel(application: Application) {
             return
         }
         disconnect("Iniciando nova conexão.")
-        diagnostics.reset()
+        diagnostics = TerminalDiagnostics()
+        val metrics = diagnostics // A retiring connection cannot contaminate the next sample.
         val id = ++generation
         val current = SshConnection()
         connection = current
-        val queue = Channel<Action>(64)
+        val queue = TerminalActionQueue(metrics)
         pending = queue
         val pins = PinnedHostKeys(PinnedHostKeys.hostId(hostname, sshPort), expected)
         val buffer = StandardCharsets.UTF_8.encode(CharBuffer.wrap(password))
@@ -110,12 +107,12 @@ class TerminalModel(application: Application) {
         password.fill('\u0000')
         val screen = TerminalSession(object : TerminalSession.Transport {
             override fun send(data: ByteArray) {
-                if (id == generation && phase == Phase.CONNECTED && queue.trySend(Action.Write(data)).isFailure) {
+                if (id == generation && phase == Phase.CONNECTED && !queue.write(data)) {
                     disconnect("Entrada excedeu a fila; sessão encerrada para evitar travamento.")
                 }
             }
             override fun resize(columns: Int, rows: Int, widthPixels: Int, heightPixels: Int) {
-                if (id == generation && queue.trySend(Action.Resize(columns, rows, widthPixels, heightPixels)).isFailure) {
+                if (id == generation && !queue.resize(columns, rows, widthPixels, heightPixels)) {
                     disconnect("Não foi possível redimensionar; reconecte.")
                 }
             }
@@ -143,16 +140,10 @@ class TerminalModel(application: Application) {
                 coroutineScope {
                     val writer = launch(Dispatchers.IO) {
                         try {
-                            for (action in queue) when (action) {
-                                is Action.Write -> {
-                                    diagnostics.wrote(action.queuedAt)
-                                    val started = System.nanoTime()
-                                    current.output.write(action.bytes)
-                                    current.output.flush()
-                                    diagnostics.flushed(System.nanoTime() - started)
-                                }
-                                is Action.Resize -> current.resize(action.cols, action.rows, action.width, action.height)
-                            }
+                            queue.run(write = { bytes ->
+                                current.output.write(bytes)
+                                current.output.flush()
+                            }, resize = { cols, rows, width, height -> current.resize(cols, rows, width, height) })
                         } catch (error: Exception) {
                             // Unblock a concurrent blocking read immediately if writing fails.
                             current.close()
@@ -167,15 +158,17 @@ class TerminalModel(application: Application) {
                                 if (count < 0) break
                                 if (count > 0) {
                                     val queuedAt = System.nanoTime()
-                                    withContext(Dispatchers.Main) {
-                                        diagnostics.delivered(queuedAt)
+                                    val mainFinishedAt = withContext(Dispatchers.Main) {
+                                        metrics.record(TerminalDiagnostics.Stage.MAIN, queuedAt, System.nanoTime() - queuedAt)
                                         if (id == generation) {
                                             val started = System.nanoTime()
                                             // withContext waits for append before this buffer is reused.
                                             screen.append(bytes, count)
-                                            diagnostics.appended(System.nanoTime() - started)
+                                            metrics.record(TerminalDiagnostics.Stage.APPEND, started, System.nanoTime() - started)
                                         }
+                                        System.nanoTime()
                                     }
+                                    metrics.record(TerminalDiagnostics.Stage.READER, mainFinishedAt, System.nanoTime() - mainFinishedAt)
                                 }
                             }
                         }

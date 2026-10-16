@@ -316,6 +316,7 @@ private fun TerminalApp(model: TerminalModel) {
                     Row { Text("Proteger capturas", Modifier.weight(1f)); Switch(checked = model.protectScreenshots,
                         onCheckedChange = { if (it) model.setCaptureProtection(true) else captureWarning = true }) }
                     Text("O clipboard pertence ao Android e pode conter dados sensíveis.", style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { model.diagnostics.startSample(); settings = false }) { Text("Amostrar engasgos · 60 s") }
                     TextButton(onClick = { measurements = model.diagnostics.snapshot(); settings = false }) { Text("Medições locais") }
                     TextButton(onClick = { licenses = true; settings = false }) { Text("Licenças") }
                 }
@@ -345,7 +346,7 @@ private fun TerminalApp(model: TerminalModel) {
             }) { Text("Enviar") } }, dismissButton = { TextButton(onClick = { pendingPaste = null }) { Text("Cancelar") } })
     }
     measurements?.let { text -> AlertDialog(onDismissRequest = { measurements = null }, title = { Text("Diagnóstico sem conteúdo") },
-        text = { Text(text) }, confirmButton = { TextButton(onClick = { measurements = null }) { Text("Fechar") } }) }
+        text = { Text(text, Modifier.verticalScroll(rememberScrollState())) }, confirmButton = { TextButton(onClick = { measurements = null }) { Text("Fechar") } }) }
     if (forgetDialog) AlertDialog(onDismissRequest = { forgetDialog = false }, title = { Text("Refazer pareamento do host?") },
         text = { Text("Chave alterada pode indicar ataque. Remova o pin somente após confirmar a mudança diretamente no Fedora.") },
         confirmButton = { TextButton(onClick = { model.forgetPin(); fingerprint = ""; forgetDialog = false }) { Text("Remover pin") } },

@@ -20,6 +20,12 @@ adaptador My-CT independente que oferece à view a API mínima de sessão e
 encaminha bytes/resize ao SSH. Ele substitui o gerenciamento de subprocesso
 local do upstream, que não foi importado. `ByteQueue` também não foi importado.
 
+MYCT-R1B acrescenta `myct-r1b-timing.patch` sobre a base MYCT-R1, na view e
+na interface cliente, com hooks numéricos de IME/KeyEvent/atualização/draw.
+São inertes por padrão, ativados por amostra de 60 s no app; preservam os
+corpos originais de processamento. Verificador agora registra três arquivos
+upstream com patches explícitos.
+
 Preservar as licenças e avisos ao redistribuir. O APK inclui os avisos de
 terceiros em assets e permite lê-los na tela de conexão. Para atualizar o
 terminal, comparar segurança/API/licenças, fixar novo commit, regenerar o
