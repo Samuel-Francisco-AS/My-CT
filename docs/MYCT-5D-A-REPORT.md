@@ -18,7 +18,7 @@
 
 **Resultado:** MYCT-5D-A **PASS** no fluxo mínimo real Fedora → SSH → APK 0.5.5/code 12 → relatório/checksum. As capturas foram fornecidas na conversa de aceite e não são arquivos versionados no repositório. Não confundir este aceite com ensaio físico de todas as situações adversas, inspeção de torrents/HTTP individuais, hash de arquivo gigante ou cancelamento prolongado. Esses testes ampliados não são necessários para declarar concluído o recorte aprovado.
 
-**Fechamento autorizado:** integrar [PR #19](https://github.com/Samuel-Francisco-AS/My-CT/pull/19) à `main` e posteriormente sincronizar o checkout Fedora. Nenhum serviço, download em andamento, seeding, banco ou cofre será alterado pelo merge. **MYCT-5D-B (ClamAV) não iniciada** e requer autorização explícita. A issue #18 permanece aberta para 5D-B e opções futuras de recheck de peças; dívidas da #9 permanecem separadas.
+**Fechamento confirmado:** [PR #19](https://github.com/Samuel-Francisco-AS/My-CT/pull/19) integrada à `main` em `d5d7c78a1a598903433f009bcf755f0077b4ef7f`; sincronização e exclusão da branch local/remota cabem ao proprietário. Nenhum serviço, download em andamento, seeding, banco ou cofre será alterado pelo merge. **MYCT-5D-B (ClamAV) não iniciada** e requer autorização explícita. A issue #18 permanece aberta para 5D-B e opções futuras de recheck de peças; dívidas da #9 permanecem separadas.
 
 ---
 
@@ -164,4 +164,4 @@ remover apenas esse helper mediante decisão do proprietário; não há serviço
 8. Registrar versão, resultados e problemas. Não considerar esta candidata aceita
    fisicamente até o proprietário confirmar inspeção/comparação real no Moto.
 
-Retomada: MYCT-5D-A aceita fisicamente; PR #19 autorizado para merge à `main`. 5D-B, issue #9 e automações #4 continuam adiadas.
+Retomada: MYCT-5D-A aceita fisicamente; PR #19 integrado à `main`. 5D-B, issue #9 e automações #4 continuam adiadas.
