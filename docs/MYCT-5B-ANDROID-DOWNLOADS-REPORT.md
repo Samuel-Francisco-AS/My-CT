@@ -2,9 +2,56 @@
 
 15/10/2026. Branch `myct-5b-android-downloads`, criada após `git fetch origin main`
 com HEAD/base `a80813c6cdff0e6c91088699ec7b600d63725bf9` (PR #15 integrado).
-**Implementado e validado automaticamente; aceite físico no Moto G06 pendente.**
-Nenhum merge, instalação da CLI, deploy do Core ou alteração de serviços ativos.
+**Estado final em 16/10/2026: encerrada e integrada à `main` com aceite funcional parcial.**
+PR #16 mesclado no commit `83e053737ff782ecf523bf31776fec9da55889dd`.
+O histórico inicial de rascunho e das correções 0.5.1/0.5.2 permanece abaixo como
+evidência cronológica; suas menções a *pendente/sem merge* descrevem o estado
+**anterior ao fechamento**, não o estado vigente. Nenhum deploy do Core ou
+alteração de serviços, PostgreSQL, SSHD ou cofre foi realizado pelo assistente.
 
+## Fechamento e limite do aceite — 16/10/2026
+
+**Aceite confirmado pelo proprietário no Moto G06:**
+- A aba Downloads consultou o histórico real do Fedora e apresentou a conclusão
+  de `https://example.com/` (577 bytes) na integração Android.
+- Na versão 0.5.1, a edição de nome permaneceu focada e o teclado aberto ao
+  longo das atualizações automáticas de quatro segundos.
+- Na versão 0.5.2, o proprietário confirmou que **Baixar e Atualizar deixaram
+  de piscar** durante o polling. A versão final é `0.5.2-downloads`, code 9.
+
+**Validação automatizada reportada pelo Codex:** Android 58 PASS/1 teste
+opcional ignorado; lint sem erros (6 avisos de versões existentes). No ciclo
+inicial da MYCT-5B: servidor 11/11 e cofre offline 6/6 PASS. O assistente
+não repetiu builds ou provas físicas já aceitas neste fechamento.
+
+**Dívida física deliberadamente adiada por decisão do proprietário:**
+- Tocar em **Ver em Arquivos** e confirmar que abre o diretório correto no SFTP.
+- **Cancelar** uma transferência ativa no Android, confirmar estado e `.part`.
+- Recuperar o histórico após reconectar a sessão SSH especificamente na aba
+  Downloads, sem enviar novamente ações.
+- Clicar em **Baixar/Atualizar durante polling** no Moto, validando efeito dos
+  toques e ausência de envio duplicado (já coberto por testes JVM).
+- Verificar progresso visual durante uma transferência lenta/maior.
+
+Esses cenários **não foram aprovados fisicamente**. Foram registrados na
+[issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9) e na
+[trilha de refinamento](09-TRILHA-REFINAMENTO-ANDROID.md). A MYCT-5A
+permanece aceita separadamente: downloads independentes de SSH/app, com
+integridade por SHA-256. Não exigir repetição da MYCT-5A na retomada.
+
+**Artefato de uso:** [APK 0.5.2 e checksum](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5b-v0.5.2-rc1)
+(`1517811269a155b58caee045dc9e427b06d9e0b3d2cf870f1b67bf2646c49846`).
+Ele não é versionado no Git. O Fedora requer a CLI em
+`~/.local/bin/myct-download`; ela foi instalada manualmente pelo proprietário
+para os testes do Android, e sua cópia não é atualizada automaticamente por Git.
+
+**Integração:** PR #16 `myct-5b-android-downloads` → `main`, merge
+`83e053737ff782ecf523bf31776fec9da55889dd`. O Marco C da issue #4
+continua aberto (torrent/magnet, automações e demais melhorias futuras).
+Deletar a branch Git após sincronização não apaga o APK já instalado, os
+downloads, metadados, executáveis implantados ou dados privados.
+
+---
 ## Correção após feedback físico — 0.5.1-downloads / code 8
 
 [Comentário do proprietário na PR #16](https://github.com/Samuel-Francisco-AS/My-CT/pull/16#issuecomment-6203357697):
