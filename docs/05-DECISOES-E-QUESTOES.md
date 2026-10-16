@@ -192,3 +192,16 @@ preservado.
   durante `systemctl`; sem alterar motor, serviços instalados ou regras de rede.
 - Aceite físico MYCT-5B pendente no Moto; aceite MYCT-5A permanece válido.
   [Entrega e roteiro](MYCT-5B-ANDROID-DOWNLOADS-REPORT.md).
+
+## 2026-10-16 — MYCT-5B encerrada com aceite parcial
+
+- **DECIDIDO pelo proprietário:** integrar o PR #16 à `main` e adiar
+  validações físicas restantes, sem bloquear novas funcionalidades.
+- **Provas Moto G06:** histórico e download real na aba Downloads,
+  edição com foco/IME estável após 0.5.1 e botões sem piscadas na 0.5.2.
+- **Não provado no aparelho:** Ver em Arquivos, cancelar, reconectar e
+  recuperar histórico, clique durante polling, progresso lento. Testes
+  automatizados passam, mas não substituem os testes físicos; issue #9.
+- **Integração:** merge `83e053737ff782ecf523bf31776fec9da55889dd`.
+  PostgreSQL/Core/Cofre/serviços existentes não foram alterados.
+  [Relatório final](MYCT-5B-ANDROID-DOWNLOADS-REPORT.md).
