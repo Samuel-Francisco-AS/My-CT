@@ -87,7 +87,20 @@ private class BoundedDownloadOutput : OutputStream() {
 }
 /** Bounded, interruptible exec; closing it never closes the shared SSH session or Terminal PTY. */
 internal fun executeDownload(action: DownloadAction, open: () -> DownloadExec, timeoutMs: Long = 25000): String {
-    val command = downloadCommand(action)
+    return executeSshCommand(downloadCommand(action), open, timeoutMs) { status, reason ->
+        if (status == 127) DownloadFailure("CLI ausente ou sem permissão. Instale no Fedora, sem downloads ativos:\n$DOWNLOAD_INSTALL")
+        else DownloadFailure(when {
+            reason.contains("Outro download") -> "Já existe uma transferência ativa; não há fila. Aguarde ou cancele."
+            reason.contains("Nome inválido") -> "Nome inválido. Use até 120 letras ASCII, números, ponto, _ ou -, sem .part final."
+            reason.contains("Linger não") -> "A CLI informou linger indisponível. Consulte a documentação MYCT-5A com o proprietário."
+            action is DownloadAction.Start -> "Pedido recusado pela CLI. Confira URL HTTP/HTTPS pública, nome, DNS e conexão. Atualize antes de repetir."
+            else -> "Falha ao consultar/cancelar pela CLI. Confira SSH e permissões; atualize antes de repetir."
+        })
+    }
+}
+
+internal fun executeSshCommand(command: String, open: () -> DownloadExec, timeoutMs: Long = 25000,
+                               failure: (Int, String) -> DownloadFailure): String {
     val output = BoundedDownloadOutput(); val error = BoundedDownloadOutput()
     val deadline = System.nanoTime() + timeoutMs * 1_000_000
     open().use { channel ->
@@ -99,19 +112,7 @@ internal fun executeDownload(action: DownloadAction, open: () -> DownloadExec, t
             if (channel.done) break
             Thread.sleep(25)
         }
-        if (channel.exitStatus == 127) throw DownloadFailure("CLI ausente ou sem permissão. Instale no Fedora, sem downloads ativos:\n$DOWNLOAD_INSTALL")
-        if (channel.exitStatus != 0) {
-            // Never expose arbitrary stderr: it may contain a sensitive URL.
-            val reason = error.text()
-            val message = when {
-                reason.contains("Outro download") -> "Já existe uma transferência ativa; não há fila. Aguarde ou cancele."
-                reason.contains("Nome inválido") -> "Nome inválido. Use até 120 letras ASCII, números, ponto, _ ou -, sem .part final."
-                reason.contains("Linger não") -> "A CLI informou linger indisponível. Consulte a documentação MYCT-5A com o proprietário."
-                action is DownloadAction.Start -> "Pedido recusado pela CLI. Confira URL HTTP/HTTPS pública, nome, DNS e conexão. Atualize antes de repetir."
-                else -> "Falha ao consultar/cancelar pela CLI. Confira SSH e permissões; atualize antes de repetir."
-            }
-            throw DownloadFailure(message)
-        }
+        if (channel.exitStatus != 0) throw failure(channel.exitStatus, error.text())
         return output.text()
     }
 }

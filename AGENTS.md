@@ -1,4 +1,11 @@
 # AGENTS.md — colaboração segura no My-CT
+
+**MYCT-5C candidata (16/10/2026):** branch `myct-5c-bittorrent`, APK
+`0.5.3-torrents`/code 10, Downloads → HTTP/HTTPS | Torrents. Integração
+Transmission 4.1+ por SSH/CLI e RPC loopback preparada; **motor ausente,
+instalação/ativação e prova real Fedora/Moto pendentes**. Não declarar aceite
+nem ativar serviços sem autorização. Remoção preserva dados; seeding explícito;
+`.torrent` SAF complementar não implementado. [Relatório e retomada](docs/MYCT-5C-BITTORRENT-REPORT.md).
 Estas orientações destinam-se a Codex e outros agentes que trabalhem neste repositório. **Leia README.md e docs/04-PLANEJAMENTO-INAUGURAL.md antes de propor implementação.**
 
 ## Estado atual e retomada

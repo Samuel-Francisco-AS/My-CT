@@ -339,3 +339,12 @@ O aplicativo possui **Terminal | Arquivos | Saúde | Cofre**. Com SSH conectado,
 **Aceite físico em 15/10/2026:** proprietário instalou o APK atualizado sobre MYCT-3C, comprovou consulta de estado locked após reboot do Fedora, desbloqueou com sucesso pelo Moto G06 e utilizou credenciais do cofre para autenticar o Copilot CLI. PRs #13 e #14 mesclados à `main`. Não é necessário recompilar/instalar APK para consultas normais.
 
 O desbloqueio **não** é automático depois do reboot. Para operar, conectar Android via SSH, abrir Cofre, consultar estado e desbloquear quando for necessário. [Fechamento MYCT-4/4B](../docs/MYCT-4-FECHAMENTO-REPORT.md) · [Detalhes do protocolo e limites](../docs/MYCT-4B-ANDROID-VAULT.md).
+
+## MYCT-5C — candidata BitTorrent
+
+APK `0.5.3-torrents`/code 10 acrescenta **Downloads → Torrents**: magnet,
+consulta, pausa/retomada, remoção preservando dados e acesso SFTP. Exige
+Transmission 4.1+ e `~/.local/bin/myct-torrent` no Fedora; pacote/ativação ainda
+pendentes nesta candidata. Não houve validação física. Instalação manual,
+configuração loopback e roteiro no [relatório MYCT-5C](../docs/MYCT-5C-BITTORRENT-REPORT.md).
+HTTP/HTTPS e aceites anteriores permanecem nos registros próprios.

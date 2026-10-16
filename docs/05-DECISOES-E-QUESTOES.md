@@ -205,3 +205,17 @@ preservado.
 - **Integração:** merge `83e053737ff782ecf523bf31776fec9da55889dd`.
   PostgreSQL/Core/Cofre/serviços existentes não foram alterados.
   [Relatório final](MYCT-5B-ANDROID-DOWNLOADS-REPORT.md).
+
+## 16/10/2026 — MYCT-5C: Transmission e adaptador operacional mínimo
+
+Candidata na branch `myct-5c-bittorrent`, sem aceite físico/merge. Usar
+Transmission 4.1+ com JSON-RPC 2.0 somente loopback e unidade dedicada de usuário,
+sem API no Core nem pacote transmission-cli. Adaptador SSH `myct-torrent` em
+Python stdlib já presente: exceção pequena de linguagem para não acrescentar
+parser JSON/HTTP C++ ou biblioteca externa a um wrapper operacional. Backend
+principal/Core e motor HTTP continuam C++20. Metadados/resume pertencem ao
+Transmission. Diretório por hash sob `Downloads/My-CT/Torrents` evita colisões
+entre torrents distintos; remoção preserva dados. Seeding do motor é explícito
+na UI; não alterar limites silenciosamente. `.torrent` SAF fica complementar.
+Pacote/ativação ainda dependem do proprietário, sem prova real do motor.
+[Arquitetura, instalação, riscos e gates](MYCT-5C-BITTORRENT-REPORT.md).

@@ -42,6 +42,7 @@ class TerminalModel(application: Application) {
     val health = HealthModel()
     val vault = VaultModel()
     val downloads = DownloadsModel()
+    internal val torrents = TorrentsModel()
     var enforceCharBasedInput by mutableStateOf(prefs.getBoolean("char-based-input", true))
         private set
     fun setCharBasedInput(enabled: Boolean) {
@@ -133,7 +134,7 @@ class TerminalModel(application: Application) {
                 files.attach(current)
                 health.attach(current)
                 vault.attach(current)
-                downloads.attach(current)
+                downloads.attach(current); torrents.attach(current)
                 message = "SSH conectado · host verificado · PTY real"
                 // Apply actual view dimensions even if they were measured before channel.connect().
                 screen.requestPtyResize()
@@ -181,7 +182,7 @@ class TerminalModel(application: Application) {
             } finally {
                 secret.fill(0)
                 withContext(NonCancellable + Dispatchers.IO) { current.close() }
-                if (id == generation) { screen.finish(); connection = null; pending = null; ctrl = false; files.attach(null); health.attach(null); vault.attach(null); downloads.attach(null) }
+                if (id == generation) { screen.finish(); connection = null; pending = null; ctrl = false; files.attach(null); health.attach(null); vault.attach(null); downloads.attach(null); torrents.attach(null) }
             }
         }
     }
@@ -189,7 +190,7 @@ class TerminalModel(application: Application) {
     fun disconnect(reason: String = "Sessão encerrada. Você pode reconectar.") {
         files.attach(null)
         health.attach(null)
-        vault.attach(null); downloads.attach(null)
+        vault.attach(null); downloads.attach(null); torrents.attach(null)
         generation++
         val old = connection
         connection = null
@@ -202,7 +203,7 @@ class TerminalModel(application: Application) {
         if (old != null) scope.launch(Dispatchers.IO) { old.close() }
     }
     private fun updatePhase(value: Phase) {
-        if (value != Phase.CONNECTED) { health.attach(null); vault.attach(null); downloads.attach(null) }
+        if (value != Phase.CONNECTED) { health.attach(null); vault.attach(null); downloads.attach(null); torrents.attach(null) }
         phase = value
         onConnectionStateChanged?.invoke()
     }

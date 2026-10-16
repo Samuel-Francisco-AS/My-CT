@@ -164,7 +164,7 @@ private fun TerminalApp(model: TerminalModel) {
                 }) { Text(if (selectedTab == index) "● $label" else label) }
             }
         }
-        if (selectedTab == 4) DownloadsScreen(model.downloads, model.files.busy, { path ->
+        if (selectedTab == 4) DownloadsScreen(model.downloads, model.torrents, model.files.busy, { path ->
             if (!model.files.busy && connected) { model.files.load(path); selectedTab = 1 }
         }, Modifier.weight(1f))
         else if (selectedTab == 3) VaultScreen(model.vault, Modifier.weight(1f))

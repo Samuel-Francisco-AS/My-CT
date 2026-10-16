@@ -43,12 +43,16 @@ class SshConnection {
         }
     }
 
-    internal fun downloads(action: DownloadAction): String = executeDownload(action, {
+    internal fun downloads(action: DownloadAction): String = executeDownload(action, { openDownloadExec() })
+
+    internal fun torrents(action: TorrentAction): String = executeTorrent(action, { openDownloadExec() })
+
+    private fun openDownloadExec(): DownloadExec {
         val channel = synchronized(downloadChannels) {
             check(!closed && session?.isConnected == true)
             (session!!.openChannel("exec") as ChannelExec).also { downloadChannels.add(it) }
         }
-        object : DownloadExec {
+        return object : DownloadExec {
             override fun connect(command: String, output: OutputStream, error: OutputStream) {
                 channel.setCommand(command)
                 channel.setOutputStream(output)
@@ -63,7 +67,7 @@ class SshConnection {
                 synchronized(downloadChannels) { downloadChannels.remove(channel) }
             }
         }
-    })
+    }
 
     /** Separate interactive SSH shell: keeps password off the ordinary PTY and argv. */
     internal fun openVaultUnlock(): VaultUnlockChannel {
