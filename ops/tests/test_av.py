@@ -47,6 +47,38 @@ class AntivirusContract(unittest.TestCase):
         self.assertEqual(av.classify(raw(2, "LibClamAV Error: cli_loaddb: Malformed database"))[0], 'UNAVAILABLE')
         self.assertEqual(av.classify(raw(2, 'ERROR: stdin read failed'))[0], 'ERROR')
 
+    def test_execution_diagnostics_are_specific_but_do_not_reclassify_errors(self):
+        cases = (
+            ("LibClamAV Warning: fmap: map allocation failed\nstdin: Memory allocation error ERROR", "memória"),
+            ("Cannot allocate memory", "memória"),
+            ("No space left on device", "espaço ou cota"),
+            ("Disk quota exceeded", "espaço ou cota"),
+            ("File size limit exceeded", "limite de tamanho"),
+            ("CRITICAL: fmap() failed", "causa específica não foi identificada"),
+            ("Can't write to temporary directory", "espaço e permissões"),
+            ("Can't write to /synthetic/private.tmp", "espaço e permissões"),
+            ("unknown failure", "causa não foi identificada"),
+        )
+        for text, expected in cases:
+            with self.subTest(text=text):
+                state, detections, message = av.classify(raw(2, text))
+                self.assertEqual(state, 'ERROR')
+                self.assertIn(expected, message)
+                self.assertIn('exit_code=2', message)
+                self.assertEqual(detections, [])
+
+    def test_diagnostics_do_not_expose_log_paths_or_override_partial_detections(self):
+        private = '/home/synthetic/private-video-name.mkv'
+        state, _, message = av.classify(raw(2, "Can't open " + private + " for writing"))
+        self.assertEqual(state, 'ERROR'); self.assertNotIn(private, message)
+        self.assertNotIn('private-video-name', message)
+        text = 'stdin: Eicar partial FOUND\nstdin: Heuristics.Limits.Exceeded.MaxScanSize FOUND\nCannot allocate memory'
+        state, detections, _ = av.classify(raw(2, text))
+        self.assertEqual(state, 'INCOMPLETE'); self.assertEqual(detections, ['Eicar partial'])
+        self.assertEqual(av.classify(raw(2, 'Cannot allocate memory', reason='cancelled'))[0], 'INCOMPLETE')
+        self.assertEqual(av.classify(raw(-1, 'Cannot allocate memory', signal=9))[0], 'INCOMPLETE')
+        self.assertEqual(av.classify(raw(2, 'cli_loaddb: Cannot allocate memory'))[0], 'UNAVAILABLE')
+
     def test_lock_prevents_scan_update_overlap(self):
         with tempfile.TemporaryDirectory() as d, patch.object(av, 'STATE', Path(d)):
             with av.locked():

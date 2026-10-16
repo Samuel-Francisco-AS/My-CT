@@ -271,3 +271,17 @@ entradas preservados; aceitar o pedido não promete inspeção completa. Teste r
 80 MiB CLEAN, ~22,33 s e ~1,01 GiB RSS; ZIP excedente INCOMPLETE. Timer já ativado
 e validado pelo proprietário, confirmado ativo e sem alteração nesta correção.
 [Detalhes e comando para atualizar somente o worker](MYCT-5D-B1-REPORT.md).
+
+## 2026-10-16 — MYCT-5D-B2: relatório Android e assinaturas em Opções
+
+Integrar só o contrato B1 via exec SSH existente. Leitor bruto preserva JSON em
+exit 1 sem alterar política de erro dos consumidores anteriores; stdin aberto
+somente no scan. Cancelamento por EOF/exec, sem encerrar sessão compartilhada.
+SHA-256 e antivírus são ações/relatórios distintos no mesmo diálogo; sem scan
+automático. Limite local inclusivo de 2000000000 bytes é preflight; CLI decide.
+Assinaturas em uma seção dentro de Opções com retorno ao menu, preservando cinco
+abas e evitando diálogo único excessivamente longo. STATUS/UPDATE_STATUS são
+consultas; UPDATE só por botão. Pedido aceito não é sucesso: consultar resultado
+real, polling 2 s apenas em execução/seção visível, sem replay ao reabrir.
+Motor/timer Fedora intactos. APK 0.5.6/code 13 candidato, aceite Moto pendente.
+[Implementação, testes e limites](MYCT-5D-B2-REPORT.md).

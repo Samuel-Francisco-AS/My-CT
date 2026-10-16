@@ -50,6 +50,7 @@ class FilesModel(private val app: Application) {
         if (!busy) transferPrefs.edit { putBoolean("unfinished", false) }
     }
 
+    internal val antivirus = AntivirusScanModel()
     private var inspectionGeneration = 0
     private var inspectionJob: Job? = null
     internal var inspection by mutableStateOf<FileInspection?>(null)
@@ -61,6 +62,7 @@ class FilesModel(private val app: Application) {
     var inspectionMessage by mutableStateOf("")
         private set
     fun closeInspection() {
+        antivirus.clear()
         inspectionGeneration++
         inspectionJob?.cancel(); inspectionJob = null
         inspecting = false; inspectionVisible = false; inspection = null
@@ -70,6 +72,7 @@ class FilesModel(private val app: Application) {
         val ssh = connection ?: return
         if (busy || inspecting || choice.epoch != epoch) return
         downloadChoice = null
+        antivirus.select(choice.path, choice.entry.size)
         inspection = null; inspectionVisible = true; inspecting = true
         inspectionMessage = "Calculando no Fedora… Mantenha o app visível. Arquivos grandes podem demorar."
         val id = epoch
@@ -77,7 +80,7 @@ class FilesModel(private val app: Application) {
         inspectionJob = scope.launch {
             try {
                 val result = runInterruptible(Dispatchers.IO) { ssh.inspectFile(choice.path) }
-                if (id == epoch && generation == inspectionGeneration) { inspection = result; inspectionMessage = "Inspeção concluída." }
+                if (id == epoch && generation == inspectionGeneration) { inspection = result; antivirus.select(choice.path, result.bytes); inspectionMessage = "Inspeção concluída." }
             } catch (_: CancellationException) {
             } catch (error: Exception) {
                 if (id == epoch && generation == inspectionGeneration) inspectionMessage = (error as? DownloadFailure)?.safeMessage
@@ -93,6 +96,7 @@ class FilesModel(private val app: Application) {
         control = null
         epoch++
         connection = value
+        antivirus.attach(value)
         listing = null
         uploadChoice = null; downloadChoice = null; uploadDestination = null; completedDownload = null
         status = FileStatus(message = if (value == null) "SSH desconectado. Reconecte manualmente." else "Abra Arquivos para listar o diretório inicial.")
@@ -137,6 +141,7 @@ class FilesModel(private val app: Application) {
     }
     fun onBackground() {
         background = true
+        antivirus.cancel("Análise cancelada ao sair do app. Inicie novamente manualmente.")
         if (inspecting) {
             inspectionGeneration++
             inspectionJob?.cancel(); inspecting = false

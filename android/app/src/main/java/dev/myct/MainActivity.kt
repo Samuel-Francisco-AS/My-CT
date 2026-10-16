@@ -286,29 +286,40 @@ private fun TerminalApp(model: TerminalModel) {
             }
         }
     }
-    if (settings) AlertDialog(onDismissRequest = { settings = false }, title = { Text("Terminal") }, text = {
-        Column(Modifier.verticalScroll(rememberScrollState())) {
-            Row {
-                Text("Manter conexão ativa", Modifier.weight(1f))
-                Switch(checked = model.backgroundEnabled, enabled = connected,
-                    onCheckedChange = { if (it) activity.enablePersistentConnection() else activity.stopPersistentConnection() })
+    if (settings) {
+        var antivirusOptions by remember { mutableStateOf(false) }
+        AlertDialog(onDismissRequest = { settings = false }, title = { Text("Opções") }, text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                if (antivirusOptions) {
+                    TextButton(onClick = { antivirusOptions = false }) { Text("← Voltar às opções") }
+                    AntivirusSignaturesSection(model.antivirusSignatures)
+                } else {
+                    TextButton(onClick = { antivirusOptions = true }) { Text("Antivírus e assinaturas") }
+                    HorizontalDivider()
+                    Text("Terminal", style = MaterialTheme.typography.titleMedium)
+                    Row {
+                        Text("Manter conexão ativa", Modifier.weight(1f))
+                        Switch(checked = model.backgroundEnabled, enabled = connected,
+                            onCheckedChange = { if (it) activity.enablePersistentConnection() else activity.stopPersistentConnection() })
+                    }
+                    Text("Ative após conectar. Há notificação com Desconectar. Desativar encerra SSH. Force-stop, morte do processo, reboot ou perda de rede exigem autenticar novamente.", style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { tmuxHelp = true; settings = false }) { Text("Recuperar trabalho · tmux") }
+                    Text("Fonte: ${model.fontSizeSp} sp")
+                    Row {
+                        Text("Entrada por caracteres", Modifier.weight(1f))
+                        Switch(checked = model.enforceCharBasedInput, onCheckedChange = { model.setCharBasedInput(it) })
+                    }
+                    Text("Altera como o teclado Android envia texto ao terminal. Experimente desativar se perceber atraso ao digitar. O resultado pode variar conforme o teclado.", style = MaterialTheme.typography.bodySmall)
+                    Row { TextButton(onClick = { model.changeFont(-1) }) { Text("A−") }; TextButton(onClick = { model.changeFont(1) }) { Text("A+") } }
+                    Row { Text("Proteger capturas", Modifier.weight(1f)); Switch(checked = model.protectScreenshots,
+                        onCheckedChange = { if (it) model.setCaptureProtection(true) else captureWarning = true }) }
+                    Text("O clipboard pertence ao Android e pode conter dados sensíveis.", style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { measurements = model.diagnostics.snapshot(); settings = false }) { Text("Medições locais") }
+                    TextButton(onClick = { licenses = true; settings = false }) { Text("Licenças") }
+                }
             }
-            Text("Ative após conectar. Há notificação com Desconectar. Desativar encerra SSH. Force-stop, morte do processo, reboot ou perda de rede exigem autenticar novamente.", style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = { tmuxHelp = true; settings = false }) { Text("Recuperar trabalho · tmux") }
-            Text("Fonte: ${model.fontSizeSp} sp")
-            Row {
-                Text("Entrada por caracteres", Modifier.weight(1f))
-                Switch(checked = model.enforceCharBasedInput, onCheckedChange = { model.setCharBasedInput(it) })
-            }
-            Text("Altera como o teclado Android envia texto ao terminal. Experimente desativar se perceber atraso ao digitar. O resultado pode variar conforme o teclado.", style = MaterialTheme.typography.bodySmall)
-            Row { TextButton(onClick = { model.changeFont(-1) }) { Text("A−") }; TextButton(onClick = { model.changeFont(1) }) { Text("A+") } }
-            Row { Text("Proteger capturas", Modifier.weight(1f)); Switch(checked = model.protectScreenshots,
-                onCheckedChange = { if (it) model.setCaptureProtection(true) else captureWarning = true }) }
-            Text("O clipboard pertence ao Android e pode conter dados sensíveis.", style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = { measurements = model.diagnostics.snapshot(); settings = false }) { Text("Medições locais") }
-            TextButton(onClick = { licenses = true; settings = false }) { Text("Licenças") }
-        }
-    }, confirmButton = { TextButton(onClick = { settings = false }) { Text("Fechar") } })
+        }, confirmButton = { TextButton(onClick = { settings = false }) { Text("Fechar") } })
+    }
     if (tmuxHelp) AlertDialog(onDismissRequest = { tmuxHelp = false }, title = { Text("Trabalho persistente no Fedora") },
         text = { Column(Modifier.verticalScroll(rememberScrollState())) {
             Text("Requer tmux no host. No prompt de shell vazio do Fedora, cole e execute manualmente:")

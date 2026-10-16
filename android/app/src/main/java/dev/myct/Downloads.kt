@@ -101,6 +101,14 @@ internal fun executeDownload(action: DownloadAction, open: () -> DownloadExec, t
 
 internal fun executeSshCommand(command: String, open: () -> DownloadExec, timeoutMs: Long = 25000,
                                failure: (Int, String) -> DownloadFailure): String {
+    val result = executeSshResult(command, open, timeoutMs)
+    if (result.status != 0) throw failure(result.status, result.error)
+    return result.output
+}
+
+internal data class SshExecResult(val output: String, val error: String, val status: Int)
+/** Raw exit status is data: the AV contract returns informative JSON on exit 1. */
+internal fun executeSshResult(command: String, open: () -> DownloadExec, timeoutMs: Long = 25000): SshExecResult {
     val output = BoundedDownloadOutput(); val error = BoundedDownloadOutput()
     val deadline = System.nanoTime() + timeoutMs * 1_000_000
     open().use { channel ->
@@ -112,7 +120,7 @@ internal fun executeSshCommand(command: String, open: () -> DownloadExec, timeou
             if (channel.done) break
             Thread.sleep(25)
         }
-        if (channel.exitStatus != 0) throw failure(channel.exitStatus, error.text())
-        return output.text()
+        if (channel.exitStatus < 0) throw DownloadFailure("Canal SSH encerrou sem resultado remoto. Confira a conexão.")
+        return SshExecResult(output.text(), error.text(), channel.exitStatus)
     }
 }

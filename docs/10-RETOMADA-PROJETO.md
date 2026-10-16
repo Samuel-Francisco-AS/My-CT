@@ -1,4 +1,12 @@
-# My-CT — guia de retomada após MYCT-5D-B1
+# My-CT — guia de retomada após MYCT-5D-B2
+
+**MYCT-5D-B2 ACEITA no Moto G06 em 16/10/2026; PR #21 autorizado para merge:** APK
+**0.5.6-antivirus/code 13**, seção Antivírus no relatório de arquivos e
+**Opções → Antivírus e assinaturas**, pela CLI B1/SSH existente. Sem alterações
+no motor, timer ou serviços Fedora. [Relatório B2](MYCT-5D-B2-REPORT.md) ·
+[APK candidato](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5d-b2-v0.5.6-rc1).
+**Aceite expresso:** inspeção/ClamAV CLEAN em PDF pequeno, cancelamento INCOMPLETE, atualização manual em Opções SUCCESS e status atualizados. Falha do MKV de 1,79 GB caracterizada como limite de VM (RLIMIT_AS 2 GiB); não houve análise completa nem mudança de recursos. Diagnóstico sanitizado da CLI incluído, **adaptador ainda pendente de instalação manual autorizada**. PR #21 autorizado para merge; dívida visual R-09 na issue #9.
+
 
 **MYCT-5D-B1 ACEITA operacionalmente em 16/10/2026 (PR #20):** ClamAV pontual no Fedora,
 CLI `myct-av` + worker C++20, base dedicada atualizada realmente, análise
@@ -6,18 +14,18 @@ não destrutiva e unidades de usuário entregues. [Relatório B1](MYCT-5D-B1-REP
 e [contrato para B2](MYCT-5D-B1-CLI.md). Instalação B1 no espaço de `sam`
 realizada sob autorização; **timer de 36h ativado e validado pelo proprietário**, confirmado ativo sem alteração
 nesta correção. Limite de entrada atualizado para **2.000.000.000 bytes**, com
-os demais limites de recursos preservados. O proprietário instalou o worker atualizado e confirmou uma análise CLI real de `abc`: CLEAN, 10,071 s, ~962 MiB RSS, base daily 28155 atual. [Aceite e medições](MYCT-5D-B1-REPORT.md). **[PR #20](https://github.com/Samuel-Francisco-AS/My-CT/pull/20) integrado à `main` (merge `a5770afa45c3771437118536e8183d14e5dd0ce4`); B2 Android não iniciada.** Issue #18 permanece aberta.
+os demais limites de recursos preservados. O proprietário instalou o worker atualizado e confirmou uma análise CLI real de `abc`: CLEAN, 10,071 s, ~962 MiB RSS, base daily 28155 atual. [Aceite e medições](MYCT-5D-B1-REPORT.md). **[PR #20](https://github.com/Samuel-Francisco-AS/My-CT/pull/20) integrado à `main` (merge `a5770afa45c3771437118536e8183d14e5dd0ce4`); B2 Android aceita no Moto G06.** Issue #18 permanece aberta.
 
 
 **MYCT-5C aceita em 16/10/2026 — PR #17 integrado à `main` (merge `30d909be5c4ba17dbf46c2008c42448c3c08b9c9`), APK 0.5.4/code 11.** Fedora 44 com Transmission 4.1.3 como serviço dedicado e RPC loopback; downloads/magnets e seeding continuam sem SSH/Android. Proprietário comprovou no Moto G06 adicionar, listar, pausar/retomar, remover preservando arquivo, Ver em Arquivos por SFTP e continuidade do download sem SSH. Também confirmou que o **novo torrent ganhou pasta com título real sanitizado + hash8 ao terminar**, após correção por hook/RPC, sem migrar pastas existentes. [Fechamento MYCT-5C](MYCT-5C-BITTORRENT-REPORT.md) · [PR #17](https://github.com/Samuel-Francisco-AS/My-CT/pull/17) · [APK 0.5.4](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5c-v0.5.4-rc1).
 
-**MYCT-5D-A ACEITA fisicamente pelo proprietário em 16/10/2026, com quatro capturas enviadas na conversa; [PR #19](https://github.com/Samuel-Francisco-AS/My-CT/pull/19) integrado à `main` no merge `d5d7c78a1a598903433f009bcf755f0077b4ef7f`.** APK 0.5.5/code 12, helper `myct-inspect` C++20, Arquivos → arquivo regular → Verificar arquivo (tipo MIME, bytes, SHA-256, cópia e comparação de checksum). Os seis testes mínimos no Moto G06 passaram, incluindo checksum correspondente, divergente, não informado e preservação do terminal SSH. [Relatório de aceite e instalação](MYCT-5D-A-REPORT.md). O helper foi disponibilizado no Fedora para os testes do proprietário; atualização Git futura não instala binários automaticamente. **B1/ClamAV aceita no Fedora; B2 Android não iniciada, timer ativo/validado pelo proprietário.**
+**MYCT-5D-A ACEITA fisicamente pelo proprietário em 16/10/2026, com quatro capturas enviadas na conversa; [PR #19](https://github.com/Samuel-Francisco-AS/My-CT/pull/19) integrado à `main` no merge `d5d7c78a1a598903433f009bcf755f0077b4ef7f`.** APK 0.5.5/code 12, helper `myct-inspect` C++20, Arquivos → arquivo regular → Verificar arquivo (tipo MIME, bytes, SHA-256, cópia e comparação de checksum). Os seis testes mínimos no Moto G06 passaram, incluindo checksum correspondente, divergente, não informado e preservação do terminal SSH. [Relatório de aceite e instalação](MYCT-5D-A-REPORT.md). O helper foi disponibilizado no Fedora para os testes do proprietário; atualização Git futura não instala binários automaticamente. **B1/ClamAV aceita no Fedora; B2 Android aceita no Moto G06, timer ativo/validado pelo proprietário.**
 
 **Dívidas não bloqueantes:** `.torrent` via SAF, prova de upload real a peer externo e reboot específico do Transmission/hook; refinamentos da [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9); automações da [issue #4](https://github.com/Samuel-Francisco-AS/My-CT/issues/4) / MYCT-6. Não refazer provas aprovadas sem necessidade. **CLI/hook 0.5.4 foram instalados no Fedora pelo executor**, mas checkout Git não os atualiza automaticamente. Não substituir por versão 0.5.3; preservar registros e pastas em seeding.
 
 ---
 
-**Atualizado:** 16/10/2026 · **Fonte de verdade:** `main` após merge do PR #20; sincronizar checkout Fedora antes da B2. Histórico 5A/5B abaixo. MYCT-5A aceita; MYCT-5B integrada com aceite funcional parcial.
+**Atualizado:** 16/10/2026 · **Fonte de verdade:** PR #21 B2 autorizado para merge na `main`; após confirmação do merge sincronizar a `main` local. Histórico 5A/5B abaixo. MYCT-5A aceita; MYCT-5B integrada com aceite funcional parcial.
 **Relatório de fechamento:** [MYCT-4-FECHAMENTO-REPORT.md](MYCT-4-FECHAMENTO-REPORT.md).
 
 
@@ -92,7 +100,7 @@ Para parar **somente** esse cluster, se ele tiver sido iniciado manualmente: `pg
 
 - [MYCT-5C BitTorrent e fechamento](MYCT-5C-BITTORRENT-REPORT.md) — motor real, APK 0.5.4, pastas legíveis, evidências e dívidas.
 - [MYCT-5D-A aceite físico](MYCT-5D-A-REPORT.md) — inspeção e comparação SHA-256 aprovadas no Moto G06.
-- [MYCT-5D Planejamento de inspeção](MYCT-5D-PLANEJAMENTO-VERIFICACAO-ARQUIVOS.md) — 5D-A aceita, B1 entregue para revisão e B2 não iniciada.
+- [MYCT-5D Planejamento de inspeção](MYCT-5D-PLANEJAMENTO-VERIFICACAO-ARQUIVOS.md) — 5D-A aceita, B1 entregue para revisão e B2 aceita no Moto G06.
 - [MYCT-5A Downloads](MYCT-5A-DOWNLOADS-REPORT.md) — CLI headless, resultados e aceite físico após saída do Android.
 - [MYCT-5B Android Downloads](MYCT-5B-ANDROID-DOWNLOADS-REPORT.md) — aceite parcial e pendências de refinamento.
 - [MYCT-4 Fechamento](MYCT-4-FECHAMENTO-REPORT.md) — estado conclusivo e evidências.
