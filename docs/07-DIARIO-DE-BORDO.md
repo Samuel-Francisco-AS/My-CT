@@ -172,3 +172,22 @@ reiniciar Core; API confirmada somente em 127.0.0.1:8765. Core ~7,4 MiB RSS,
 cluster ~23,7 MiB PSS agregado, CPU observada 0,0%, dados 42 MiB.
 Core e banco parados ao final; registros preservados. Nenhuma mudança de código
 foi necessária para passar os testes. Evidências e retomada no relatório MYCT-3B.
+
+### 2026-10-16 — fechamento MYCT-5B com dívida física consciente
+
+- **Integração:** PR #16 mesclado à `main` em
+  `83e053737ff782ecf523bf31776fec9da55889dd`.
+- **Implementado:** quinta aba Downloads via SSH/CLI 5A; histórico,
+  progresso, cancelar e Ver em Arquivos, sem API nova ou banco adicional.
+- **Prova física relatada pelo proprietário:** histórico e conclusão de
+  exemplo HTTP (577 bytes) no Moto G06; foco/IME estável na versão 0.5.1;
+  botões Baixar/Atualizar sem piscadas na versão 0.5.2.
+- **Testes do Codex:** Android 58 PASS/1 ignorado e lint sem erros na última
+  correção; servidor 11/11 e helper 6/6 no ciclo inicial.
+- **Dívidas conscientemente adiadas:** não declarar como aceitos os
+  fluxos físicos de Ver em Arquivos, cancelar, reconectar a aba, toque
+  durante polling e progresso de arquivo grande/lento; issue #9.
+- **Decisão do proprietário:** encerrar MYCT-5B sem reabrir a bateria
+  de testes; manter Marco C/issue #4 aberto para torrent e automações.
+  Limpeza de branch local/remota solicitada ao proprietário via comandos
+  Git após sincronização; preservar APK, downloads e serviços.
