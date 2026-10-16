@@ -49,6 +49,10 @@ class SshConnection {
 
     internal fun inspectFile(path: String): FileInspection = executeInspection(path) { openDownloadExec(true) }
 
+    internal fun scanAntivirus(path: String): AvScanResult = executeAvScan(path) { openDownloadExec(true) }
+    internal fun antivirus(command: AvCommand): SshExecResult =
+        executeSshResult(avCommand(command), { openDownloadExec() })
+
     private fun openDownloadExec(keepInput: Boolean = false): DownloadExec {
         val channel = synchronized(downloadChannels) {
             check(!closed && session?.isConnected == true)

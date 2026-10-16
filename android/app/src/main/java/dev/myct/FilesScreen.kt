@@ -162,6 +162,7 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
                             color = if (comparison == "DIVERGENTE") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
                         Text(result.warning, style = MaterialTheme.typography.bodySmall)
                     }
+                    AntivirusScanSection(model.antivirus, enabled = !model.inspecting)
                 } }, confirmButton = { TextButton(onClick = { model.closeInspection() }) {
                     Text(if (model.inspecting) "Cancelar inspeção" else "Fechar")
                 } })

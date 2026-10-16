@@ -214,3 +214,14 @@ comprovada. Fronteiras numéricas por arquivos esparsos, sem análise gigante.
 Servidor 19/19, operacionais 23/23. Timer já habilitado/validado pelo proprietário;
 estado active/enabled e hashes preservados, sem operação nas unidades.
 PR sem merge, B2 não iniciada. Comando de atualização só do worker no relatório B1.
+
+### 2026-10-16 — MYCT-5D-B2 candidata Android
+
+Main limpa/sincronizada em b6cac9d, merge #20 confirmado; branch
+myct-5d-b2-android-antivirus. Seção AV no relatório e assinaturas em Opções por
+CLI B1 via SSH; leitor preserva JSON em exit 1, cancelamento separado e polling
+condicional. APK 0.5.6/code 13 com assinatura compatível com 0.5.5. Testes JVM:
+86 PASS/1 opcional ignorado, build aprovado, lint 0 erros/2 avisos/1 sugestão
+existentes. Nenhum deploy/alteração de motor ou timer; active/enabled e hashes
+preservados. Publicação candidata para revisão, sem aceite físico/merge.
+[Roteiro Moto e limites](MYCT-5D-B2-REPORT.md).

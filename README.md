@@ -1,17 +1,25 @@
 # My-CT
 
+**MYCT-5D-B2 candidata para teste no Moto G06 (16/10/2026):** APK
+**0.5.6-antivirus/code 13**, seção Antivírus no relatório de arquivos e
+**Opções → Antivírus e assinaturas**, pela CLI B1/SSH existente. Sem alterações
+no motor, timer ou serviços Fedora. [Relatório B2](docs/MYCT-5D-B2-REPORT.md) ·
+[APK candidato](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5d-b2-v0.5.6-rc1).
+**Aceite físico pendente; PR/branch sem merge até validação do proprietário.**
+
+
 **MYCT-5D-B1 ACEITA operacionalmente em 16/10/2026 (PR #20):** ClamAV pontual no Fedora,
 CLI `myct-av` + worker C++20, base dedicada atualizada realmente, análise
 não destrutiva e unidades de usuário entregues. [Relatório B1](docs/MYCT-5D-B1-REPORT.md)
 e [contrato para B2](docs/MYCT-5D-B1-CLI.md). Instalação B1 no espaço de `sam`
 realizada sob autorização; **timer de 36h ativado e validado pelo proprietário**, confirmado ativo sem alteração
 nesta correção. Limite de entrada atualizado para **2.000.000.000 bytes**, com
-os demais limites de recursos preservados. O proprietário instalou o worker atualizado e confirmou uma análise CLI real de `abc`: CLEAN, 10,071 s, ~962 MiB RSS, base daily 28155 atual. [Aceite e medições](docs/MYCT-5D-B1-REPORT.md). **[PR #20](https://github.com/Samuel-Francisco-AS/My-CT/pull/20) integrado à `main` (merge `a5770afa45c3771437118536e8183d14e5dd0ce4`); B2 Android não iniciada.** Issue #18 permanece aberta.
+os demais limites de recursos preservados. O proprietário instalou o worker atualizado e confirmou uma análise CLI real de `abc`: CLEAN, 10,071 s, ~962 MiB RSS, base daily 28155 atual. [Aceite e medições](docs/MYCT-5D-B1-REPORT.md). **[PR #20](https://github.com/Samuel-Francisco-AS/My-CT/pull/20) integrado à `main` (merge `a5770afa45c3771437118536e8183d14e5dd0ce4`); B2 Android candidata para aceite físico.** Issue #18 permanece aberta.
 
 
 **MYCT-5C aprovada (16/10/2026, PR #17):** BitTorrent/magnet pelo Transmission 4.1.3 no Fedora e controles no APK **0.5.4/code 11**. O proprietário confirmou no Moto G06 download sem SSH, pausa/retomada, remoção preservando arquivo, SFTP e **nome de pasta pelo título real ao concluir**, usando hook/RPC do Transmission. Seeding preservado; sem migração das pastas antigas. [Relatório de fechamento](docs/MYCT-5C-BITTORRENT-REPORT.md) · [release 0.5.4](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5c-v0.5.4-rc1).
 
-**MYCT-5D-A ACEITA fisicamente (16/10/2026):** Arquivos → Verificar arquivo com tamanho/tipo por conteúdo/SHA-256, cópia e comparação opcional comprovados no Moto G06; APK 0.5.5/code 12, helper C++20 `myct-inspect` no Fedora durante o aceite. [PR #19](https://github.com/Samuel-Francisco-AS/My-CT/pull/19) integrado à `main`; [relatório de aceite](docs/MYCT-5D-A-REPORT.md). MYCT-5D-B1/ClamAV aceita operacionalmente no Fedora; B2 permanece posterior. Dívidas #9 e automações #4 continuam adiadas.
+**MYCT-5D-A ACEITA fisicamente (16/10/2026):** Arquivos → Verificar arquivo com tamanho/tipo por conteúdo/SHA-256, cópia e comparação opcional comprovados no Moto G06; APK 0.5.5/code 12, helper C++20 `myct-inspect` no Fedora durante o aceite. [PR #19](https://github.com/Samuel-Francisco-AS/My-CT/pull/19) integrado à `main`; [relatório de aceite](docs/MYCT-5D-A-REPORT.md). MYCT-5D-B1/ClamAV aceita operacionalmente no Fedora; B2 candidata para teste físico conforme relatório acima. Dívidas #9 e automações #4 continuam adiadas.
 
 **My-CT** é uma iniciativa de infraestrutura pessoal: um servidor Linux doméstico, administrado por um aplicativo Android nativo, capaz de executar tarefas, disponibilizar arquivos e realizar downloads sem depender de uma sessão gráfica.
 
