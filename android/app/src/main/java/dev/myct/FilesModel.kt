@@ -25,10 +25,26 @@ data class FileStatus(val phase: FilePhase = FilePhase.IDLE, val name: String = 
 data class UploadChoice(val uri: Uri, val directory: String, val epoch: Int, val name: String, val size: Long?)
 data class DownloadChoice(val path: String, val entry: RemoteEntry, val epoch: Int)
 
+// Only UI scroll coordinates; never persists paths or filenames to disk.
+internal data class FilesScrollAnchor(val name: String?, val index: Int, val offset: Int) {
+    fun restoredIndex(entries: List<RemoteEntry>): Int {
+        val matched = name?.let { saved -> entries.indexOfFirst { it.name == saved } } ?: -1
+        return if (matched >= 0) matched else index.coerceIn(0, (entries.size - 1).coerceAtLeast(0))
+    }
+}
+
 class FilesModel(private val app: Application) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var connection: SshConnection? = null
     private var epoch = 0
+    // Bounded to this SSH connection; return to the same visible item after nested navigation.
+    private val scrollHistory = object : java.util.LinkedHashMap<String, FilesScrollAnchor>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, FilesScrollAnchor>?): Boolean = size > 64
+    }
+    internal fun rememberScroll(path: String, entries: List<RemoteEntry>, index: Int, offset: Int) {
+        scrollHistory[path] = FilesScrollAnchor(entries.getOrNull(index)?.name, index.coerceAtLeast(0), offset.coerceAtLeast(0))
+    }
+    internal fun scrollPosition(path: String): FilesScrollAnchor? = scrollHistory[path]
     private var control by mutableStateOf<TransferControl?>(null)
     val busy get() = control != null
     var status by mutableStateOf(FileStatus())
@@ -97,6 +113,7 @@ class FilesModel(private val app: Application) {
         epoch++
         connection = value
         antivirus.attach(value)
+        scrollHistory.clear()
         listing = null
         uploadChoice = null; downloadChoice = null; uploadDestination = null; completedDownload = null
         status = FileStatus(message = if (value == null) "SSH desconectado. Reconecte manualmente." else "Abra Arquivos para listar o diretório inicial.")
