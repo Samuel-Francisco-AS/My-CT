@@ -1,11 +1,11 @@
 # My-CT
 
-**MYCT-5D-B2 ACEITA no Moto G06 em 16/10/2026; PR #21 autorizado para merge:** APK
+**MYCT-5D-B2 ACEITA no Moto G06 em 16/10/2026; PR #21 integrado à main (merge `ed593cffe798e01177c249b9acffc700184a455a`):** APK
 **0.5.6-antivirus/code 13**, seção Antivírus no relatório de arquivos e
 **Opções → Antivírus e assinaturas**, pela CLI B1/SSH existente. Sem alterações
 no motor, timer ou serviços Fedora. [Relatório B2](docs/MYCT-5D-B2-REPORT.md) ·
 [APK candidato](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5d-b2-v0.5.6-rc1).
-**Aceite expresso:** inspeção/ClamAV CLEAN em PDF pequeno, cancelamento INCOMPLETE, atualização manual em Opções SUCCESS e status atualizados. Falha do MKV de 1,79 GB caracterizada como limite de VM (RLIMIT_AS 2 GiB); não houve análise completa nem mudança de recursos. Diagnóstico sanitizado da CLI incluído, **adaptador ainda pendente de instalação manual autorizada**. PR #21 autorizado para merge; dívida visual R-09 na issue #9.
+**Aceite expresso:** inspeção/ClamAV CLEAN em PDF pequeno, cancelamento INCOMPLETE, atualização manual em Opções SUCCESS e status atualizados. Falha do MKV de 1,79 GB caracterizada como limite de VM (RLIMIT_AS 2 GiB); não houve análise completa nem mudança de recursos. Diagnóstico sanitizado da CLI incluído, **adaptador ainda pendente de instalação manual autorizada**. PR #21 integrado à `main`; issue #18 encerrada; dívida visual R-09 na issue #9.
 
 
 **MYCT-5D-B1 ACEITA operacionalmente em 16/10/2026 (PR #20):** ClamAV pontual no Fedora,

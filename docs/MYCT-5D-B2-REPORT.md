@@ -3,7 +3,7 @@
 16/10/2026 · Issue [#18](https://github.com/Samuel-Francisco-AS/My-CT/issues/18).
 Branch `myct-5d-b2-android-antivirus`, criada da `main` limpa/sincronizada em
 `b6cac9d`, após confirmar o merge B1/PR #20 (`a5770af`).
-**ACEITA operacionalmente pelo proprietário em 16/10/2026, com limitação de arquivos grandes documentada; PR #21 autorizado para integração à main.**
+**ACEITA operacionalmente pelo proprietário em 16/10/2026, com limitação de arquivos grandes documentada; PR #21 integrado à `main` (merge `ed593cffe798e01177c249b9acffc700184a455a`).**
 Não confundir as provas do motor B1 ou os testes JVM abaixo com execução Android
 real autenticada. PR/branch devem permanecer abertos, sem merge até revisão.
 
@@ -521,4 +521,4 @@ Após revisão do diagnóstico da execução monitorada, o proprietário **autor
 - Avaliação futura, **somente mediante novo pedido e autorização**, de VM maior (hipótese 3 GiB) com proteção independente do uso de RAM (ex.: cgroup específico), sem garantia de que a análise completa funcionará.
 - Não ampliar escopo para automação, varredura em background ou quarentena.
 
-**Decisão:** MYCT-5D-B2 aceita; PR #21 autorizado para merge; encerrar issue #18 após confirmação de integração. Registro de instalação manual do adaptador no Fedora permanecerá pendente até o proprietário executar e informar resultado. As instruções/histórico de “PR sem merge” acima se referem às etapas anteriores à autorização final.
+**Decisão e resultado:** MYCT-5D-B2 aceita e PR #21 integrado à `main` no merge `ed593cffe798e01177c249b9acffc700184a455a`. Issue #18 encerrada como concluída. O registro da instalação manual do adaptador no Fedora permanece pendente até o proprietário executar e informar o resultado. Registro de instalação manual do adaptador no Fedora permanecerá pendente até o proprietário executar e informar resultado. As instruções/histórico de “PR sem merge” acima se referem às etapas anteriores à autorização final.
