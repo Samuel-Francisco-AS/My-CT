@@ -1,24 +1,23 @@
 # My-CT — guia de retomada após MYCT-5D-A
 
-**MYCT-5D-B1 implementada para revisão em 16/10/2026:** ClamAV pontual no Fedora,
+**MYCT-5D-B1 ACEITA operacionalmente em 16/10/2026 (PR #20):** ClamAV pontual no Fedora,
 CLI `myct-av` + worker C++20, base dedicada atualizada realmente, análise
 não destrutiva e unidades de usuário entregues. [Relatório B1](MYCT-5D-B1-REPORT.md)
 e [contrato para B2](MYCT-5D-B1-CLI.md). Instalação B1 no espaço de `sam`
 realizada sob autorização; **timer de 36h ativado e validado pelo proprietário**, confirmado ativo sem alteração
 nesta correção. Limite de entrada atualizado para **2.000.000.000 bytes**, com
-os demais limites de recursos preservados. PR sem merge até validação do proprietário. Android permanece
-0.5.5/code 12; B2 não iniciada. Issue #18 continua aberta.
+os demais limites de recursos preservados. O proprietário instalou o worker atualizado e confirmou uma análise CLI real de `abc`: CLEAN, 10,071 s, ~962 MiB RSS, base daily 28155 atual. [Aceite e medições](MYCT-5D-B1-REPORT.md). **PR #20 autorizado para merge; B2 Android não iniciada.** Issue #18 permanece aberta.
 
 
 **MYCT-5C aceita em 16/10/2026 — PR #17 integrado à `main` (merge `30d909be5c4ba17dbf46c2008c42448c3c08b9c9`), APK 0.5.4/code 11.** Fedora 44 com Transmission 4.1.3 como serviço dedicado e RPC loopback; downloads/magnets e seeding continuam sem SSH/Android. Proprietário comprovou no Moto G06 adicionar, listar, pausar/retomar, remover preservando arquivo, Ver em Arquivos por SFTP e continuidade do download sem SSH. Também confirmou que o **novo torrent ganhou pasta com título real sanitizado + hash8 ao terminar**, após correção por hook/RPC, sem migrar pastas existentes. [Fechamento MYCT-5C](MYCT-5C-BITTORRENT-REPORT.md) · [PR #17](https://github.com/Samuel-Francisco-AS/My-CT/pull/17) · [APK 0.5.4](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5c-v0.5.4-rc1).
 
-**MYCT-5D-A ACEITA fisicamente pelo proprietário em 16/10/2026, com quatro capturas enviadas na conversa; [PR #19](https://github.com/Samuel-Francisco-AS/My-CT/pull/19) integrado à `main` no merge `d5d7c78a1a598903433f009bcf755f0077b4ef7f`.** APK 0.5.5/code 12, helper `myct-inspect` C++20, Arquivos → arquivo regular → Verificar arquivo (tipo MIME, bytes, SHA-256, cópia e comparação de checksum). Os seis testes mínimos no Moto G06 passaram, incluindo checksum correspondente, divergente, não informado e preservação do terminal SSH. [Relatório de aceite e instalação](MYCT-5D-A-REPORT.md). O helper foi disponibilizado no Fedora para os testes do proprietário; atualização Git futura não instala binários automaticamente. **B1/ClamAV entregue para revisão; B2 não iniciada, timer ativo/validado pelo proprietário.**
+**MYCT-5D-A ACEITA fisicamente pelo proprietário em 16/10/2026, com quatro capturas enviadas na conversa; [PR #19](https://github.com/Samuel-Francisco-AS/My-CT/pull/19) integrado à `main` no merge `d5d7c78a1a598903433f009bcf755f0077b4ef7f`.** APK 0.5.5/code 12, helper `myct-inspect` C++20, Arquivos → arquivo regular → Verificar arquivo (tipo MIME, bytes, SHA-256, cópia e comparação de checksum). Os seis testes mínimos no Moto G06 passaram, incluindo checksum correspondente, divergente, não informado e preservação do terminal SSH. [Relatório de aceite e instalação](MYCT-5D-A-REPORT.md). O helper foi disponibilizado no Fedora para os testes do proprietário; atualização Git futura não instala binários automaticamente. **B1/ClamAV aceita no Fedora; B2 Android não iniciada, timer ativo/validado pelo proprietário.**
 
 **Dívidas não bloqueantes:** `.torrent` via SAF, prova de upload real a peer externo e reboot específico do Transmission/hook; refinamentos da [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9); automações da [issue #4](https://github.com/Samuel-Francisco-AS/My-CT/issues/4) / MYCT-6. Não refazer provas aprovadas sem necessidade. **CLI/hook 0.5.4 foram instalados no Fedora pelo executor**, mas checkout Git não os atualiza automaticamente. Não substituir por versão 0.5.3; preservar registros e pastas em seeding.
 
 ---
 
-**Atualizado:** 16/10/2026 · **Fonte de verdade:** `main` após merge do PR #19; histórico 5A/5B abaixo. MYCT-5A aceita; MYCT-5B integrada com aceite funcional parcial.
+**Atualizado:** 16/10/2026 · **Fonte de verdade:** PR #20 B1 autorizado para merge; `main` deverá ser sincronizada após fechamento. Histórico 5A/5B abaixo. MYCT-5A aceita; MYCT-5B integrada com aceite funcional parcial.
 **Relatório de fechamento:** [MYCT-4-FECHAMENTO-REPORT.md](MYCT-4-FECHAMENTO-REPORT.md).
 
 

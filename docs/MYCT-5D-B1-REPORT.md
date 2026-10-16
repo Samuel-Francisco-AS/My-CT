@@ -3,7 +3,7 @@
 16/10/2026 · Issue [#18](https://github.com/Samuel-Francisco-AS/My-CT/issues/18).
 Branch `myct-5d-b1-clamav`, criada da `main` limpa e sincronizada em
 `6d78dbdbb279b3493a6de0e46367cbd1cffef57e` (após PR #19).
-**Candidata para aceite do proprietário; sem merge. B2 não iniciada.**
+**MYCT-5D-B1 ACEITA operacionalmente pelo proprietário em 16/10/2026; PR #20 autorizado para fechamento e merge. B2 não iniciada.**
 APK permanece **0.5.5/code 12**, aceite 5D-A preservado.
 
 ## Aceite definido antes da implementação
@@ -239,9 +239,7 @@ reboot, espera de 36h, falha real de rede, ensaio de todos os formatos compactad
 ou integração Android B2. Falhas/timeout são cobertos proporcionalmente por
 classificação simulada e cancelamento real. Nenhum teste aguarda instalação de
 pacotes; todos os pacotes necessários já estavam instalados pelo proprietário.
-**Pendências para aceite:** revisão do proprietário sobre a correção de limite,
-utilidade e consumo. O timer já foi ativado/validado por ele. Manter PR sem merge até
-sua validação. Não iniciar B2 por consequência desta entrega.
+**Aceite operacional confirmado:** correção de limite, consumo e timer aprovados pelo proprietário após teste real do worker instalado. Não iniciar B2 por consequência desta entrega.
 
 Referências técnicas: [configuração FreshClam](https://docs.clamav.net/manual/Usage/Configuration.html),
 [gestão de assinaturas](https://docs.clamav.net/manual/Usage/SignatureManagement.html),
@@ -361,3 +359,35 @@ reexecutada com sucesso: 80 MiB CLEAN em **22,163 s**, pico **1.056.344 KiB RSS*
 CPU **21,317 + 0,785 s**; benigno CLEAN (10,192 s), EICAR DETECTED (10,194 s),
 expansão INCOMPLETE (10,277 s), EOF INCOMPLETE. Todas as comparações de preservação
 passaram novamente. Worker instalado permaneceu com seu hash original.
+
+
+## Fechamento operacional aprovado pelo proprietário — 16/10/2026
+
+O proprietário atualizou **apenas** o worker compilado `myct-av-scan` em
+`~/.local/bin/`, com cópia de segurança do binário anterior em
+`/home/sam/.local/bin/myct-av-scan.bak-1792178905649509245`.
+A instalação não exigiu sudo, reinstalação de serviços ou mudança do timer.
+
+**Prova real posterior à instalação:** fixture benigna com conteúdo `abc`
+criada via `mktemp` sob o home, chamada real `~/.local/bin/myct-av scan`
+com caminho hexadecimal. Saída JSON v1 recebida diretamente do usuário:
+
+- `state: CLEAN`, `detections: []`, `exit_code: 0`, `signal: 0`;
+- `duration_ms: 10071`, `peak_rss_kib: 984612` (~962 MiB);
+- `engine: ClamAV 1.4.6/28155`, `available: true`, `stale: false`;
+- `Scanned files: 1`, `Infected files: 0`, `incomplete_reason: ""`;
+- `last_success: 1792177627` para a atualização da base dedicada.
+
+**Resultado: PASS / aceite operacional B1.** O relatório inicial já documenta
+benigno, EICAR, limites, cancelamento, preservação dos arquivos, concorrência,
+medição de 80 MiB e fronteiras numéricas até 2.000.000.000 bytes. A prova
+posterior comprova especificamente o worker **instalado** e o contrato CLI real,
+sem reivindicar análise completa de arquivo de 2 GB. O timer de 36h foi
+anteriormente habilitado e comprovado `enabled/active` pelo proprietário, com
+próxima execução agendada; não foi alterado no fechamento.
+
+**PR #20 autorizado para merge na main.** O aceite cobre o motor do Fedora,
+**não** a interface Android; o APK permanece 0.5.5/code 12, e a MYCT-5D-B2
+continua pendente. A issue #18 deve permanecer aberta. Sem varredura automática,
+quarentena ou exclusão; detecção não implica ação sobre arquivo. `CLEAN` não
+certifica segurança absoluta.
