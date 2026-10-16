@@ -47,11 +47,16 @@ class SshConnection {
 
     internal fun torrents(action: TorrentAction): String = executeTorrent(action, { openDownloadExec() })
 
-    private fun openDownloadExec(): DownloadExec {
+    internal fun inspectFile(path: String): FileInspection = executeInspection(path) { openDownloadExec(true) }
+
+    private fun openDownloadExec(keepInput: Boolean = false): DownloadExec {
         val channel = synchronized(downloadChannels) {
             check(!closed && session?.isConnected == true)
             (session!!.openChannel("exec") as ChannelExec).also { downloadChannels.add(it) }
         }
+        // Keep remote stdin open until this operation is cancelled/closed. EOF stops hashing.
+        if (keepInput) channel.setInputStream(null)
+        val input = if (keepInput) channel.outputStream else null
         return object : DownloadExec {
             override fun connect(command: String, output: OutputStream, error: OutputStream) {
                 channel.setCommand(command)
@@ -63,6 +68,7 @@ class SshConnection {
             override val done get() = channel.isClosed
             override val exitStatus get() = channel.exitStatus
             override fun close() {
+                runCatching { input?.close() }
                 channel.disconnect()
                 synchronized(downloadChannels) { downloadChannels.remove(channel) }
             }

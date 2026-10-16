@@ -1,14 +1,14 @@
-# My-CT — guia de retomada após MYCT-5C
+# My-CT — guia de retomada após MYCT-5D-A
 
 **MYCT-5C aceita em 16/10/2026 — PR #17 integrado à `main` (merge `30d909be5c4ba17dbf46c2008c42448c3c08b9c9`), APK 0.5.4/code 11.** Fedora 44 com Transmission 4.1.3 como serviço dedicado e RPC loopback; downloads/magnets e seeding continuam sem SSH/Android. Proprietário comprovou no Moto G06 adicionar, listar, pausar/retomar, remover preservando arquivo, Ver em Arquivos por SFTP e continuidade do download sem SSH. Também confirmou que o **novo torrent ganhou pasta com título real sanitizado + hash8 ao terminar**, após correção por hook/RPC, sem migrar pastas existentes. [Fechamento MYCT-5C](MYCT-5C-BITTORRENT-REPORT.md) · [PR #17](https://github.com/Samuel-Francisco-AS/My-CT/pull/17) · [APK 0.5.4](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5c-v0.5.4-rc1).
 
-**Próxima fase: MYCT-5D — PLANEJADA e NÃO INICIADA.** [Issue #18](https://github.com/Samuel-Francisco-AS/My-CT/issues/18) · [plano de inspeção de arquivos](MYCT-5D-PLANEJAMENTO-VERIFICACAO-ARQUIVOS.md). Primeiro inspecionar formato/tamanho/SHA-256 no Fedora a partir do Moto (5D-A); depois considerar antivírus ClamAV sob demanda com autorização expressa (5D-B). Abrir **branch nova somente depois de sincronizar a `main`**. Sem instalar pacotes nem alterar serviços no fechamento.
+**MYCT-5D-A ACEITA fisicamente pelo proprietário em 16/10/2026, com quatro capturas enviadas na conversa; PR #19 autorizado para integração à `main`.** APK 0.5.5/code 12, helper `myct-inspect` C++20, Arquivos → arquivo regular → Verificar arquivo (tipo MIME, bytes, SHA-256, cópia e comparação de checksum). Os seis testes mínimos no Moto G06 passaram, incluindo checksum correspondente, divergente, não informado e preservação do terminal SSH. [Relatório de aceite e instalação](MYCT-5D-A-REPORT.md). O helper foi disponibilizado no Fedora para os testes do proprietário; atualização Git futura não instala binários automaticamente. **5D-B/ClamAV não iniciada e depende de autorização expressa.**
 
 **Dívidas não bloqueantes:** `.torrent` via SAF, prova de upload real a peer externo e reboot específico do Transmission/hook; refinamentos da [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9); automações da [issue #4](https://github.com/Samuel-Francisco-AS/My-CT/issues/4) / MYCT-6. Não refazer provas aprovadas sem necessidade. **CLI/hook 0.5.4 foram instalados no Fedora pelo executor**, mas checkout Git não os atualiza automaticamente. Não substituir por versão 0.5.3; preservar registros e pastas em seeding.
 
 ---
 
-**Atualizado:** 16/10/2026 · **Fonte de verdade:** `main` após encerramento do PR #17; histórico 5A/5B abaixo. MYCT-5A aceita; MYCT-5B integrada com aceite funcional parcial.
+**Atualizado:** 16/10/2026 · **Fonte de verdade:** PR #19 autorizado para integração à `main`; histórico 5A/5B abaixo. MYCT-5A aceita; MYCT-5B integrada com aceite funcional parcial.
 **Relatório de fechamento:** [MYCT-4-FECHAMENTO-REPORT.md](MYCT-4-FECHAMENTO-REPORT.md).
 
 
@@ -82,7 +82,8 @@ Para parar **somente** esse cluster, se ele tiver sido iniciado manualmente: `pg
 ## Documentos e histórico
 
 - [MYCT-5C BitTorrent e fechamento](MYCT-5C-BITTORRENT-REPORT.md) — motor real, APK 0.5.4, pastas legíveis, evidências e dívidas.
-- [MYCT-5D Planejamento de inspeção](MYCT-5D-PLANEJAMENTO-VERIFICACAO-ARQUIVOS.md) — próximo ciclo aprovado, não iniciado.
+- [MYCT-5D-A aceite físico](MYCT-5D-A-REPORT.md) — inspeção e comparação SHA-256 aprovadas no Moto G06.
+- [MYCT-5D Planejamento de inspeção](MYCT-5D-PLANEJAMENTO-VERIFICACAO-ARQUIVOS.md) — 5D-A fisicamente aceita, 5D-B não iniciada.
 - [MYCT-5A Downloads](MYCT-5A-DOWNLOADS-REPORT.md) — CLI headless, resultados e aceite físico após saída do Android.
 - [MYCT-5B Android Downloads](MYCT-5B-ANDROID-DOWNLOADS-REPORT.md) — aceite parcial e pendências de refinamento.
 - [MYCT-4 Fechamento](MYCT-4-FECHAMENTO-REPORT.md) — estado conclusivo e evidências.

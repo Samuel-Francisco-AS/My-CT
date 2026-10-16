@@ -50,7 +50,43 @@ class FilesModel(private val app: Application) {
         if (!busy) transferPrefs.edit { putBoolean("unfinished", false) }
     }
 
+    private var inspectionGeneration = 0
+    private var inspectionJob: Job? = null
+    internal var inspection by mutableStateOf<FileInspection?>(null)
+        private set
+    var inspectionVisible by mutableStateOf(false)
+        private set
+    var inspecting by mutableStateOf(false)
+        private set
+    var inspectionMessage by mutableStateOf("")
+        private set
+    fun closeInspection() {
+        inspectionGeneration++
+        inspectionJob?.cancel(); inspectionJob = null
+        inspecting = false; inspectionVisible = false; inspection = null
+    }
+    fun inspectSelected() {
+        val choice = downloadChoice ?: return
+        val ssh = connection ?: return
+        if (busy || inspecting || choice.epoch != epoch) return
+        downloadChoice = null
+        inspection = null; inspectionVisible = true; inspecting = true
+        inspectionMessage = "Calculando no Fedora… Mantenha o app visível. Arquivos grandes podem demorar."
+        val id = epoch
+        val generation = ++inspectionGeneration
+        inspectionJob = scope.launch {
+            try {
+                val result = runInterruptible(Dispatchers.IO) { ssh.inspectFile(choice.path) }
+                if (id == epoch && generation == inspectionGeneration) { inspection = result; inspectionMessage = "Inspeção concluída." }
+            } catch (_: CancellationException) {
+            } catch (error: Exception) {
+                if (id == epoch && generation == inspectionGeneration) inspectionMessage = (error as? DownloadFailure)?.safeMessage
+                    ?: "Inspeção incompleta: canal SSH desconectado ou resposta inválida. Tente novamente manualmente."
+            } finally { if (id == epoch && generation == inspectionGeneration) inspecting = false }
+        }
+    }
     fun attach(value: SshConnection?) {
+        closeInspection()
         val old = control
         if (old != null && status.name.isNotEmpty()) recoveryNotice =
             "Transferência interrompida pela mudança de conexão. Confira o destino antes de repetir: pode haver documento SAF parcial, temporário remoto .myct-upload-* ou upload já publicado. Nada será repetido automaticamente."
@@ -101,6 +137,11 @@ class FilesModel(private val app: Application) {
     }
     fun onBackground() {
         background = true
+        if (inspecting) {
+            inspectionGeneration++
+            inspectionJob?.cancel(); inspecting = false
+            inspectionMessage = "Inspeção cancelada ao sair do app. Inicie novamente manualmente."
+        }
         if (busy && !transferKeepsConnection) cancel()
     }
     fun load(path: String? = listing?.path) {

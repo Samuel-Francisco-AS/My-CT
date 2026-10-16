@@ -7,3 +7,5 @@ android/.kotlin/
 artifacts/
 *.jks
 *.keystore
+
+/server/myct-inspect

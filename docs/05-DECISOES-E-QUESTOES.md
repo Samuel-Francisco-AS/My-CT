@@ -232,3 +232,13 @@ em ratio/banda ou efeito de escrita em list/status. Colisões e RPC ambíguo nã
 repetem move automaticamente. CLI e hook atualizados na instância dedicada por
 RPC, sem restart. APK 0.5.4/code 11 necessário para aceitar o caminho legível.
 [Prova real, instalação e limites](MYCT-5C-BITTORRENT-REPORT.md).
+
+## 2026-10-16 — MYCT-5D-A: inspeção pontual pelo SSH existente
+
+CLI C++20 separada, JSON v1, SHA-256 via OpenSSL EVP já disponível e MIME via
+`file`. Escopo de inspeção limitado ao home do usuário SSH, mais restrito que a
+navegação SFTP, cobrindo os downloads atuais sem autorizar leitura fora do home.
+`openat2` recusa symlinks/escape; stdin aberto permite cancelar sem serviço ou
+fila. Limite de 30 min; sair do app cancela. Sem API, banco ou deploy. Decisões
+com prova automatizada no Fedora, experiência física ainda pendente; detalhes e
+limites no [relatório MYCT-5D-A](MYCT-5D-A-REPORT.md).
