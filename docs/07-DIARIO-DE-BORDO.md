@@ -191,3 +191,16 @@ foi necessária para passar os testes. Evidências e retomada no relatório MYCT
   de testes; manter Marco C/issue #4 aberto para torrent e automações.
   Limpeza de branch local/remota solicitada ao proprietário via comandos
   Git após sincronização; preservar APK, downloads e serviços.
+
+### 2026-10-16 — MYCT-5D-B1, candidata Fedora para aceite
+
+Main limpa/sincronizada em `6d78dbd`; branch `myct-5d-b1-clamav`. Inventário
+confirmou ClamAV/FreshClam 1.4.6 instalados e linger ativo. Configuração própria
+sem tocar /etc; primeira atualização real baixou daily 28155/main 63/bytecode 339.
+CLI myct-av, scanner C++20, unidades de usuário e contrato JSON entregues.
+Benigno/EICAR/limites/cancelamento/caminhos e preservação de fixtures comprovados
+no Fedora; oito pedidos update simultâneos serializados após scanner.
+Servidor 18/18; operacionais 22/22. Medição ~11 s e ~962 MiB RSS, sem pressão
+observada, Core/Transmission ativos. Timer instalado, inativo/desabilitado;
+aguarda confirmação específica. APK não alterado, B2 não iniciada, PR sem merge.
+[Relatório completo e retomada](MYCT-5D-B1-REPORT.md).

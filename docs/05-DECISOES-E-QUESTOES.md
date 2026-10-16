@@ -242,3 +242,20 @@ navegação SFTP, cobrindo os downloads atuais sem autorizar leitura fora do hom
 fila. Limite de 30 min; sair do app cancela. Sem API, banco ou deploy. Decisões
 com prova automatizada no Fedora, experiência física ainda pendente; detalhes e
 limites no [relatório MYCT-5D-A](MYCT-5D-A-REPORT.md).
+
+## 2026-10-16 — MYCT-5D-B1: ClamAV pontual, base do usuário e timer de 36h
+
+Solicitação explícita do proprietário para B1 Fedora, sem APK/B2. ClamScan sem
+daemon, worker C++20 com validação compartilhada da 5D-A e O_NOATIME obrigatório,
+argv fixo e leitura do inode via stdin. Adaptador operacional em Python stdlib
+segue a exceção do myct-torrent para JSON/systemd/locks, sem biblioteca nova;
+Core/backend principal continuam C++20. Análise estritamente informativa.
+Base ClamAV privada, FreshClam sem root pelo mesmo serviço oneshot para CLI e
+timer; OnStartupSec=5min e OnUnitInactiveSec=36h, sem persistir tempo desligado.
+Lock único entre análise e atualização limita RAM e estabiliza versão da base;
+update aguarda scanner terminar. Freshness separada em 72h, admitindo margem
+sobre o intervalo de 36h. Pacotes já instalados pelo proprietário, sem sudo.
+Instalação/atualização real de B1 autorizadas; timer entregue desabilitado,
+ativação permanente depende de confirmação. Consumo real ~1 GiB e ~11 s por
+análise pequena, sem pressão observada. PR sem merge até validação.
+[Entrega, provas e limites](MYCT-5D-B1-REPORT.md).

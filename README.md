@@ -1,8 +1,17 @@
 # My-CT
 
+**MYCT-5D-B1 implementada para revisão em 16/10/2026:** ClamAV pontual no Fedora,
+CLI `myct-av` + worker C++20, base dedicada atualizada realmente, análise
+não destrutiva e unidades de usuário entregues. [Relatório B1](docs/MYCT-5D-B1-REPORT.md)
+e [contrato para B2](docs/MYCT-5D-B1-CLI.md). Instalação B1 no espaço de `sam`
+realizada sob autorização; **timer instalado mas desabilitado**, ativação permanente
+requer confirmação. PR sem merge até validação do proprietário. Android permanece
+0.5.5/code 12; B2 não iniciada. Issue #18 continua aberta.
+
+
 **MYCT-5C aprovada (16/10/2026, PR #17):** BitTorrent/magnet pelo Transmission 4.1.3 no Fedora e controles no APK **0.5.4/code 11**. O proprietário confirmou no Moto G06 download sem SSH, pausa/retomada, remoção preservando arquivo, SFTP e **nome de pasta pelo título real ao concluir**, usando hook/RPC do Transmission. Seeding preservado; sem migração das pastas antigas. [Relatório de fechamento](docs/MYCT-5C-BITTORRENT-REPORT.md) · [release 0.5.4](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-5c-v0.5.4-rc1).
 
-**MYCT-5D-A ACEITA fisicamente (16/10/2026):** Arquivos → Verificar arquivo com tamanho/tipo por conteúdo/SHA-256, cópia e comparação opcional comprovados no Moto G06; APK 0.5.5/code 12, helper C++20 `myct-inspect` no Fedora durante o aceite. [PR #19](https://github.com/Samuel-Francisco-AS/My-CT/pull/19) integrado à `main`; [relatório de aceite](docs/MYCT-5D-A-REPORT.md). MYCT-5D-B/ClamAV permanece posterior mediante autorização. Dívidas #9 e automações #4 continuam adiadas.
+**MYCT-5D-A ACEITA fisicamente (16/10/2026):** Arquivos → Verificar arquivo com tamanho/tipo por conteúdo/SHA-256, cópia e comparação opcional comprovados no Moto G06; APK 0.5.5/code 12, helper C++20 `myct-inspect` no Fedora durante o aceite. [PR #19](https://github.com/Samuel-Francisco-AS/My-CT/pull/19) integrado à `main`; [relatório de aceite](docs/MYCT-5D-A-REPORT.md). MYCT-5D-B1/ClamAV está entregue para revisão conforme relatório acima; B2 permanece posterior. Dívidas #9 e automações #4 continuam adiadas.
 
 **My-CT** é uma iniciativa de infraestrutura pessoal: um servidor Linux doméstico, administrado por um aplicativo Android nativo, capaz de executar tarefas, disponibilizar arquivos e realizar downloads sem depender de uma sessão gráfica.
 

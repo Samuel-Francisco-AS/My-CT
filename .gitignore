@@ -9,3 +9,8 @@ artifacts/
 *.keystore
 
 /server/myct-inspect
+
+/server/myct-av-scan
+
+# Python operational tools/tests
+__pycache__/

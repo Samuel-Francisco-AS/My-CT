@@ -19,29 +19,7 @@
 #include <string>
 #include <array>
 
-struct Fd { int n; ~Fd() { if(n >= 0) close(n); } };
-static std::string json(const std::string& s) {
-    std::ostringstream o; o << '"';
-    for(unsigned char c : s) {
-        if(c == '"' || c == '\\') o << '\\' << c;
-        else if(c < 32) o << "\\u" << std::hex << std::setw(4) << std::setfill('0') << int(c);
-        else o << c;
-    }
-    return o.str() + '"';
-}
-static void check(bool ok, const char* message) { if(!ok) throw std::runtime_error(message); }
-static std::string decode(const std::string& s) {
-    check(!s.empty() && s.size() <= 32768 && s.size()%2 == 0, "Caminho inválido.");
-    std::string out;
-    for(size_t i=0;i<s.size();i+=2) {
-        auto digit=[](char c) { return c>='0' && c<='9' ? c-'0' : c>='a' && c<='f' ? c-'a'+10 : -1; };
-        int a=digit(s[i]), b=digit(s[i+1]);
-        check(a>=0 && b>=0, "Caminho inválido.");
-        unsigned char c=a*16+b;
-        check(c>=32 && c!=127, "Caminho contém controles não suportados."); out+=c;
-    }
-    return out;
-}
+#include "safe_file.hpp"
 static void connected(bool watched) {
     if(!watched) return;
     pollfd p{STDIN_FILENO, POLLIN, 0};
@@ -96,21 +74,7 @@ int main(int argc,char** argv) {
         check(argc==2 || (argc==3 && std::string(argv[2])=="--watch-stdin"),"Uso: myct-inspect CAMINHO_UTF8_HEX [--watch-stdin]");
         bool watched=argc==3;
         auto path=decode(argv[1]);
-        auto user=getpwuid(getuid()); check(user,"Usuário Linux indisponível.");
-        std::string home=user->pw_dir, prefix=home+"/";
-        check(path.starts_with(prefix),"Caminho fora do home autorizado do usuário SSH.");
-        auto relative=path.substr(prefix.size());
-        std::istringstream components(relative); std::string part;
-        while(std::getline(components,part,'/')) check(!part.empty() && part!="." && part!="..","Caminho não autorizado.");
-        Fd root{open(home.c_str(),O_PATH|O_DIRECTORY|O_CLOEXEC)};
-        check(root.n>=0,"Acesso ao home negado.");
-        open_how how{}; how.flags=O_RDONLY|O_NONBLOCK|O_CLOEXEC; how.resolve=RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS;
-        Fd file{int(syscall(SYS_openat2,root.n,relative.c_str(),&how,sizeof how))};
-        if(file.n<0) {
-            if(errno==ENOENT) throw std::runtime_error("Arquivo inexistente.");
-            if(errno==EACCES) throw std::runtime_error("Sem permissão de leitura.");
-            throw std::runtime_error("Caminho recusado: symlink, escape ou acesso indisponível.");
-        }
+        Fd file{openHomeFile(path)};
         struct stat before{},after{};
         check(fstat(file.n,&before)==0 && S_ISREG(before.st_mode),"Selecione um arquivo regular; diretórios e tipos especiais são recusados.");
         connected(watched);
