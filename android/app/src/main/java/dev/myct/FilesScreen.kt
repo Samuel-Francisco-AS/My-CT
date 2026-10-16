@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -53,6 +54,30 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
     var link by remember { mutableStateOf<RemoteEntry?>(null) }
     val listing = model.listing
     val status = model.status
+    val listState = rememberLazyListState()
+    fun openDirectory(path: String) {
+        listing?.let { current ->
+            model.rememberScroll(current.path, current.entries,
+                listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+        }
+        model.load(path)
+    }
+    // Restoration happens after the new listing is composed, not while it is loading.
+    LaunchedEffect(model, listing?.path) {
+        val current = listing ?: return@LaunchedEffect
+        val saved = model.scrollPosition(current.path)
+        listState.scrollToItem(saved?.restoredIndex(current.entries) ?: 0, saved?.offset ?: 0)
+    }
+    DisposableEffect(model, listing?.path) {
+        val current = listing
+        onDispose {
+            // Navigating already saved the old folder; avoid storing a clamped new-list position.
+            if (current != null && model.listing?.path == current.path) {
+                model.rememberScroll(current.path, current.entries,
+                    listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+            }
+        }
+    }
     val dateFormat = remember { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT) }
     LaunchedEffect(model) { if (model.listing == null && !model.busy) model.load(null) }
     CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
@@ -66,7 +91,7 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 6.dp))
             Row {
                 TextButton(enabled = !model.busy && listing != null && listing.path != "/",
-                    onClick = { listing?.let { model.load(RemotePath.parent(it.path)) } }) { Text("↑ Pai") }
+                    onClick = { listing?.let { openDirectory(RemotePath.parent(it.path)) } }) { Text("↑ Pai") }
                 TextButton(enabled = !model.busy, onClick = { model.load() }) { Text("Atualizar") }
                 TextButton(enabled = !model.busy && listing != null, onClick = {
                     if (model.beginUploadSelection()) upload.launch(arrayOf("*/*"))
@@ -99,14 +124,14 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
                     } catch (_: Exception) { Toast.makeText(context, "Download concluído, mas o visualizador/provedor não abriu o documento. Isso não comprova corrupção. Tente pelo gerenciador Android.", Toast.LENGTH_LONG).show() }
                 }) { Text("Abrir arquivo baixado") }
             }
-            LazyColumn(Modifier.weight(1f)) {
+            LazyColumn(Modifier.weight(1f), state = listState) {
                 items(listing?.entries ?: emptyList(), key = { it.name }) { entry ->
                     ListItem(headlineContent = { Text(entry.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
                         supportingContent = {
                             Text("${when (entry.kind) { RemoteKind.DIRECTORY -> "Pasta"; RemoteKind.LINK -> "Link simbólico"; RemoteKind.FILE -> "Arquivo · ${formatFileSize(entry.size)}"; RemoteKind.OTHER -> "Tipo especial (sem transferência)" }} · ${dateFormat.format(Date(entry.modified * 1000))}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }, modifier = Modifier.clickable(enabled = !model.busy) {
                             when (entry.kind) {
-                                RemoteKind.DIRECTORY -> listing?.let { model.load(RemotePath.child(it.path, entry.name)) }
+                                RemoteKind.DIRECTORY -> listing?.let { openDirectory(RemotePath.child(it.path, entry.name)) }
                                 RemoteKind.FILE -> model.selectDownload(entry)
                                 RemoteKind.LINK -> link = entry
                                 RemoteKind.OTHER -> Unit
@@ -170,7 +195,7 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
         link?.let { entry ->
             AlertDialog(onDismissRequest = { link = null }, title = { Text("Link simbólico") },
                 text = { Text("${entry.name}\nAbrir seguirá o link somente para navegar, se o destino for um diretório acessível. Links não são baixados nem modificados por esta tela.") },
-                confirmButton = { TextButton(onClick = { listing?.let { model.load(RemotePath.child(it.path, entry.name)) }; link = null }) { Text("Abrir diretório") } },
+                confirmButton = { TextButton(onClick = { listing?.let { openDirectory(RemotePath.child(it.path, entry.name)) }; link = null }) { Text("Abrir diretório") } },
                 dismissButton = { TextButton(onClick = { link = null }) { Text("Cancelar") } })
         }
     }
