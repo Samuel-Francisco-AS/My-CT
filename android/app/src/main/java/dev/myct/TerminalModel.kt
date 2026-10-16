@@ -97,6 +97,7 @@ class TerminalModel(application: Application) {
             return
         }
         disconnect("Iniciando nova conexão.")
+        diagnostics.reset()
         val id = ++generation
         val current = SshConnection()
         connection = current
@@ -143,7 +144,13 @@ class TerminalModel(application: Application) {
                     val writer = launch(Dispatchers.IO) {
                         try {
                             for (action in queue) when (action) {
-                                is Action.Write -> { diagnostics.wrote(action.queuedAt); current.output.write(action.bytes); current.output.flush() }
+                                is Action.Write -> {
+                                    diagnostics.wrote(action.queuedAt)
+                                    val started = System.nanoTime()
+                                    current.output.write(action.bytes)
+                                    current.output.flush()
+                                    diagnostics.flushed(System.nanoTime() - started)
+                                }
                                 is Action.Resize -> current.resize(action.cols, action.rows, action.width, action.height)
                             }
                         } catch (error: Exception) {
@@ -163,7 +170,11 @@ class TerminalModel(application: Application) {
                                     val queuedAt = System.nanoTime()
                                     withContext(Dispatchers.Main) {
                                         diagnostics.delivered(queuedAt)
-                                        if (id == generation) screen.append(chunk)
+                                        if (id == generation) {
+                                            val started = System.nanoTime()
+                                            screen.append(chunk)
+                                            diagnostics.appended(System.nanoTime() - started)
+                                        }
                                     }
                                 }
                             }
