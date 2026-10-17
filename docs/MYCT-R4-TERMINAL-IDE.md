@@ -260,3 +260,8 @@ básico de C/GCC da 0.6.5 continua comprovado; **não é aceite da Fix 0.6.6**.
 **Decisão de operação:** proprietário autorizou expressamente **fechar MYCT-R4 e integrar PR #26 à `main`**, preservando histórico e sem apagar a branch até orientação de sincronização Git local. Novo trabalho apenas na **MYCT-L1 — ambiente local independente**, planejada em [docs/MYCT-L1-AMBIENTE-LOCAL.md](MYCT-L1-AMBIENTE-LOCAL.md) na main, em uma nova conversa. MYCT-6 automações fica posterior à L1. Os trechos anteriores “pendente de aceite” pertencem ao histórico pré-teste; prevalece este resultado.
 
 **Pendências específicas não bloqueantes:** eventual validação adicional em cenário de conflito de escrita, notificações/permissões e acessibilidade; a R4 está aprovada para uso pessoal/portfólio, não declarada pronta para distribuição comercial.
+
+
+## G — Merge efetivo e encerramento Git (17/10/2026)
+
+PR #26 **integrado na main** por merge commit `266e799a0fe3d5a4dd6d9a270095c3d2f3da6005` (preservação de histórico). O documento de decisões `docs/05-DECISOES-E-QUESTOES.md` foi conciliado com a MYCT-L1 para preservar ambas as decisões. [Fechamento oficial](MYCT-R4-FECHAMENTO.md). A branch pode ser removida depois de sincronização local e teste de ancestralidade; não apagar antes. **Próxima fase: MYCT-L1**, em nova conversa, antes de MYCT-6 automações. Nenhum novo desenvolvimento L1 iniciou neste merge.
