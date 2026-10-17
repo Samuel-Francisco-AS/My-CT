@@ -48,11 +48,18 @@ internal fun MyCtTextButton(onClick: () -> Unit, modifier: Modifier = Modifier, 
     TextButton(onClick, modifier, enabled, shape = MyCtGeometry.Control, colors = colors, content = content)
 }
 
-/** Terminal-only controls: direct press colors, no ripple/tween, one native keyboard haptic.
+/** Direct press colors, no ripple/tween, one native keyboard haptic.
  * Seven equal columns keep the reference layout even with a narrow viewport or large fonts. */
 @Composable
 internal fun MyCtTerminalKeys(modifiers: TerminalModifiers, enabled: Boolean,
                               onKey: (TerminalExtraKey) -> Unit) {
+    MyCtKeyGrid(modifiers.ctrl, modifiers.alt, enabled, onKey)
+}
+
+/** Shared visual/haptic grid. The caller owns the destination and independent modifier state. */
+@Composable
+internal fun MyCtKeyGrid(ctrl: Boolean, alt: Boolean, enabled: Boolean,
+                         onKey: (TerminalExtraKey) -> Unit, editor: Boolean = false) {
     val palette = MaterialTheme.colorScheme
     val view = LocalView.current
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -64,8 +71,8 @@ internal fun MyCtTerminalKeys(modifiers: TerminalModifiers, enabled: Boolean,
                         val interactions = remember { MutableInteractionSource() }
                         val pressed by interactions.collectIsPressedAsState()
                         val active = when (key) {
-                            TerminalExtraKey.CTRL -> modifiers.ctrl
-                            TerminalExtraKey.ALT -> modifiers.alt
+                            TerminalExtraKey.CTRL -> ctrl
+                            TerminalExtraKey.ALT -> alt
                             else -> false
                         }
                         val text = if (!enabled) palette.onSurface.copy(alpha = 0.38f)
@@ -78,7 +85,8 @@ internal fun MyCtTerminalKeys(modifiers: TerminalModifiers, enabled: Boolean,
                                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                             }
                             .semantics {
-                                contentDescription = key.description
+                                contentDescription = if (editor && key == TerminalExtraKey.CTRL) "Control: atalhos locais e próxima tecla da barra"
+                                    else if (editor && key == TerminalExtraKey.ALT) "Alt: atalhos locais do Sora" else key.description
                                 if (key == TerminalExtraKey.CTRL || key == TerminalExtraKey.ALT) {
                                     selected = active
                                     stateDescription = if (active) "Ativado para a próxima tecla" else "Desativado"

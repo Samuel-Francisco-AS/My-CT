@@ -38,6 +38,7 @@ private fun shellIcon(name: String, path: String) = ImageVector.Builder(name, 24
 private val sectionIcons = mapOf(
     AppSection.Terminal to shellIcon("Terminal", "M4,5 L20,5 L20,19 L4,19 Z M7,9 L10,12 L7,15 M13,15 L17,15"),
     AppSection.Files to shellIcon("Files", "M3,7 L3,19 L21,19 L21,7 L12,7 L10,4 L3,4 Z"),
+    AppSection.Ide to shellIcon("IDE", "M8,5 L2,12 L8,19 M16,5 L22,12 L16,19 M14,3 L10,21"),
     AppSection.Health to shellIcon("Health", "M3,12 L7,12 L10,5 L14,19 L17,12 L21,12"),
     AppSection.Vault to shellIcon("Vault", "M5,10 L19,10 L19,21 L5,21 Z M8,10 L8,7 C8,2 16,2 16,7 L16,10 M12,14 L12,17"),
     AppSection.Downloads to shellIcon("Downloads", "M12,3 L12,15 M7,10 L12,15 L17,10 M4,16 L4,21 L20,21 L20,16")

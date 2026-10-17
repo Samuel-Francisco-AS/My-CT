@@ -14,6 +14,7 @@ import android.os.PersistableBundle
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.LocalActivity
@@ -154,6 +155,13 @@ private fun TerminalApp(model: TerminalModel) {
         activity.lifecycle.addObserver(observer)
         onDispose { activity.lifecycle.removeObserver(observer) }
     }
+    var ideExitWarning by remember { mutableStateOf(false) }
+    BackHandler(enabled = model.ide.document?.dirty == true) { ideExitWarning = true }
+    if (ideExitWarning) AlertDialog(onDismissRequest = { ideExitWarning = false },
+        title = { Text("Há código não salvo") },
+        text = { Text("Salve na IDE antes de fechar o app. O buffer está em memória e pode ser perdido se o processo Android encerrar.") },
+        confirmButton = { TextButton(onClick = { ideExitWarning = false; selectedTab = AppSection.Ide }) { Text("Voltar à IDE") } },
+        dismissButton = { TextButton(onClick = { ideExitWarning = false; activity.finish() }) { Text("Sair sem salvar") } })
     // A single union consumes overlap once; AndroidView receives the actual remaining area.
     val insets = WindowInsets.systemBars.union(WindowInsets.displayCutout).union(WindowInsets.ime)
     AppShell(
@@ -179,7 +187,11 @@ private fun TerminalApp(model: TerminalModel) {
     ) {
         AppSectionContent(selectedTab) {
             Column(Modifier.fillMaxSize()) {
-                if (selectedTab == AppSection.Downloads) DownloadsScreen(model.downloads, model.torrents, model.files.busy, { path ->
+                if (selectedTab == AppSection.Ide) IdeScreen(model.ide,
+                    terminal = { selectedTab = AppSection.Terminal },
+                    files = { path -> if (connected && !model.files.busy) { model.files.load(path); selectedTab = AppSection.Files } },
+                    modifier = Modifier.weight(1f))
+                else if (selectedTab == AppSection.Downloads) DownloadsScreen(model.downloads, model.torrents, model.files.busy, { path ->
                     if (!model.files.busy && connected) { model.files.load(path); selectedTab = AppSection.Files }
                 }, Modifier.weight(1f))
                 else if (selectedTab == AppSection.Vault) VaultScreen(model.vault, Modifier.weight(1f))
