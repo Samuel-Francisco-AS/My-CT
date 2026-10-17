@@ -1,6 +1,6 @@
 # MYCT-R3 — Teclas auxiliares e colagem direta
 
-**Data:** 17/10/2026. **Status:** implementação candidata; aceite físico no Moto G06 pendente. **Base:** main após fechamento MYCT-R2. **Princípio:** FLUIDEZ.
+**Data:** 17/10/2026. **Estado final:** **PASS físico do proprietário**, candidata 0.6.4/code 21 aceita; fechamento e merge do PR #25 autorizados. **Base:** main após MYCT-R2. **Princípio:** FLUIDEZ.
 
 ## Layout obrigatório — referência Termux no Moto G06
 
@@ -91,7 +91,7 @@ Código e validação enviados em **`3b21629f699bb41463d4cbb864a18564a3bd1e8a`**
 
 Retomada: permanecer nesta branch, instalar a candidata manualmente sobre 0.6.3, executar o gate abaixo no Moto e registrar somente os resultados observados. Não declarar aceite nem integrar o PR antes do retorno do proprietário.
 
-### Gate físico — ainda pendente
+### Gate físico — roteiro original (histórico, anterior ao aceite)
 
 ADB não apresentou dispositivo conectado nesta execução. Não houve instalação no Moto, conexão SSH autenticada, medição de RAM/CPU Android ou aceite físico. O custo de build e o tamanho do APK não são medidas de consumo do app.
 
@@ -102,4 +102,17 @@ ADB não apresentou dispositivo conectado nesta execução. Não houve instalaç
 5. Colar texto simples e multilinha pelas ações de seleção/menu e clipboard do teclado, sem popup My-CT; testar bracketed paste num programa compatível. Campos comuns mantêm o fluxo Android/Gboard.
 6. Desconectar/reconectar e confirmar que ações antigas não colam em outra sessão. Confirmar estabilidade do teclado e ausência de regressão nos fluxos preservados.
 
-A R3 só pode ser fechada após o retorno físico do proprietário. Não fazer merge automaticamente.
+Este era o roteiro anterior ao retorno físico; o proprietário concedeu passe posteriormente, conforme registro abaixo.
+
+
+## Aceite físico final e decisão de integração — 17/10/2026
+
+O proprietário apresentou captura do **Moto G06** com a barra 2×7 instalada imediatamente acima do teclado Android e confirmou em texto: **“Sim, ficou bom, o toque e a disposição das teclas, e testei suas funcionalidades e funcionaram bem. Acredito que já possamos aplicar o passe nessa etapa. E se você não tiver nenhuma contestação, pode realizar o procedimento de fechamento padrão no remoto.”**
+
+**PASS/aprovado pelo proprietário:** disposição das duas fileiras, toque/feedback e funcionamento das teclas exercitadas no aparelho. A captura mostra `^C` devolvendo o prompt, coerente com Ctrl+C funcionando. Código e testes automatizados também comprovam a existência do caminho de **colagem direta sem diálogo próprio**.
+
+**Limites do relato:** o proprietário não descreveu um ensaio individual separado de colagem simples/multilinha/bracketed paste, ALT com aplicações específicas, TalkBack, rotação e haptics com vibração desligada. Não registrar esses cenários como fisicamente testados; ficam como validação oportunista, **não bloqueiam** o passe explícito. A confirmação My-CT “Enviar texto ao terminal?” foi removida no código, sem alterar diálogos de segurança distintos.
+
+**Decisão operacional:** encerrar a MYCT-R3 e integrar **PR #25 à `main` com merge commit**, preservando histórico, mediante autorização expressa do proprietário; não alterar serviços Fedora ou funcionalidades R2. R-01 de lag SSH continua dívida suspensa e não é parte deste passe. O relatório final de fechamento na `main` registrará SHA real do merge e situação Git. Não apagar branch remota antes de orientar sincronização local.
+
+Os resultados anteriores de implementação e testes permanecem históricos; o aceite físico posterior prevalece para o status da fase.
