@@ -319,3 +319,24 @@ Toda a aplicação — inclusive seções não exemplificadas em capturas — de
 ## 17/10/2026 — MYCT-L1 e reordenação antes da automação (ADR-015 a ADR-018)
 
 O proprietário quer My-CT como estação de programação offline autossuficiente, não dependente do app Termux, do Fedora ou de internet, com fase inicial para programas de console, e expansão futura em direção a ferramentas Linux completas. O mesmo Sora, explorador e terminal gráfico devem atender **Local** e **Remoto** por backends de dados/execução distintos. A rota L1A (IDE/arquivos locais) → L1B (PTY/shell Android) → L1C (compilação e execução C offline) foi **aprovada para ser a fase seguinte ao fechamento da R4**. MYCT-6/T5 automações foi explicitamente adiada, sem cancelamento. Não presumir compilador funcional no target 36; escolher runtime/compilador após protótipo comprovado. Fonte: [MYCT-L1](MYCT-L1-AMBIENTE-LOCAL.md).
+
+## MYCT-R4 — 17/10/2026 — editor remoto pessoal
+
+Autorização expressa: última auditoria SSH + IDE na mesma sessão. Auditoria não
+identificou nova causa demonstrável; transporte/emulador permanecem como R3.
+IDE usa Sora 0.23.6 LGPL, AndroidView e TextMate local (C/C++, Rust, Python,
+Kotlin, Shell e JavaScript), reusando sessão e canais SFTP existentes. Sem LSP,
+NDK, Core, banco, execução automática ou serviço adicional. Um buffer em memória,
+limites 1 MiB/30 mil linhas, snapshot só em abrir/salvar: fluidez antes de abas.
+Save explícito com comparação integral, temporário verificado, modo/uid/gid,
+hardlink de backup privado e posix-rename OpenSSH; resultado incerto bloqueia
+novos saves até revisão/reabertura. SFTP não oferece CAS, ACL/xattr/hardlinks
+existentes não são reproduzidos no novo inode; backup conserva inode anterior.
+Evitar outro escritor no intervalo final; sem promessa de sincronização concorrente.
+Arquivo deve pertencer ao usuário SSH, ter escrita de proprietário e não ter bits
+especiais. Sem essas garantias/extensões, recusar em vez de truncar o original.
+Buffers/undo sobrevivem à navegação, recriação da Activity e desconexão dentro do
+mesmo processo; nenhuma cópia persistente/autosave silencioso. Back avisa sobre
+buffer sujo; encerramento forçado do processo Android exige salvar antes.
+Fontes/licenças e reconstrução em `android/IDE-LICENSES.md`; evidências e limites
+em `docs/MYCT-R4-TERMINAL-IDE.md`. **Aceite físico R4-Fix concedido em 17/10/2026:** Sora editou/salvou `teste.c`, e GCC executou no Fedora com saída `My-CT IDE funcionando! Pós-r4-fix`; teclas 2×7, cabeçalho e navegação aprovados pelo proprietário. **PR #26 autorizado para merge**, SHA de integração registrado no fechamento da R4. Lag SSH continua R-01 suspensa.
