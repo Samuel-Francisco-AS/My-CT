@@ -3,6 +3,12 @@
 **Abertura:** 15/10/2026. **Atualização (16/10):** R-01/lag **suspenso como dívida** após teste físico negativo da 0.5.9; R-02/rolagem **melhorou e foi confirmado no Moto**; próxima trilha: **refinamento visual e ergonomia (UX-R03 + R-09)**.  
 [Issue de acompanhamento #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9) · [Fechamento do ciclo](08-FECHAMENTO-CICLO-ANDROID.md)
 
+## MYCT-R3 — PASSE físico e merge concluído (17/10/2026)
+
+O proprietário aprovou no Moto G06 a grade de teclas auxiliares no layout **Termux 2×7**, incluindo posicionamento, toque e funcionalidades exercitadas. MYCT-R3 **0.6.4/code 21** integrou-se à `main` pelo [PR #25](https://github.com/Samuel-Francisco-AS/My-CT/pull/25), merge `daae0d06af5adc91f310b4b7a2726a55b7212b95`. A implementação inclui CTRL/ALT one-shot, feedback háptico breve, resposta visual mais rápida e colagem direta sem o diálogo de confirmação próprio do My-CT. [Fechamento MYCT-R3](MYCT-R3-FECHAMENTO.md).
+
+**R-07 resolvida e aprovada.** Permanecem R-01/lag SSH **suspenso**, validações SFTP em background (R-04) e adversas (R-05), autenticação SSH com chave/Keystore opcional (R-06), validação Downloads HTTP (R-08) e prova física específica do relatório AV (R-09). Não reabrir análises de lag. As linhas abaixo representam histórico do planejamento anterior a este checkpoint.
+
 ## Checkpoint de fechamento R2 — 17/10/2026
 
 **MYCT-R2A/R2A.1/R2B/R2B-Fix aprovadas pelo proprietário no Moto G06** (último APK 0.6.3/code 20). Identidade preta/dourada industrial, navegação lateral e telas internas com melhora visual; scroll SFTP melhorado; correção do gesto do drawer e integração dos dados acumulados/ratio dos torrents confirmadas no retorno do proprietário. O adaptador `myct-torrent` foi efetivamente instalado no Fedora com backup e consulta somente leitura; a diferença entre taxas instantâneas e acumulados permanece preservada. [Detalhes do aceite](MYCT-R2B-REFINAMENTO-TELAS.md). A integração Git foi **executada com sucesso** em 17/10/2026 na ordem #22 → #23 → #24, com SHAs de merge `d239502`, `116f779` e `393eef9`. Relatório final: [MYCT-R2-FECHAMENTO.md](MYCT-R2-FECHAMENTO.md).
