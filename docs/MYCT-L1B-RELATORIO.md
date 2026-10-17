@@ -213,10 +213,18 @@ do terminal local nem substitui o gate de interface A–F.
   [APK](https://github.com/Samuel-Francisco-AS/My-CT/releases/download/myct-l1b-v0.6.8-rc1/myct-l1b-0.6.8-debug.apk),
   [SHA256SUMS](https://github.com/Samuel-Francisco-AS/My-CT/releases/download/myct-l1b-v0.6.8-rc1/myct-l1b-SHA256SUMS.txt)
   e fonte Sora 0.23.6 correspondente, preservando sua entrega LGPL anterior.
-- Branch `myct-l1b-local-terminal`, PR **draft com base `myct-l1a-ide-local`**,
+- Branch `myct-l1b-local-terminal`, [PR #29](https://github.com/Samuel-Francisco-AS/My-CT/pull/29)
+  **OPEN/draft com base `myct-l1a-ide-local`**,
   dependente do [PR #28](https://github.com/Samuel-Francisco-AS/My-CT/pull/28).
   Antes de qualquer integração futura, verificar o estado do #28 e ajustar a
   base se necessário, sem duplicar/reaplicar L1A. Sem merge ou fechamento #27.
+- Commits publicados: `9833201` (núcleo JNI/modelo/testes/licenças), `e10a974`
+  (integração UI/IDE) e `209ef9d` (relatório/retomada). Tag da pré-release aponta
+  para `209ef9dcbb441b21a4187e2648f3cf8e6e54c60b`; atualização documental posterior
+  registra links, sem alterar o APK. GitHub confirmou `prerelease=true`, APK
+  uploaded com **mesmo digest SHA-256 e 18.251.989 bytes** do arquivo local;
+  checksum e fonte Sora uploaded. PR #28 segue OPEN/draft na mesma HEAD L1A.
+  `git merge-base --is-ancestor` confirma a cadeia preservada.
 
 ## Uso, instalação e checklist físico compacto
 
