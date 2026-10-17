@@ -340,3 +340,8 @@ mesmo processo; nenhuma cópia persistente/autosave silencioso. Back avisa sobre
 buffer sujo; encerramento forçado do processo Android exige salvar antes.
 Fontes/licenças e reconstrução em `android/IDE-LICENSES.md`; evidências e limites
 em `docs/MYCT-R4-TERMINAL-IDE.md`. **Aceite físico R4-Fix concedido em 17/10/2026:** Sora editou/salvou `teste.c`, e GCC executou no Fedora com saída `My-CT IDE funcionando! Pós-r4-fix`; teclas 2×7, cabeçalho e navegação aprovados pelo proprietário. **PR #26 autorizado para merge**, SHA de integração registrado no fechamento da R4. Lag SSH continua R-01 suspensa.
+
+
+## MYCT-R4 — PASS e merge #26 (17/10/2026)
+
+R4-Fix 0.6.6/code 23 foi aceita fisicamente no Moto G06 após teste de IDE Sora com edição/salvamento e GCC Fedora retornando `My-CT IDE funcionando! Pós-r4-fix`. O proprietário aprovou os três ajustes de ergonomia e autorizou fechamento. [PR #26](https://github.com/Samuel-Francisco-AS/My-CT/pull/26) **MERGED** em `266e799a0fe3d5a4dd6d9a270095c3d2f3da6005`; [relatório formal](MYCT-R4-FECHAMENTO.md). As decisões sobre L1 (ADR-015 a ADR-018) permanecem intactas e o marco de entrada L1 está liberado. MYCT-6 automações segue posterior à L1. A investigação SSH da R4 não encontrou solução comprovada; lag R-01 continua suspenso.
