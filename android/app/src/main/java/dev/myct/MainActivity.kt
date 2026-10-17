@@ -190,6 +190,7 @@ private fun TerminalApp(model: TerminalModel) {
                     Text(model.message, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         color = if (model.phase == TerminalModel.Phase.ERROR) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground)
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ScreenHeading("Conectar ao Fedora", "Use rede privada. Senha não é salva; perda do processo exige nova autenticação. Pareamento verifica a identidade do servidor antes de conectar.")
                         OutlinedTextField(model.host, { model.host = it; fingerprint = "" }, label = { Text("Endereço do Fedora") },
                             singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -207,7 +208,7 @@ private fun TerminalApp(model: TerminalModel) {
                                 singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(autoCorrectEnabled = false))
                             Text("ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256", style = MaterialTheme.typography.bodySmall)
                         } else {
-                            Text("Host fixado: $pin", style = MaterialTheme.typography.bodySmall)
+                            DetailValue("Host fixado", pin, maxLines = 1)
                             MyCtTextButton(onClick = { forgetDialog = true }) { Text("Refazer pareamento…") }
                         }
                         MyCtButton(onClick = { val secret = password.toCharArray(); password = ""; model.connect(secret, fingerprint) },
@@ -308,23 +309,34 @@ private fun TerminalApp(model: TerminalModel) {
                     MyCtTextButton(onClick = { antivirusOptions = false }) { Text("← Voltar às opções") }
                     AntivirusSignaturesSection(model.antivirusSignatures)
                 } else {
-                    MyCtTextButton(onClick = { antivirusOptions = true }) { Text("Antivírus e assinaturas") }
-                    HorizontalDivider()
-                    Text("Terminal", style = MaterialTheme.typography.titleMedium)
-                    MyCtTextButton(onClick = { tmuxHelp = true; settings = false }) { Text("Recuperar trabalho · tmux") }
-                    Text("Fonte: ${model.fontSizeSp} sp")
-                    Row {
-                        Text("Entrada por caracteres", Modifier.weight(1f))
-                        MyCtSwitch(checked = model.enforceCharBasedInput, label = "Entrada por caracteres", onCheckedChange = { model.setCharBasedInput(it) })
+                    ScreenPanel {
+                        ScreenHeading("Terminal", "Entrada por caracteres controla como o teclado envia texto. A preferência existente é aplicada ao fechar Opções. Use A− e A+ para ajustar a fonte da grade ANSI.")
+                        MyCtOperationalToggle("Entrada por caracteres", "Preferência de entrada do teclado", model.enforceCharBasedInput,
+                            onCheckedChange = { model.setCharBasedInput(it) })
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Text("Fonte · ${model.fontSizeSp} sp", Modifier.weight(1f))
+                            MyCtTextButton(onClick = { model.changeFont(-1) }) { Text("A−") }
+                            MyCtTextButton(onClick = { model.changeFont(1) }) { Text("A+") }
+                        }
                     }
-                    Text("Altera como o teclado Android envia texto ao terminal. Experimente desativar se perceber atraso ao digitar. O resultado pode variar conforme o teclado.", style = MaterialTheme.typography.bodySmall)
-                    Row { MyCtTextButton(onClick = { model.changeFont(-1) }) { Text("A−") }; MyCtTextButton(onClick = { model.changeFont(1) }) { Text("A+") } }
-                    Row { Text("Proteger capturas", Modifier.weight(1f)); MyCtSwitch(checked = model.protectScreenshots, label = "Proteger capturas",
-                        onCheckedChange = { if (it) model.setCaptureProtection(true) else captureWarning = true }) }
-                    Text("O clipboard pertence ao Android e pode conter dados sensíveis.", style = MaterialTheme.typography.bodySmall)
-                    MyCtTextButton(onClick = { model.diagnostics.startSample(); settings = false }) { Text("Amostrar engasgos · 60 s") }
-                    MyCtTextButton(onClick = { measurements = model.diagnostics.snapshot(); settings = false }) { Text("Medições locais") }
-                    MyCtTextButton(onClick = { licenses = true; settings = false }) { Text("Licenças") }
+                    Spacer(Modifier.height(12.dp))
+                    ScreenPanel {
+                        ScreenHeading("Proteção e clipboard", "A preferência de captura é local. Cofre permanece sempre protegido. A área de transferência pertence ao Android e pode conter dados sensíveis.")
+                        MyCtOperationalToggle("Proteger capturas", "Cofre sempre protegido", model.protectScreenshots,
+                            onCheckedChange = { if (it) model.setCaptureProtection(true) else captureWarning = true })
+                        StatusNotice("Clipboard pode conter dados sensíveis.")
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    ScreenPanel {
+                        Text("Ferramentas", style = MaterialTheme.typography.titleMedium)
+                        MyCtTextButton(onClick = { antivirusOptions = true }) { Text("Antivírus e assinaturas") }
+                        MyCtTextButton(onClick = { tmuxHelp = true; settings = false }) { Text("Recuperar trabalho · tmux") }
+                        MyCtTextButton(onClick = { licenses = true; settings = false }) { Text("Licenças") }
+                        ExpandDetails("Diagnóstico local") {
+                            MyCtTextButton(onClick = { model.diagnostics.startSample(); settings = false }) { Text("Amostrar engasgos · 60 s") }
+                            MyCtTextButton(onClick = { measurements = model.diagnostics.snapshot(); settings = false }) { Text("Medições locais") }
+                        }
+                    }
                 }
             }
         }, confirmButton = { MyCtTextButton(onClick = { settings = false }) { Text("Fechar") } })

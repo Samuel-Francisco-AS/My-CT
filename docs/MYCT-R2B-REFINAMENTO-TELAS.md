@@ -1,6 +1,6 @@
 # MYCT-R2B — telas internas, ergonomia e fluidez
 
-**Abertura:** 17/10/2026. **Status:** planejamento para implementação, não concluído. **Base visual aceita:** MYCT-R2A.1 0.6.1/code 18; branch `myct-r2b-screens` derivada de `myct-r2a-visual-shell` após o [aceite](MYCT-R2-IDENTIDADE-VISUAL-E-PLANEJAMENTO.md).
+**Abertura:** 17/10/2026. **Status:** implementação candidata R2B; aceite visual/funcional no Moto G06 pendente. **Base visual aceita:** MYCT-R2A.1 0.6.1/code 18; branch `myct-r2b-screens` derivada de `myct-r2a-visual-shell` após o [aceite](MYCT-R2-IDENTIDADE-VISUAL-E-PLANEJAMENTO.md).
 
 ## Mandato
 
@@ -33,3 +33,46 @@ R-01 lag de digitação SSH permanece **dívida técnica suspensa**. Não estuda
 - PR #22 `myct-r1-terminal-files → main` draft/sem merge; PR #23 `myct-r2a-visual-shell → myct-r1-terminal-files` draft/sem merge. O **aceite visual da R2A.1** foi registrado; eventuais testes funcionais não relatados não devem ser presumidos.
 - Branch `myct-r2b-screens` parte do HEAD aceito/documentado de R2A.1. Codex deve trabalhar nela, abrindo PR **draft baseado em `myct-r2a-visual-shell`** para diff isolado; não mesclar #22, #23 ou R2B à main sem autorização explícita.
 - **R-07 teclas adicionais Home/End/PgUp/PgDn**, dívida de transferências em background e **lag R-01** permanecem fora de R2B, salvo nova solicitação.
+
+
+## Implementação candidata — 17/10/2026
+
+- **Arquivos:** caminho compacto consultável/copiável, seta acessível para subir, Atualizar/Enviar/ocultos na mesma faixa, ícones vetoriais por tipo e linhas com nome em duas linhas/metadados. Sem “Arquivos · SFTP” ou tutorial permanente. Ajuda `i` e permissão de notificação no início da escolha SAF; recusa mantém uso em primeiro plano, com aviso. Ações SAF/SFTP, inspeção, symlinks, cancelamento e abertura local preservadas.
+- **Deslocamento ao tocar:** o código anterior inseria progresso e Cancelar acima da LazyColumn ao iniciar `load`, diminuindo a viewport enquanto a lista antiga ainda aparecia. Agora status/ações ocupam faixa fixa de 64 dp e progresso tem 4 dp reservados, sem pedir scroll/centralização. Chave por caminho/filtro, âncora nome/offset, cache e modelos R1 permanecem idênticos. Esta é a correção do mecanismo identificado por revisão; **o sintoma físico ainda precisa ser reensaiado em arquivos/pastas parcialmente visíveis e no fim da lista**, além de voltar/trocar aba/filtro/reconectar. Não há alegação de reprodução ou resolução comprovada no Moto.
+- **Saúde:** painéis CPU/RAM/disco/Uptime do Core com valores reais, barras simples, estado/última consulta e marcação de dados anteriores. Sem novas medições/polling. **Cofre:** estado explícito, ações e senha efêmera, avisos de alcance do desbloqueio visíveis no momento da ação; ajuda secundária. Lifecycle/autenticação e FLAG_SECURE incondicional preservados.
+- **HTTP/Torrents:** formulários compactos e histórico em painéis, nomes completos consultáveis/copiáveis, progresso e ações existentes, vazios/erros/stale explícitos. Taxas antigas não são rotuladas como atuais. Aviso de seeding permanece visível antes de adicionar; remoção e cancelamento mantêm seus consentimentos e preservação de dados.
+- **Opções/relatórios:** grupos Terminal, Proteção/clipboard e Ferramentas; controles/callbacks existentes mantidos, diagnóstico somente sob ação manual. Persistência continua exclusivamente no drawer. Inspeção mostra resumo, SHA-256/cópia/comparação, avisos, detalhes expansíveis e estados AV completos. Relatórios/ajuda têm corpo rolável limitado à janela/insets e ações fora da rolagem; caminhos/títulos extensos não empurram Fechar para fora da tela. Nova camada visual pequena em `ScreenComponents.kt`, reutilizando o tema/controles aceitos, sem dependências/assets externos.
+
+## Acumulados de torrents — consulta aditiva
+
+Inspecionados [RPC 4.1.3](https://github.com/transmission/transmission/blob/4.1.3/docs/rpc-spec.md#33-torrent-accessor-torrent_get) e [definições tr_stat](https://github.com/transmission/transmission/blob/4.1.3/libtransmission/transmission.h). Acrescentados somente `downloaded_ever`, `uploaded_ever` e `upload_ratio` à lista de campos solicitados por `ops/myct-torrent`. Contadores são bytes históricos por torrent, separados de `rate_download`/`rate_upload` e do tamanho atual. Ratio é o valor informado pelo Transmission (4.1: enviado / tamanho final), sem cálculo a partir das taxas ou dos acumulados; −1 = indisponível, −2 = infinito. Campos faltantes/inválidos continuam indisponíveis, nunca zero inventado.
+
+**O adaptador atualizado está apenas no repositório. Não foi instalado no Fedora.** A CLI anterior continua compatível com o APK e operações existentes; acumulados/ratio aparecem como Indisponível até instalação manual autorizada da revisão `ops/myct-torrent`. Git pull não atualiza `~/.local/bin/myct-torrent`. Nenhuma alteração de RPC endpoint, serviço, motor, seeding, diretório, conta ou configuração. Teste Python confirma consulta única `torrent_get` e encaminhamento dos campos sem mutação.
+
+## Validação e retomada
+
+Ferramentas existentes: JBR/Java 21, SDK 36, Gradle 8.14.3, AGP 8.13.0/Kotlin 2.2.20, Compose UI 1.9.3/Material3 1.4.0. Nenhuma dependência instalada.
+
+```sh
+JAVA_HOME=/opt/android-studio/jbr ANDROID_HOME=/home/sam/Android/Sdk \
+  android/gradlew -p android :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --offline --console=plain
+python3 -m unittest discover -s ops/tests -p test_torrent.py
+python3 android/terminal/upstream/verify.py
+for patch in android/terminal/upstream/*.patch; do git apply --reverse --check "$patch" || exit; done
+git diff --check
+```
+
+**Build offline final SUCCESS; lint com 0 erros e dois avisos preexistentes de versões** (Gradle e org.json). JVM: **130 testes, 129 aprovados e 1 handshake local opt-in ignorado**, incluindo os cinco casos existentes de âncoras/filtros SFTP e três novos casos de contadores opcionais/legados, separação taxa/volume/progresso e sentinelas de ratio. Python: **8 testes aprovados**. Upstream: 21 arquivos, três arquivos com alterações documentadas e quatro patches reversos íntegros. Revisão de fonte confirmou drawer/tema/controles aprovados, modelos de conexão/execução, FGS, autenticação/Cofre, polling, renderer/PTY/IME e efeito FLAG_SECURE inalterados. Sem supressões de lint.
+
+ADB sem dispositivo nesta execução. **Nenhum aceite R2B, medida de consumo Android, prova de notificação real ou teste visual/acessível foi realizado pelo agente.** Avaliar no Moto os sete critérios deste documento, incluindo fonte ampliada/TalkBack, nomes/caminhos extensos, inspeção/AV/cancelamento/comparação, diálogo com teclado aberto, estados vazios/erro/stale, transferência SAF com permissão aceita/recusada e preservação do drawer/FGS/Cofre. R-01 e teclas adicionais permanecem suspensos/fora do escopo; nenhuma instalação ou mudança no Fedora.
+
+
+Execução final em 1m58s, CPU acumulada ~580 s, RSS máximo do build ~1.832 MiB, zero swaps; aviso de metaspace ao encerrar, sem alteração dos limites. Logs/checks/hipótese SFTP em `artifacts/myct-r2b-validation/`. Nenhuma alegação de otimização de consumo/lag Android.
+
+**APK candidato:** `artifacts/myct-r2b-0.6.2-debug.apk`, **0.6.2-r2b-screens / code 19**, pacote `dev.myct`, 14.047.517 bytes (13,40 MiB). Apksigner confirmou o mesmo certificado da 0.6.1; atualizar sem desinstalar/apagar dados. [Prévia com APK e checksum](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-r2b-v0.6.2-rc1). SHA-256:
+
+```text
+b3c0764a5322a48fd1e7f5feaf95fa31265239fcc9366cd8fa72e49b485991e6
+```
+
+Continuar em `myct-r2b-screens`, PR draft com base `myct-r2a-visual-shell`; sem merge. Próximo passo é o proprietário avaliar esta candidata no Moto, registrar resultados reais e autorizar separadamente eventual instalação da CLI de consulta ampliada.

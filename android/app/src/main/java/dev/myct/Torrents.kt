@@ -2,6 +2,7 @@ package dev.myct
 
 import org.json.JSONObject
 import java.net.URI
+import java.util.Locale
 
 internal val torrentHash = Regex("[0-9a-fA-F]{40}")
 internal enum class TorrentState(val label: String) {
@@ -10,7 +11,8 @@ internal enum class TorrentState(val label: String) {
 }
 internal data class ServerTorrent(val id: Long, val hash: String, val name: String, val state: TorrentState,
     val total: Long?, val bytes: Long?, val progress: Float?, val down: Long?, val up: Long?,
-    val peers: Long?, val directory: String, val error: String) {
+    val peers: Long?, val directory: String, val error: String,
+    val downloadedEver: Long? = null, val uploadedEver: Long? = null, val ratio: Double? = null) {
     val paused get() = state == TorrentState.STOPPED
 }
 internal fun parseTorrents(text: String): List<ServerTorrent> {
@@ -38,7 +40,9 @@ internal fun parseTorrents(text: String): List<ServerTorrent> {
             TorrentState.entries[row.getInt("status").also { require(it in 0..6) }], total,
             if (size != null && left != null) (size - left).also { require(it >= 0) } else null,
             progress, number(row, "rate_download"), number(row, "rate_upload"), number(row, "peers_connected"),
-            directory, row.optString("error_string", ""))
+            directory, row.optString("error_string", ""),
+            optionalTorrentCounter(row, "downloaded_ever"), optionalTorrentCounter(row, "uploaded_ever"),
+            (row.opt("upload_ratio") as? Number)?.toDouble()?.takeIf { it.isFinite() && (it >= 0 || it == -1.0 || it == -2.0) })
     }.also { require(it.map { row -> row.hash }.distinct().size == it.size) }
 }
 internal sealed interface TorrentAction {
@@ -72,3 +76,14 @@ internal fun executeTorrent(action: TorrentAction, open: () -> DownloadExec, tim
             else -> "Pedido recusado pelo motor. Confira magnet, diretório e Transmission 4.1+. Atualize antes de repetir."
         })
     }
+
+// Optional on purpose: the installed pre-R2B CLI does not request these RPC fields.
+private fun optionalTorrentCounter(row: JSONObject, key: String): Long? {
+    val value = row.opt(key)
+    return if (value is Int || value is Long) (value as Number).toLong().takeIf { it >= 0 } else null
+}
+internal fun torrentRatioLabel(value: Double?): String = when {
+    value == -2.0 -> "∞"
+    value == null || !value.isFinite() || value < 0 -> "Indisponível"
+    else -> String.format(Locale.getDefault(), "%.2f", value)
+}

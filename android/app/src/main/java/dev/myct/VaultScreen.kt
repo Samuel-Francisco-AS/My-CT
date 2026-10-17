@@ -41,10 +41,25 @@ fun VaultScreen(model: VaultModel, modifier: Modifier = Modifier) {
     }
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Cofre do Fedora", style = MaterialTheme.typography.titleLarge)
-        Text(state.message)
-        Text("GNOME Keyring · coleção login", style = MaterialTheme.typography.bodySmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ScreenHeading("Cofre", "GNOME Keyring · coleção login. A senha segue somente pelo SSH autenticado a um terminal privado do myct-vault. Não é salva pelo My-CT. A captura desta seção é sempre protegida.")
+        ScreenPanel {
+            Text(when (state.phase) {
+                VaultPhase.NO_SSH -> "SSH desconectado"
+                VaultPhase.IDLE -> "Não consultado"
+                VaultPhase.UNAVAILABLE -> "Indisponível"
+                VaultPhase.DENIED -> "Recusado"
+                VaultPhase.ERROR -> "Falha"
+                VaultPhase.INPUT_REJECTED -> "Entrada recusada"
+                VaultPhase.UNLOCKED -> "Desbloqueado"
+                VaultPhase.LOCKED -> "Bloqueado"
+                VaultPhase.PASSWORD -> "Aguardando senha"
+                else -> if (state.busy) "Em andamento" else "Estado do cofre"
+            }, style = MaterialTheme.typography.titleLarge,
+                color = if (state.phase == VaultPhase.UNLOCKED) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary)
+            StatusNotice(state.message, state.phase in setOf(VaultPhase.ERROR, VaultPhase.DENIED, VaultPhase.INPUT_REJECTED, VaultPhase.UNAVAILABLE))
+            Text("login · captura protegida", style = MaterialTheme.typography.labelSmall)
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MyCtButton(onClick = model::refresh, enabled = state.phase != VaultPhase.NO_SSH &&
                 !state.busy && state.phase != VaultPhase.PASSWORD) { Text("Consultar estado") }
             if (state.phase == VaultPhase.LOCKED && state.compatible) {
@@ -74,11 +89,9 @@ fun VaultScreen(model: VaultModel, modifier: Modifier = Modifier) {
                 MyCtTextButton(onClick = { password = ""; model.cancelUnlock() }) { Text("Cancelar") }
             }
         }
-        Text("A senha é enviada somente pela sessão SSH autenticada, a um terminal privado do myct-vault. " +
-            "Não é salva no aplicativo, no servidor ou em logs pelo My-CT.",
-            style = MaterialTheme.typography.bodySmall)
-        Text("Desbloquear permite que aplicativos do mesmo usuário consultem seus próprios itens " +
-            "no Secret Service; não concede permissões individuais a agentes.",
-            style = MaterialTheme.typography.bodySmall)
+        if (state.phase == VaultPhase.PASSWORD || state.phase == VaultPhase.LOCKED) {
+            StatusNotice("Desbloquear permite que aplicativos do mesmo usuário acessem seus próprios itens no Secret Service. Não concede permissões individuais a agentes.")
+            if (state.phase == VaultPhase.PASSWORD) StatusNotice("Senha apenas nesta tentativa; enviada somente pelo SSH autenticado.")
+        }
     }
 }

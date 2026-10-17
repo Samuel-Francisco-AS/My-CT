@@ -19,7 +19,8 @@ ENDPOINT_PORT = 19091
 LIMIT = 262144
 FIELDS = ['id', 'hash_string', 'name', 'status', 'total_size', 'size_when_done',
           'left_until_done', 'percent_done', 'metadata_percent_complete', 'rate_download',
-          'rate_upload', 'peers_connected', 'download_dir', 'error', 'error_string']
+          'rate_upload', 'peers_connected', 'download_dir', 'error', 'error_string',
+          'downloaded_ever', 'uploaded_ever', 'upload_ratio']
 
 class Failure(Exception):
     pass

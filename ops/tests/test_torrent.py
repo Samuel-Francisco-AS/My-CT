@@ -28,6 +28,24 @@ class FakeRpc:
         return {}
 
 class TorrentTest(unittest.TestCase):
+    def test_accumulated_stats_are_read_only_and_forwarded_per_torrent(self):
+        with tempfile.TemporaryDirectory() as home, patch.object(torrent.Path, 'home', return_value=Path(home)):
+            root = torrent.destination()
+            class Engine(FakeRpc):
+                def call(inner, method, params):
+                    self.assertEqual('torrent_get', method)
+                    for key in ('downloaded_ever', 'uploaded_ever', 'upload_ratio'):
+                        self.assertIn(key, params['fields'])
+                    inner.calls.append((method, params))
+                    return {'torrents': [{'hash_string': HASH, 'download_dir': str(root / HASH),
+                        'downloaded_ever': 1234, 'uploaded_ever': 9876, 'upload_ratio': 8.0}]}
+            rpc = Engine(root)
+            row = torrent.records(rpc)[0]
+            self.assertEqual(1234, row['downloaded_ever'])
+            self.assertEqual(9876, row['uploaded_ever'])
+            self.assertEqual(8.0, row['upload_ratio'])
+            self.assertEqual(1, len(rpc.calls))
+
     def test_validation_and_duplicate(self):
         self.assertEqual(MAGNET, torrent.magnet(MAGNET))
         for value in ['https://example.com', MAGNET + '\n', MAGNET + '&xs=http://127.0.0.1/a',
