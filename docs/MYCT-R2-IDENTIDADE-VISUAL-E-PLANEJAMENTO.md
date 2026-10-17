@@ -1,6 +1,6 @@
 # MYCT-R2 — identidade visual, experiência e planejamento
 
-**Decisão do proprietário:** 16/10/2026. **Status:** R2A testada visualmente pelo proprietário; complemento R2A.1 candidato a novo aceite visual/funcional no Moto G06. **Princípio obrigatório: FLUIDEZ.**
+**Decisão do proprietário:** 16/10/2026. **Atualização em 17/10/2026:** **R2A.1 aceita visualmente** após capturas do Moto G06; o proprietário considerou o resultado melhor e autorizou seguir para R2B, reservando retoques estéticos futuros caso necessários. Aceite funcional exaustivo **não inferido**. **Princípio obrigatório: FLUIDEZ.**
 
 **Referências:** [trilha de refinamento](09-TRILHA-REFINAMENTO-ANDROID.md), [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9), [decisões](05-DECISOES-E-QUESTOES.md), [histórico MYCT-R1](MYCT-R1-TERMINAL-FILES.md).
 
@@ -159,3 +159,16 @@ Build com JBR/Java 21, SDK 36, Gradle 8.14.3, Kotlin 2.2.20/AGP 8.13.0, Compose 
 ```
 
 Manter [PR #23](https://github.com/Samuel-Francisco-AS/My-CT/pull/23) draft, base `myct-r1-terminal-files`, sem merge. R2B e lag R-01 continuam fora desta rodada. Proprietário deve executar o aceite descrito acima, incluindo cancelamento da confirmação, notificação real, captura do Cofre, navegação/foco/IME, seleção, SFTP, Saúde e Downloads; nova geometria/interruptores também exigem avaliação de contraste, fonte ampliada e TalkBack no Moto.
+
+
+## 9. Aceite visual R2A.1 e início da R2B — 17/10/2026
+
+**Relato direto do proprietário após usar 0.6.1/code 18 no Moto G06:** “Ficou melhor. Vamos aceitar esse resultado, se necessário depois fazemos uma outra revisão. Podemos ir para a próxima.”
+
+**ACEITO no aspecto visual e de direção de design:** linguagem Industrial Futurista, drawer com cabeçalho apenas *interno ao próprio menu*, geometria chanfrada, marcador dourado, menu global oculto por gesto, ausência de cabeçalho global permanente e dois controles reunidos no drawer. Capturas reais mostram status “SSH conectado · persistente” e toggle ativo de manutenção da conexão, bem como a remoção desse controle da janela Opções. **Não afirmar com base nas capturas** que o usuário executou confirmação de desligamento, negou a notificação, testou TalkBack, verificou todos os fluxos de Cofre ou realizou bateria completa de regressão. Funcionalidades preservadas em testes automatizados; comprovação física limitada ao relato e às capturas.
+
+**Decisão:** não prolongar R2A com microajustes. Manter a identidade aprovada, aceitar eventual revisão estética futura e avançar à **MYCT-R2B — reformulação interna das telas**. R-01/lag de digitação segue dívida suspensa e não bloqueia o trabalho. R2B usa o shell existente como base, sem desfazer navegação e sem introduzir cabeçalho global. Elementos locais úteis continuam permitidos.
+
+**Controle de branches:** PR #23 continua draft e sem merge; PR #22 também draft e sem merge. Uma branch posterior R2B pode partir do HEAD aceito da R2A.1, com PR draft baseado em `myct-r2a-visual-shell` para manter diffs legíveis. Não integrar automaticamente em `main`; a ordem futura de merge deve respeitar dependências R1 → R2A → R2B mediante decisão explícita.
+
+**R2B — intenção reafirmada:** Arquivos com caminho/↑, listagem mais rica, toque sem recentralização e scroll preservado; Saúde em painel visual; Cofre compacto; Downloads HTTP/Torrents com formulários e dados organizados; totais download/upload/ratio de torrent somente quando reais e disponíveis; Opções e relatórios/AV compactos com explicações não críticas sob `i`; demais seções e estados coerentes. Usabilidade, atualização visual estável e fluidez acima de efeitos de decoração.
