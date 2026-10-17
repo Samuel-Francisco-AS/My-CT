@@ -3,6 +3,14 @@
 **Abertura:** 15/10/2026. **Atualização (16/10):** R-01/lag **suspenso como dívida** após teste físico negativo da 0.5.9; R-02/rolagem **melhorou e foi confirmado no Moto**; próxima trilha: **refinamento visual e ergonomia (UX-R03 + R-09)**.  
 [Issue de acompanhamento #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9) · [Fechamento do ciclo](08-FECHAMENTO-CICLO-ANDROID.md)
 
+## Checkpoint de fechamento R2 — 17/10/2026
+
+**MYCT-R2A/R2A.1/R2B/R2B-Fix aprovadas pelo proprietário no Moto G06** (último APK 0.6.3/code 20). Identidade preta/dourada industrial, navegação lateral e telas internas com melhora visual; scroll SFTP melhorado; correção do gesto do drawer e integração dos dados acumulados/ratio dos torrents confirmadas no retorno do proprietário. O adaptador `myct-torrent` foi efetivamente instalado no Fedora com backup e consulta somente leitura; a diferença entre taxas instantâneas e acumulados permanece preservada. [Detalhes do aceite](MYCT-R2B-REFINAMENTO-TELAS.md). A integração Git foi autorizada, na ordem PRs #22, #23, #24; registrar situação efetiva após os merges.
+
+**Débitos remanescentes (não bloqueantes):** R-01 lag SSH/Backspace **suspenso**; R-04 transferência SFTP em segundo plano **não testada fisicamente**; R-05 adversidades SFTP/SAF; R-06 chave de usuário/Keystore opcional; R-07 teclas Home/End/PgUp/PgDn; R-08 verificações restantes de Downloads HTTP; R-09 interface AV **implementada visualmente**, mas teste físico do diálogo com caminho longo não demonstrado. Testes específicos de dotfiles/acessibilidade/notificação podem ser realizados oportunamente. Nenhuma dessas pendências implica rejeição do redesign R2 ou nova rodada automática de diagnósticos.
+
+Abaixo permanece o histórico de decisões, requisitos e dívidas em seu estado original; este checkpoint prevalece para status atualizado.
+
 ## Princípio
 
 **O proprietário autorizou continuar a trilha de refinamento, exceto o lag R-01.** Escolher uma frente visual/ergonômica por vez e entregar mudança útil no Moto G06. Não reiniciar diagnósticos/benchmarks de digitação sem autorização expressa. Evitar reescrever emulador, expandir infraestrutura ou redesenhar por redesenhar.
