@@ -156,7 +156,7 @@ private fun TerminalApp(model: TerminalModel) {
         onDispose { activity.lifecycle.removeObserver(observer) }
     }
     var ideExitWarning by remember { mutableStateOf(false) }
-    BackHandler(enabled = model.ide.document?.dirty == true) { ideExitWarning = true }
+    BackHandler(enabled = model.ide.hasDirtyBuffers) { ideExitWarning = true }
     if (ideExitWarning) AlertDialog(onDismissRequest = { ideExitWarning = false },
         title = { Text("Há código não salvo") },
         text = { Text("Salve na IDE antes de fechar o app. O buffer está em memória e pode ser perdido se o processo Android encerrar.") },
