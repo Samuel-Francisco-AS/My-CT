@@ -76,3 +76,10 @@ Essa ordem pode mudar se uma dependência prática exigir.
 **Android/SSH/SFTP já implementados e utilizados no Moto G06.** Kotlin+Compose, mwiede/JSch 2.28.8, módulos de terminal Termux reutilizados, Session SSH com host Ed25519 pinado e canais Shell/PTY e SFTP, SAF para arquivos locais, FGS specialUse opt-in do terminal e dataSync para transferência. tmux do Fedora é usado manualmente para preservar trabalho remoto. Download/upload de PDF via SFTP foram relatados funcionando; o dataSync de transferência **não teve validação física em segundo plano**.
 
 **Ainda apenas direcionais:** Core C++20, PostgreSQL, API JSON, painel de saúde, tarefas e motores de download no Fedora; as escolhas de bibliotecas/serviços desses componentes ainda não são implementações. Consulte [fechamento](08-FECHAMENTO-CICLO-ANDROID.md), [retomada](10-RETOMADA-PROJETO.md) e [refinamento](09-TRILHA-REFINAMENTO-ANDROID.md). A arquitetura poderá ser simplificada na prática, conforme evidência e custo operacional.
+
+
+## Revisão arquitetural MYCT-L1 — 17/10/2026 (planejada, posterior ao diagrama inicial)
+
+O diagrama inaugural Android → Fedora descreve o **modo remoto existente**, não o limite definitivo do produto. Nova direção aprovada: o **Android também executará um modo local independente**, com IDE Sora e arquivos locais (privado/SAF), um terminal PTY/shell Android e, após prova técnica, compilação C offline no Moto G06. A mesma interface deve distinguir fontes de arquivo e sessão de execução `Local` versus `Fedora`, preservando os modelos remotos e seus privilégios. Componentes do emulador Termux incorporados podem continuar em uso; o **aplicativo Termux** não será uma dependência de execução ou instalação.
+
+Restrições ainda sem implementação: targetSdk 36 e sandbox Android impedem presumir execução de binários baixados/gerados em diretórios graváveis; investigar WAMR/WASI e alternativa nativa segura com protótipo no aparelho. Sem root, sem servidor Fedora para executar programas locais, sem serviço local universal de comandos remotos. Ver [MYCT-L1](MYCT-L1-AMBIENTE-LOCAL.md). **MYCT-6 automações no Fedora permanece planejada, porém posterior à L1.**
