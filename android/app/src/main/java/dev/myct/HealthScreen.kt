@@ -22,7 +22,7 @@ fun HealthScreen(model: HealthModel, modifier: Modifier = Modifier) {
         Text("Saúde do Fedora", style = MaterialTheme.typography.titleLarge)
         Text(state.message)
         if (state.phase == HealthPhase.LOADING) LinearProgressIndicator(Modifier.fillMaxWidth())
-        Button(onClick = model::refresh, enabled = state.phase != HealthPhase.NO_SSH && state.phase != HealthPhase.LOADING) { Text("Atualizar") }
+        MyCtButton(onClick = model::refresh, enabled = state.phase != HealthPhase.NO_SSH && state.phase != HealthPhase.LOADING) { Text("Atualizar") }
         state.sample?.let { sample ->
             val date = DateFormat.getDateTimeInstance().format(Date(checkNotNull(state.fetchedAt)))
             Text("Última consulta: $date", style = MaterialTheme.typography.bodySmall)

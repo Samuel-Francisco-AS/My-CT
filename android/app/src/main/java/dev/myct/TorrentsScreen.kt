@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -18,7 +19,7 @@ import kotlinx.coroutines.isActive
 @Composable
 internal fun DownloadsScreen(http: DownloadsModel, torrents: TorrentsModel, filesBusy: Boolean,
                              openFiles: (String) -> Unit, modifier: Modifier = Modifier) {
-    var section by remember { mutableStateOf(0) }
+    var section by rememberSaveable { mutableIntStateOf(0) }
     Column(modifier) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             FilterChip(section == 0, { section = 0 }, label = { Text("HTTP/HTTPS") })
@@ -58,8 +59,8 @@ internal fun TorrentsScreen(model: TorrentsModel, filesBusy: Boolean, openFiles:
                 singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = model.formEnabled,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { model.add(magnet) }, enabled = model.actionsEnabled && magnet.isNotBlank()) { Text("Adicionar torrent") }
-                TextButton(onClick = { model.refresh() }, enabled = model.actionsEnabled) { Text("Atualizar") }
+                MyCtButton(onClick = { model.add(magnet) }, enabled = model.actionsEnabled && magnet.isNotBlank()) { Text("Adicionar torrent") }
+                MyCtTextButton(onClick = { model.refresh() }, enabled = model.actionsEnabled) { Text("Atualizar") }
             }
             Box(Modifier.fillMaxWidth().height(4.dp)) {
                 if (model.showOperationProgress) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -83,11 +84,11 @@ internal fun TorrentsScreen(model: TorrentsModel, filesBusy: Boolean, openFiles:
                     Text(item.directory, style = MaterialTheme.typography.bodySmall)
                     if (item.error.isNotBlank()) Text(item.error, color = MaterialTheme.colorScheme.error)
                     Row {
-                        TextButton(onClick = { model.control(if (item.paused) "resume" else "pause", item.hash) },
+                        MyCtTextButton(onClick = { model.control(if (item.paused) "resume" else "pause", item.hash) },
                             enabled = model.actionsEnabled && !model.stale) { Text(if (item.paused) "Retomar" else "Pausar") }
-                        TextButton(onClick = { remove = item }, enabled = model.actionsEnabled && !model.stale) { Text("Remover…") }
+                        MyCtTextButton(onClick = { remove = item }, enabled = model.actionsEnabled && !model.stale) { Text("Remover…") }
                     }
-                    TextButton(onClick = { openFiles(item.directory) }, enabled = model.connected && !filesBusy) { Text("Ver em Arquivos") }
+                    MyCtTextButton(onClick = { openFiles(item.directory) }, enabled = model.connected && !filesBusy) { Text("Ver em Arquivos") }
                 }
             }
         }
@@ -95,7 +96,7 @@ internal fun TorrentsScreen(model: TorrentsModel, filesBusy: Boolean, openFiles:
     remove?.let { item ->
         AlertDialog(onDismissRequest = { remove = null }, title = { Text("Remover torrent da lista?") },
             text = { Text("${item.name}: para a transferência e o compartilhamento. Arquivos completos e parciais serão preservados no Fedora.") },
-            confirmButton = { TextButton(onClick = { remove = null; model.control("remove", item.hash) }, enabled = model.actionsEnabled) { Text("Remover e preservar dados") } },
-            dismissButton = { TextButton(onClick = { remove = null }) { Text("Voltar") } })
+            confirmButton = { MyCtTextButton(onClick = { remove = null; model.control("remove", item.hash) }, enabled = model.actionsEnabled) { Text("Remover e preservar dados") } },
+            dismissButton = { MyCtTextButton(onClick = { remove = null }) { Text("Voltar") } })
     }
 }

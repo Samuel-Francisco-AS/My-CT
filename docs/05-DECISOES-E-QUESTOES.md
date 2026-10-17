@@ -20,6 +20,10 @@
 | ADR-008 | Downloads | DECIDIDO | Download e gerenciamento pelo próprio servidor, inclusive torrent/magnet, sem dependência de µTorrent |
 | ADR-009 | Operação | DECIDIDO | Headless, econômico, independente do app e sem dependência de IA |
 | ADR-010 | Plano | DECIDIDO | Planejamento inaugural flexível e sujeito a discussão/alteração |
+| ADR-011 | Identidade visual MYCT-R2 | DECIDIDO | Preto profundo/sombreado e dourado/âmbar vivo em variações, inspirados na linguagem estética de Deus Ex: Human Revolution, com hierarquia e legibilidade; sem cópia de assets |
+| ADR-012 | Navegação Android | DECIDIDO | **Nenhum cabeçalho global permanente**, nem hambúrguer/título/status; cinco seções, status SSH, Opções e encerrar exclusivamente no drawer oculto acessível por gesto da esquerda à direita; exceções somente para controles locais funcionais |
+| ADR-013 | Princípio UX | DECIDIDO | **Fluidez**: feedback imediato, preservação de estado/posição, transições suaves e curtas, ausência de saltos, piscadas ou efeitos pesados; acessibilidade e ergonomia acima de ornamento |
+| ADR-014 | Recorte MYCT-R2 | DECIDIDO | R2A implementa tema global e drawer/shell, sem alterar lógicas de telas. R2B refaz visual das telas, diálogos e oferece ajuda opcional por ícone `i`, com avisos críticos sempre visíveis quando necessários. R-01/lag permanece dívida suspensa |
 
 ## Propostas técnicas (não congelar sem prova)
 | ID | Tema | Proposta | Como decidir |
@@ -299,3 +303,10 @@ O adaptador para JSch 2.28.8 evita que window-change herde espera de reply do
 connect(timeout); usa setPtySize com want_reply=false e restaura timeout em
 finally, apenas no canal interativo e no mesmo escritor. Teste de pacote real
 sem rede protege esse acoplamento à versão fixada. Não muda autenticação.
+
+
+## 2026-10-16 — MYCT-R2: identidade preto/dourado e fluidez (ADR-011 a ADR-014)
+
+Decisão explícita do proprietário após revisão das capturas reais do Moto G06. O desenho deve seguir a estética tecnológica preto profundo/dourado do Deus Ex: Human Revolution sem reproduzir obras ou texturas do jogo. **Fluidez** é a palavra-guia de interações, transições e organização visual. O proprietário **rejeitou** a recomendação de manter qualquer barra global mínima; tudo que é global fica no drawer acessível por gesto, sem cabeçalho permanente em nenhuma aba. Caminho atual em Arquivos e barra de teclas do Terminal são conteúdos funcionais locais permitidos.
+
+Toda a aplicação — inclusive seções não exemplificadas em capturas — deve adotar a identidade. Explicações longas não críticas ficam sob ícone `i`, mas alertas relevantes para decisão/segurança continuam visíveis no momento oportuno. **R2A só shell e tema; R2B redesenho de telas, com melhoria de Arquivos, Saúde, Cofre, HTTP/Torrents, Opções e diálogos AV.** R-01/lag SSH suspenso após 0.5.9; não reabrir diagnóstico e não fazer a experiência de digitação condição da R2A. Decisão e aceite detalhados em [MYCT-R2](MYCT-R2-IDENTIDADE-VISUAL-E-PLANEJAMENTO.md).

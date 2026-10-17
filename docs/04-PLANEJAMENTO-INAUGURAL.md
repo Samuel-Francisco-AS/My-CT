@@ -72,3 +72,10 @@ Mudanças de prioridade ou tecnologia não exigem novo grande planejamento; bast
 - **Não estender esta janela para corrigir todo o UX:** lag, scroll SFTP ao retornar ao pai, interface rígida e validação de transferências em segundo plano ficam em [refinamento](09-TRILHA-REFINAMENTO-ANDROID.md)/[issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9). São dívidas explícitas, não funcionalidades aprovadas por suposição.
 - **Próximo menor fluxo útil a discutir:** iniciar Core C++20 + PostgreSQL e painel de saúde real no Fedora, com integração Android privada mínima e controles proporcionais. CMake/Postgres estavam ausentes no inventário; reinspecionar antes de instalar. Não começar HTTP/torrent/jobs/uma arquitetura genérica ao mesmo tempo. [Guia de retomada](10-RETOMADA-PROJETO.md).
 - Esta atualização não cria prazo ou obrigação de executar toda a janela A/C; o plano continua **flexível** e submetido a decisão do proprietário.
+
+
+## Checkpoint 16/10/2026 — MYCT-R2 visual e ergonomia (posterior às entregas funcionais)
+
+O plano inaugural continua como histórico. O proprietário autorizou a nova trilha de **refinamento visual/UX** com identidade inspirada em Deus Ex: Human Revolution (preto profundo/dourado) e princípio obrigatório de **fluidez**. **R2A** cria tema e drawer lateral por gesto **sem cabeçalho global**; **R2B** remodela as telas e diálogos; toda seção deve seguir a linguagem visual. Plano técnico, telas, limites e aceites estão em [MYCT-R2](MYCT-R2-IDENTIDADE-VISUAL-E-PLANEJAMENTO.md), com acompanhamento em [docs/09](09-TRILHA-REFINAMENTO-ANDROID.md).
+
+O lag intermitente do terminal permanece **dívida suspensa** após teste real da 0.5.9; abertura/fechamento do teclado melhoraram, mas digitação não. Não reabrir testes/implementação de performance sem nova solicitação. Preservar o scroll SFTP melhorado. O PR #22 de R1 ainda é draft/sem merge; a branch `myct-r2a-visual-shell` foi criada a partir de R1 para manter o recorte R2A separado. Esta decisão não autoriza merge ou mudança no Fedora.
