@@ -245,3 +245,18 @@ na branch existente. [PR #26](https://github.com/Samuel-Francisco-AS/My-CT/pull/
 continua **draft/aberto, sem merge**. Retomar instalando sobre a 0.6.5 sem apagar
 dados e validar os oito critérios físicos solicitados. Não reabrir SSH. O teste
 básico de C/GCC da 0.6.5 continua comprovado; **não é aceite da Fix 0.6.6**.
+
+
+## F — aceite físico R4-Fix e autorização de fechamento (17/10/2026)
+
+**Resultado:** **PASS físico autorizado pelo proprietário** na candidata MYCT-R4-Fix **0.6.6/code 23**, após testar no Moto G06 as três correções de UX: grade de teclas 2×7 no Sora, cabeçalho contextual compacto, navegador de arquivos semelhante ao SFTP sem os saltos indesejados. O proprietário afirmou: “Pronto, Luna, fiz os testes e as correções passaram. Vamos realizar o fechamento padrão no remoto, depois você me manda o bloco Git para sincronizar o local e deletar as branchs local e remota. Depois, iniciamos a fase L1 em uma conversa nova”.
+
+**Capturas reais no aparelho:** editor exibindo `teste.c` com linha `puts("My-CT IDE funcionando! Pós-r4-fix");`, barra 2×7 e cabeçalho compacto; terminal remoto exibindo compilação GCC e execução com **`My-CT IDE funcionando! Pós-r4-fix`**. Isso comprova alteração/salvamento remoto e compilação/execução real em Fedora pela IDE+Terminal. A confirmação expressa do usuário cobre o funcionamento satisfatório dos ajustes ergonômicos da Fix. Não presumir bateria de testes individuais de desempenho, acessibilidade/TalkBack, conflito de save ou arquivo gigante.
+
+**Frente A — latência do Terminal SSH:** auditoria final sem causa técnica demonstrada; nenhuma mudança especulativa foi entregue. O lag intermitente no SSH **continua dívida R-01, suspensa**; a digitação na IDE Sora foi percebida como fluida, sem constituir solução para o SSH.
+
+**Prova automatizada final:** build Android offline PASS; **172 testes JVM PASS, 1 handshake opt-in ignorado**, lint 0 erros/2 avisos preexistentes, verificação dos 21 arquivos upstream e quatro patches, SFTP real descartável. Versão APK 0.6.6/code 23, certificado compatível com 0.6.5; SHA-256 `63a2f6622fc0e92b166262f5d9c84eb55b7052f5dbd0b1ab4eebb71b85273c11`. [Candidata publicada](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-r4-fix-v0.6.6-rc1).
+
+**Decisão de operação:** proprietário autorizou expressamente **fechar MYCT-R4 e integrar PR #26 à `main`**, preservando histórico e sem apagar a branch até orientação de sincronização Git local. Novo trabalho apenas na **MYCT-L1 — ambiente local independente**, planejada em [docs/MYCT-L1-AMBIENTE-LOCAL.md](MYCT-L1-AMBIENTE-LOCAL.md) na main, em uma nova conversa. MYCT-6 automações fica posterior à L1. Os trechos anteriores “pendente de aceite” pertencem ao histórico pré-teste; prevalece este resultado.
+
+**Pendências específicas não bloqueantes:** eventual validação adicional em cenário de conflito de escrita, notificações/permissões e acessibilidade; a R4 está aprovada para uso pessoal/portfólio, não declarada pronta para distribuição comercial.
