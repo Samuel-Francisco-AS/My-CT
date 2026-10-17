@@ -12,8 +12,31 @@ import java.util.UUID
 internal enum class CPhase(val label: String) {
     IDLE("Pronto"), COMPILING("Compilando C localmente…"), RUNNING("Executando · WebAssembly interpretado"),
     FINISHED("Encerrado"), COMPILE_ERROR("Erro de compilação"), FAILED("Falha local"),
+    START_ERROR("Falha de inicialização"), NATIVE_FAILURE("Worker encerrado por sinal"),
     CANCELLED("Interrompido"), LIMIT("Limite atingido")
 }
+/** Worker compile has no user-defined exit status. Java reports signal deaths
+ * as 128+signal; code alone says nothing about the underlying native cause. */
+internal fun compileOutcome(code: Int): CPhase = when (code) {
+    0 -> CPhase.FINISHED
+    1 -> CPhase.COMPILE_ERROR
+    142, 152, 153 -> CPhase.LIMIT // SIGALRM, SIGXCPU, SIGXFSZ
+    in 129..159 -> CPhase.NATIVE_FAILURE
+    else -> CPhase.START_ERROR
+}
+internal fun workerFailureMessage(code: Int): String {
+    val signal = when (code) {
+        132 -> "SIGILL (4)"; 133 -> "SIGTRAP (5)"; 134 -> "SIGABRT (6)"
+        135 -> "SIGBUS (7)"; 136 -> "SIGFPE (8)"; 137 -> "SIGKILL (9)"
+        139 -> "SIGSEGV (11)"; 142 -> "SIGALRM (14)"; 152 -> "SIGXCPU (24)"
+        153 -> "SIGXFSZ (25)"; 159 -> "SIGSYS (31)"; else -> null
+    }
+    return if (signal != null) "Worker terminou com status $code, compatível com $signal. Consulte as etapas do diagnóstico."
+        else if (code in 129..159) "Worker terminou com status $code, compatível com sinal ${code-128}. Consulte as etapas do diagnóstico."
+        else "Worker terminou com status $code. Consulte o diagnóstico de inicialização."
+}
+internal class WorkerLaunchFailure(cause: java.io.IOException) : java.io.IOException(cause)
+
 internal fun canCompileC(environment: IdeEnvironment, doc: IdeDocument?): Boolean =
     environment == IdeEnvironment.LOCAL && doc?.identity == LocalIdeModel.LOCAL_ID && doc.path.endsWith(".c") && !doc.uncertain
 
@@ -44,7 +67,7 @@ internal class OfflineCModel(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val inputLock = Mutex()
-        private var control: Control? = null
+    private var control: Control? = null
     var phase by mutableStateOf(CPhase.IDLE); private set
     var output by mutableStateOf(""); private set
     var source by mutableStateOf(""); private set
@@ -92,17 +115,25 @@ internal class OfflineCModel(
                         val result = command(listOf("run", "programa.wasm"), directory, runTimeoutMs, token)
                         if (token.stopped() == null) {
                             exitCode = result
-                            phase = if (output.contains("[myct-wasm: encerrado;")) CPhase.FINISHED else CPhase.FAILED
+                            phase = if (output.contains("[myct-wasm: encerrado;")) CPhase.FINISHED
+                                else if (result in 129..159) compileOutcome(result) else CPhase.FAILED
+                            if (phase == CPhase.NATIVE_FAILURE || phase == CPhase.LIMIT) append("\n${workerFailureMessage(result)}\n", token)
                         }
                     } else if (token.stopped() == null) {
-                        exitCode = compiled; phase = CPhase.COMPILE_ERROR
-                        append("\nCompilação falhou; nenhum programa foi executado.\n", token)
+                        exitCode = compiled
+                        phase = if (compiled == 0) CPhase.FAILED else compileOutcome(compiled)
+                        append("\n" + when (phase) {
+                            CPhase.COMPILE_ERROR -> "O compilador recusou a fonte; confira o diagnóstico acima."
+                            CPhase.NATIVE_FAILURE, CPhase.LIMIT -> workerFailureMessage(compiled)
+                            else -> "Falha ao iniciar/concluir a compilação. " + workerFailureMessage(compiled)
+                        } + " Nenhum programa foi executado.\n", token)
                     }
                 }
             } catch (e: Exception) {
                 if (token.stopped() == null) {
-                    phase = CPhase.FAILED
+                    phase = if (e is WorkerLaunchFailure) CPhase.START_ERROR else CPhase.FAILED
                     append(when (e) {
+                        is WorkerLaunchFailure -> "Não foi possível iniciar o worker instalado. Fonte preservada; confira o pacote Android.\n"
                         is EditConflict -> "O arquivo salvo mudou. Reabra e confira antes de compilar.\n"
                         is EditRejected -> e.explanation
                         else -> "Não foi possível compilar/executar localmente (${e.javaClass.simpleName}). Confira o pacote e o espaço disponível.\n"
@@ -127,7 +158,7 @@ internal class OfflineCModel(
                 if (token.stopped() != null) return@withContext -1
                 val builder = ProcessBuilder(listOf(worker.absolutePath) + args).directory(directory).redirectErrorStream(true)
                 builder.environment().remove("WCPL_INCLUDE_PATH"); builder.environment().remove("WCPL_LIBRARY_PATH")
-                val p = builder.start()
+                val p = try { builder.start() } catch (e: java.io.IOException) { throw WorkerLaunchFailure(e) }
                 token.attach(p)
                 withContext(dispatcher) { inputReady = args.first() == "run" && token.stopped() == null }
                 try {

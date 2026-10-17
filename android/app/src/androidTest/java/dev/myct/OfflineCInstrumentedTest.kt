@@ -21,6 +21,10 @@ class OfflineCInstrumentedTest {
         File(dir, "programa.c").writeText(source)
         return command(dir, "compile", "programa.c", "programa.wasm")
     }
+    private fun assertCompiled(dir: File, source: String) {
+        val (code, output) = compile(dir, source)
+        assertEquals(output, 0, code)
+    }
     private fun command(dir: File, vararg args: String): Pair<Int, String> {
         val p = ProcessBuilder(listOf(worker.absolutePath) + args).directory(dir).redirectErrorStream(true).start()
         val reader = Executors.newSingleThreadExecutor()
@@ -28,12 +32,27 @@ class OfflineCInstrumentedTest {
             p.outputStream.close()
             val output = reader.submit<String> { p.inputStream.bufferedReader().use { it.readText() } }
             assertTrue("Worker timed out", p.waitFor(30, TimeUnit.SECONDS))
-            return p.exitValue() to output.get(5, TimeUnit.SECONDS)
+            val text = output.get(5, TimeUnit.SECONDS)
+            android.util.Log.i("MyCtCProbe", "worker ${args.first()} exit=${p.exitValue()}\n" +
+                text.lineSequence().filter { it.startsWith("[myct-worker:v2]") }.joinToString("\n"))
+            return p.exitValue() to text
         } finally { p.destroyForcibly(); reader.shutdownNow() }
+    }
+    @Test fun motoHelloThroughSavedWorkspaceAndCapture() = fixture { dir ->
+        val code = "#include <stdio.h>\n\nint main(void) {\n    puts(\"My-CT compilando offline!\");\n    return 0;\n}\n"
+        val workspace = LocalWorkspace(File(dir, "ide-local"))
+        workspace.create("", "teste", true); workspace.create("teste", "teste.c", false)
+        val saved = workspace.save(workspace.load("teste/teste.c"), code.toByteArray())
+        val captured = captureC(workspace, saved, File(dir,"compilacoes"))
+        val (compiled, diagnostic) = command(captured,"compile","programa.c","programa.wasm")
+        assertEquals(diagnostic, 0, compiled)
+        val (exit, output) = command(captured,"run","programa.wasm")
+        assertEquals(output, 0, exit); assertTrue(output.contains("My-CT compilando offline!"))
+        assertArrayEquals(saved.bytes, workspace.load(saved.path).bytes)
     }
     @Test fun installedWorkerActuallyCompilesCAndRunsWasmOnAndroid() = fixture { dir ->
         val source = "#include <stdio.h>\nint twice(int x) { return x*2; }\nint main(void) { int n=3; for(int i=0;i<2;++i) { if(n>0) printf(\"valor=%d\\n\",twice(n)); else puts(\"erro\"); } return 7; }"
-        assertEquals(0, compile(dir, source).first)
+        assertCompiled(dir, source)
         val wasm = File(dir, "programa.wasm").readBytes()
         assertArrayEquals(byteArrayOf(0,97,115,109,1,0,0,0), wasm.take(8).toByteArray())
         val (code, output) = command(dir, "run", "programa.wasm")
@@ -41,11 +60,11 @@ class OfflineCInstrumentedTest {
         assertEquals(source, File(dir, "programa.c").readText())
         assertNotEquals(0, compile(dir, "int main(void) { return }").first)
         assertNotEquals(0, compile(dir, "").first)
-        assertEquals(0, compile(dir, "int main(void) { return 22; }").first)
+        assertCompiled(dir, "int main(void) { return 22; }")
         assertEquals(22, command(dir, "run", "programa.wasm").first)
     }
     @Test fun interactiveScanfPromptArrivesBeforeInput() = fixture { dir ->
-        assertEquals(0, compile(dir, "#include <stdio.h>\nint main(void) { int n; printf(\"Numero: \"); if(scanf(\"%d\",&n)!=1) return 2; printf(\"dobro=%d\\n\",n*2); return 0; }").first)
+        assertCompiled(dir, "#include <stdio.h>\nint main(void) { int n; printf(\"Numero: \"); if(scanf(\"%d\",&n)!=1) return 2; printf(\"dobro=%d\\n\",n*2); return 0; }")
         val p = ProcessBuilder(worker.absolutePath, "run", "programa.wasm").directory(dir).redirectErrorStream(true).start()
         val reader = Executors.newSingleThreadExecutor()
         try {
@@ -63,14 +82,14 @@ class OfflineCInstrumentedTest {
     }
     @Test fun endlessWasmIsKillableWithoutTouchingSource() = fixture { dir ->
         val source = "int main(void) { while(1) {} return 0; }"
-        assertEquals(0, compile(dir, source).first)
+        assertCompiled(dir, source)
         val p = ProcessBuilder(worker.absolutePath, "run", "programa.wasm").directory(dir).start()
         try {
             assertFalse(p.waitFor(100, TimeUnit.MILLISECONDS))
             p.destroyForcibly(); assertTrue(p.waitFor(3, TimeUnit.SECONDS))
             assertEquals(source, File(dir, "programa.c").readText())
         } finally { p.destroyForcibly(); p.outputStream.close(); p.inputStream.close(); p.errorStream.close() }
-        assertEquals(0, compile(dir, "int main(void) { return 0; }").first)
+        assertCompiled(dir, "int main(void) { return 0; }")
         assertEquals(0, command(dir, "run", "programa.wasm").first)
     }
 }

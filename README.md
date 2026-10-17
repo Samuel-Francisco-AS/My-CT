@@ -136,3 +136,12 @@ existente sobre 0.6.8, sem desinstalar/limpar dados. [APK e checklist A–F](doc
 substituem o aceite físico. PR draft empilhado sobre L1B enquanto #28/#29 abertos.
 L1D (armazenamento compartilhado direto) foi aprovada para depois da L1C, antes
 do refinamento final; somente planejamento nesta entrega.
+
+
+**MYCT-L1C-F1:** RC1/code 26 recebeu **FAIL físico** no Moto (compilação status
+139, fonte preservada). **0.6.9-l1c-f1/code 27 é candidata diagnóstica**: separa
+crash nativo de erro do compilador e adiciona etapas/VM/RSS/stack. A causa nativa
+segue não demonstrada; limite AS 384 MiB inalterado, sem PASS Android ou Moto.
+Duas tentativas de emulador caíram no processo host antes de instalar My-CT.
+[Relatório F1, RC2 e checklist](docs/MYCT-L1C-F1-RELATORIO.md). Atualizar sem
+desinstalar/limpar dados; PR #30 permanece draft, L1D não iniciada.

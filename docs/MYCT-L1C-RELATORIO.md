@@ -1,5 +1,11 @@
 # MYCT-L1C — compilação e execução C offline
 
+**Atualização física F1:** RC1/code 26 falhou no Moto G06: `teste/teste.c`
+com stdio/puts, status 139 em 290 ms, sem diagnóstico/módulo executado, fonte
+preservada. **Gate L1C-B FAIL.** Os estados anteriores abaixo são históricos.
+Investigação e RC2 diagnóstica em [MYCT-L1C-F1](MYCT-L1C-F1-RELATORIO.md);
+a causa nativa ainda não foi demonstrada nem a correção física aceita.
+
 17/10/2026. Issue #27. Branch `myct-l1c-offline-c`, base L1B `e1deac6`.
 PRs #28/#29 abertos antes do início; [PR #30 draft](https://github.com/Samuel-Francisco-AS/My-CT/pull/30) empilhado sobre L1B.
 **Candidata implementada e validada no Fedora; gate físico Android/Moto obrigatório PENDENTE.**

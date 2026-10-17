@@ -16,4 +16,7 @@ is preserved.
 
 My-CT modification (17/10/2026): bundled stdin and stdout default to
 unbuffered I/O for the line-input console. See android/offline-c/prepare.py.
-Parser, compiler, linker and all other embedded library bytes unchanged.
+F1 modification: the native compiler also calls a diagnostic callback at fixed
+entry/parser/linker/encoder boundaries. No source, path, token or user input is
+passed to the callback. Compiler/parser/linker behavior otherwise unchanged.
+Original source archives and all other embedded library bytes unchanged.

@@ -145,3 +145,12 @@ fluidez; os demais gates continuam pendentes.
 L1D aprovada para depois da L1C: acesso direto ao armazenamento compartilhado
 autorizado; avaliar APIs/SAF/MANAGE_EXTERNAL_STORAGE na própria fase, sem
 implementação ou concessão de permissões nesta missão.
+
+
+## Retorno físico L1C/F1 — 17/10/2026
+
+LOC-03 **não aceito**: RC1/code 26 falhou ao compilar o puts simples no Moto,
+status 139 em 290 ms, sem módulo executado, fonte preservada. RC2/code 27 é
+diagnóstica e corrige classificação/observabilidade; causa nativa ainda não
+demonstrada. Instrumentação compilada e tentada via emulador, mas host qemu caiu
+antes de instalar o app; nenhum teste Android executado. [Relatório F1](MYCT-L1C-F1-RELATORIO.md).

@@ -383,3 +383,16 @@ armazenamento, SAF e permissão especial MANAGE_EXTERNAL_STORAGE; acesso direto
 exigir cópias. Exige autorização explícita para permissões aplicáveis e respeito
 às restrições da plataforma. Symlinks não concedem permissões. **Somente
 planejamento nesta missão; nenhuma permissão/acesso amplo implementado.**
+
+
+## 17/10/2026 — MYCT-L1C-F1: falha física e diagnóstico sem alterar memória
+
+RC1/code 26: gate B **FAIL** no Moto, status 139 sem diagnóstico, 290 ms, fonte
+preservada. H1 startup/empacotamento, H2 limite AS/Bionic e H3 WCPL/ABI continuam
+hipóteses; o sinal não identifica causa. Emulador Android 15 provisionado para
+reprodução, mas qemu host caiu em duas tentativas antes de instalar o APK.
+Candidata RC2/code 27 separa falha nativa de recusa normal de fonte e inclui
+etapas internas fixas e medidas de VM/RSS/stack. **Não alterar RLIMIT_AS 384 MiB
+nem substituir WCPL/WAMR sem evidência.** Não declarar crash corrigido/gate
+aceito; próximo dado necessário é último estágio/medidas no Moto ou backtrace
+Android autorizado. [F1 e checklist](MYCT-L1C-F1-RELATORIO.md). L1D continua posterior à L1C, sem início nesta missão; nenhuma implementação ou permissão nova nesta correção.

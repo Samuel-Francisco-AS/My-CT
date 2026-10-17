@@ -495,3 +495,22 @@ shell/pwd/ls/echo/cd/workspace/Ctrl+C/fluidez; demais regressões continuam pend
 L1D aprovada somente para a fase seguinte: avaliar armazenamento compartilhado
 (Android APIs/SAF/MANAGE_EXTERNAL_STORAGE) com autorização explícita; nenhuma
 nova permissão de armazenamento foi pedida nesta L1C.
+
+
+## MYCT-L1C-F1 — RC2 diagnóstica 0.6.9-l1c-f1/code 27
+
+O puts simples da RC1/code 26 falhou no Moto com status 139 em 290 ms, sem
+executar módulo e preservando fonte. A RC2 **não alega causa/correção nativa
+comprovada**: corrige a classificação (139 compatível com SIGSEGV é falha do
+worker, separado de código 1 do compilador) e inclui diagnóstico por etapas.
+`[myct-worker:v2]` mostra entrada real no WCPL, init/parser/linker/encoder,
+WAMR e valores numéricos de VM/RSS/stack/limites. Não acrescenta fonte, caminhos,
+input ou segredos ao diagnóstico. Limite AS 384 MiB e demais recursos mantidos.
+
+Atualize sobre code 26 sem desinstalar/limpar dados; compilar o mesmo puts em
+modo avião. Se falhar, registrar status/tempo e todas as etapas até a última
+visível; se passar, registrar saída/retorno e números before/after-limits.
+Depois scanf/printf, sintaxe, interrupção, recompile e fonte preservada.
+[Relatório F1, SHA-256, tentativas Android e checklist](../docs/MYCT-L1C-F1-RELATORIO.md).
+Emulador host caiu nas duas tentativas; a instrumentação foi compilada, não
+executada. Moto continua pendente; nenhum acesso ADB ao aparelho foi presumido.

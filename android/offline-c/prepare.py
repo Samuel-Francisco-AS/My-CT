@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Verify vendored sources; prepare reproducible, offline-only build tree.
 Console adaptation: unbuffered guest stdin/stdout so prompts appear over pipes.
-The original compiler/parser/linker are unchanged. No source templates involved.
+Fixed compiler stage callbacks do not change parser/codegen behavior. No source templates.
 """
 import gzip
 import hashlib
@@ -56,7 +56,27 @@ def prepare(destination):
     (destination / 'wcpl/lib/stdio.wo').write_bytes(obj)
     src = destination / 'wcpl/lib/src/stdio.c'
     src.write_text(src.read_text().replace('_IOREAD,       0', '_IOREAD|_IONBF, 0').replace('_IOWRT,        1', '_IOWRT|_IONBF,  1'))
-    print('PASS: WCPL/WAMR SHA-256; console libc stdin/stdout unbuffered')
+    # F1 diagnosis: fixed stage markers at actual compiler entry and boundaries.
+    # No source/path/token/argv values are passed to the diagnostic callback.
+    compiler = destination / 'wcpl/c.c'
+    c = compiler.read_text()
+    replacements = [
+        ('int main(int argc, char **argv)\n{',
+         'extern void myct_wcpl_stage(const char *stage);\nint main(int argc, char **argv)\n{\n  myct_wcpl_stage("wcpl-main");'),
+        ('  init_wcpl(&incv, &libv, lvl_arg, (size_t)s_arg, (size_t)a_arg);',
+         '  myct_wcpl_stage("wcpl-init");\n  init_wcpl(&incv, &libv, lvl_arg, (size_t)s_arg, (size_t)a_arg);\n  myct_wcpl_stage("wcpl-ready");'),
+        ('        compile_module_to_wat(ifile_arg, pwm);',
+         '        myct_wcpl_stage("c-parse");\n        compile_module_to_wat(ifile_arg, pwm);\n        myct_wcpl_stage("c-parsed");'),
+        ('    link_wat_modules(&wmb, &wm);',
+         '    myct_wcpl_stage("c-link");\n    link_wat_modules(&wmb, &wm);\n    myct_wcpl_stage("c-linked");'),
+        ('        wat_to_wasm(&wm, &wbm);',
+         '        myct_wcpl_stage("wasm-encode");\n        wat_to_wasm(&wm, &wbm);\n        myct_wcpl_stage("wasm-encoded");'),
+    ]
+    for before, after in replacements:
+        assert c.count(before) == 1, before
+        c = c.replace(before, after)
+    compiler.write_text(c)
+    print('PASS: WCPL/WAMR SHA-256; console libc unbuffered; F1 fixed diagnostic stages')
 
 
 if __name__ == '__main__':

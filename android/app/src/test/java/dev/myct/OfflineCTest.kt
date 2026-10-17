@@ -26,6 +26,15 @@ class OfflineCTest {
     private suspend fun awaitDone(m: OfflineCModel) = withTimeout(10_000) { while (m.active) delay(5) }
     private suspend fun awaitInput(m: OfflineCModel) = withTimeout(10_000) { while (!m.acceptsInput) { assertTrue(m.active); delay(5) } }
 
+    @Test fun nativeSignalIsNotASourceDiagnosticAndResourceSignalsAreLimits() {
+        assertEquals(CPhase.NATIVE_FAILURE, compileOutcome(139))
+        assertTrue(workerFailureMessage(139).contains("SIGSEGV"))
+        assertEquals(CPhase.NATIVE_FAILURE, compileOutcome(134))
+        assertEquals(CPhase.COMPILE_ERROR, compileOutcome(1))
+        assertEquals(CPhase.START_ERROR, compileOutcome(125))
+        assertEquals(CPhase.FINISHED, compileOutcome(0))
+        listOf(142,152,153).forEach { assertEquals(CPhase.LIMIT, compileOutcome(it)) }
+    }
     @Test fun actionOnlyForLocalCAndKnownIdentity() {
         val c = doc("int main(void) { return 0; }")
         assertTrue(canCompileC(IdeEnvironment.LOCAL, c))
@@ -62,6 +71,33 @@ class OfflineCTest {
         m.start(IdeEnvironment.LOCAL, d)
         assertEquals(CPhase.FAILED, m.phase); assertTrue(m.output.contains("Salve")); assertFalse(m.active)
         assertFalse(File(temp.root, "artifacts").exists()); assertTrue(d.dirty); m.close()
+    }
+    @Test fun crashedWorkerIsNotReportedAsSyntaxAndSourceSurvives() {
+        val crash = File(temp.root, "signal-worker")
+        crash.writeText("#!/bin/sh\nulimit -c 0\nkill -SEGV $$\n")
+        assertTrue(crash.setExecutable(true))
+        Executors.newSingleThreadExecutor().asCoroutineDispatcher().use { dispatcher -> runBlocking(dispatcher) {
+            val d = doc("int main(void) { return 0; }")
+            val m = model(crash, dispatcher)
+            try {
+                m.start(IdeEnvironment.LOCAL, d); awaitDone(m)
+                assertEquals(CPhase.NATIVE_FAILURE, m.phase)
+                assertEquals(139, m.exitCode); assertTrue(m.output.contains("SIGSEGV"))
+                assertNull(m.artifact)
+                assertArrayEquals(d.snapshot.bytes, workspace().load(d.path).bytes)
+            } finally { m.close() }
+        } }
+    }
+    @Test fun missingInstalledWorkerIsAnInitializationFailure() {
+        Executors.newSingleThreadExecutor().asCoroutineDispatcher().use { dispatcher -> runBlocking(dispatcher) {
+            val d = doc("int main(void) { return 0; }")
+            val m = model(File(temp.root,"missing-worker"), dispatcher)
+            try {
+                m.start(IdeEnvironment.LOCAL, d); awaitDone(m)
+                assertEquals(CPhase.START_ERROR, m.phase); assertNull(m.exitCode); assertNull(m.artifact)
+                assertArrayEquals(d.snapshot.bytes, workspace().load(d.path).bytes)
+            } finally { m.close() }
+        } }
     }
     @Test fun realCompilerLifecycleRecompileAndSyntaxFailureNeverRunsOldModule() {
         val w = worker()
@@ -110,8 +146,11 @@ class OfflineCTest {
                 d.snapshot = workspace().save(d.snapshot, "#include <stdio.h>\nint main(void) { while(1) puts(\"saida\"); return 0; }".toByteArray())
                 m.start(IdeEnvironment.LOCAL, d); awaitDone(m); assertEquals(CPhase.LIMIT, m.phase)
                 assertTrue(m.output.length < OfflineCModel.MAX_OUTPUT + 100)
-                d.snapshot = workspace().save(d.snapshot, "int main(void) { return 125; }".toByteArray())
-                m.start(IdeEnvironment.LOCAL, d); awaitDone(m); assertEquals(CPhase.FINISHED, m.phase); assertEquals(125, m.exitCode)
+                for (code in listOf(125, 139)) {
+                    d.snapshot = workspace().save(d.snapshot, "int main(void) { return $code; }".toByteArray())
+                    m.start(IdeEnvironment.LOCAL, d); awaitDone(m)
+                    assertEquals(CPhase.FINISHED, m.phase); assertEquals(code, m.exitCode)
+                }
             } finally { m.close() }
         } }
     }

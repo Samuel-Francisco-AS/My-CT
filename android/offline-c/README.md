@@ -1,5 +1,10 @@
 # Offline C worker — MYCT-L1C
 
+**F1:** RC1/code 26 failed physically with status 139 on the Moto G06. RC2/code
+27 adds stage/resource diagnostics and correct native-failure classification;
+the native cause is unproven, RLIMIT_AS remains 384 MiB, physical gate pending.
+See `docs/MYCT-L1C-F1-RELATORIO.md`.
+
 The APK ships **WCPL 1.04** (real C parser/compiler/linker, headers and a small
 libc) and **WAMR 2.4.4**, classic interpreter only. They run on Android in a
 fixed native PIE worker installed with the APK. The selected source is compiled
@@ -24,8 +29,10 @@ adaptation changes the embedded stdio object's **stdin/stdout default flags to
 unbuffered**, so `printf("Numero: ")` becomes visible before `scanf` blocks on
 pipes. The script checks the original flags, patches two bytes in its data
 segment, recompresses that object into `l.c`, and updates the corresponding libc
-source/object in the prepared tree. The compiler, parser, linker, headers and
-all other libc bytes are untouched. No modification to the user's source.
+source/object in the prepared tree. F1 additionally injects fixed diagnostic calls at native compiler entry,
+initialization, parsing, linking and WASM encoding boundaries; the calls receive
+no source/path/token/input. Compiler behavior and generated code are otherwise
+unchanged; headers and all other libc bytes remain untouched. No modification to the user's source.
 
 WAMR is built without AOT/JIT/fast-JIT/SIMD/threads or hardware signal-based
 bounds checks. The classic interpreter performs software bounds checks.
