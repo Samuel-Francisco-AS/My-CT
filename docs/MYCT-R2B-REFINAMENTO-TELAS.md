@@ -1,6 +1,6 @@
 # MYCT-R2B — telas internas, ergonomia e fluidez
 
-**Abertura:** 17/10/2026. **Status:** implementação candidata R2B; aceite visual/funcional no Moto G06 pendente. **Base visual aceita:** MYCT-R2A.1 0.6.1/code 18; branch `myct-r2b-screens` derivada de `myct-r2a-visual-shell` após o [aceite](MYCT-R2-IDENTIDADE-VISUAL-E-PLANEJAMENTO.md).
+**Abertura:** 17/10/2026. **Atualização após teste físico:** proprietário aprovou visual e organização da R2B no Moto G06, destacando melhora perceptível especialmente em Arquivos; duas pendências de Fix foram relatadas (gesto drawer interferindo na rolagem e métricas acumuladas de torrents indisponíveis por CLI antiga). Aceite funcional exaustivo ainda não inferido. **Base visual aceita:** MYCT-R2A.1 0.6.1/code 18; branch `myct-r2b-screens` derivada de `myct-r2a-visual-shell` após o [aceite](MYCT-R2-IDENTIDADE-VISUAL-E-PLANEJAMENTO.md).
 
 ## Mandato
 
@@ -76,3 +76,14 @@ b3c0764a5322a48fd1e7f5feaf95fa31265239fcc9366cd8fa72e49b485991e6
 ```
 
 Continuar em `myct-r2b-screens`, PR draft com base `myct-r2a-visual-shell`; sem merge. Próximo passo é o proprietário avaliar esta candidata no Moto, registrar resultados reais e autorizar separadamente eventual instalação da CLI de consulta ampliada.
+
+
+## Retorno físico do proprietário e Fix pós-R2B — 17/10/2026
+
+**Relato:** “Ficou bom, de verdade. Senti as melhorias, principalmente na navegação em arquivos que ficou bem melhor.” Capturas do Moto G06 mostram drawer, Arquivos, Saúde, HTTP/Torrents e Opções com estilo aprovado. **R2B aprovada visualmente e em navegação geral de Arquivos**, não significando teste exaustivo de transferência, Cofre, AV ou que o deslocamento pontual do item ao abrir pasta foi revalidado isoladamente.
+
+**FIX-01 — Drawer rouba gestos de scroll (defeito real relatado):** ao tentar rolar verticalmente, a gaveta lateral pode iniciar abertura/consumir o gesto e dificultar subir/descer. Origem introduzida na R2A; reproduzido/percebido ao usar telas R2B. O `AppShell.kt` usa `ModalNavigationDrawer` com gestos padrão e `systemGestureExclusion` numa faixa da borda esquerda. **Corrigir reconhecimento entre intenção horizontal de abrir drawer e rolagem vertical de qualquer seção**, preservando swipe esquerda→direita, swipe inverso, toque fora, Back/predictive Back, acessibilidade e terminal/seleção. Preferir restrição de ativação pela borda e discriminador direcional com slop adequado, sem intercepção invasiva ou botão fixo; provar fisicamente arraste vertical próximo à borda, com início diagonal, e abertura deliberada do drawer. Não declarar mecanismo exato como causa provada sem reproduzir; a existência do conflito foi confirmada pelo proprietário.
+
+**FIX-02 — Métricas acumuladas torrents ausentes (integração pendente, não falha da UI):** a versão Android R2B já exibe `downloaded_ever`, `uploaded_ever`, `upload_ratio` quando o adaptador as fornece. A CLI anterior no Fedora (`~/.local/bin/myct-torrent`) ainda não foi substituída pela revisão do repositório (`ops/myct-torrent`); por isso UI mostra “Indisponível”. As **taxas instantâneas** de download/upload (p.ex. 0 bytes/s nas capturas) são distintas e não representam acumulados. **Instalação é ação no Fedora ainda não autorizada nesta rodada**: solicitar consentimento explícito antes de atualizar, validar origem/arquivo/permissões, preservar executável anterior e confirmar consulta somente leitura. Não alterar serviço, motor, torrent, seeding ou pastas.
+
+**Prioridade autorizada para discussão:** Fix pontual do drawer; depois atualização separada da CLI mediante autorização do proprietário. Nenhuma nova rodada de diagnósticos de lag SSH (R-01 segue dívida suspensa), nenhuma nova reforma visual, nenhum merge automático. PR #24 continua draft, baseado em R2A; PRs #22/#23 ainda draft. Sem afirmar que essas pendências invalidam a melhora visual aceita.
