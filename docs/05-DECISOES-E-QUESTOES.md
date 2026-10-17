@@ -24,6 +24,10 @@
 | ADR-012 | Navegação Android | DECIDIDO | **Nenhum cabeçalho global permanente**, nem hambúrguer/título/status; cinco seções, status SSH, Opções e encerrar exclusivamente no drawer oculto acessível por gesto da esquerda à direita; exceções somente para controles locais funcionais |
 | ADR-013 | Princípio UX | DECIDIDO | **Fluidez**: feedback imediato, preservação de estado/posição, transições suaves e curtas, ausência de saltos, piscadas ou efeitos pesados; acessibilidade e ergonomia acima de ornamento |
 | ADR-014 | Recorte MYCT-R2 | DECIDIDO | R2A implementa tema global e drawer/shell, sem alterar lógicas de telas. R2B refaz visual das telas, diálogos e oferece ajuda opcional por ícone `i`, com avisos críticos sempre visíveis quando necessários. R-01/lag permanece dívida suspensa |
+| ADR-015 | Ambiente local independente | DECIDIDO | MYCT-L1 deve funcionar offline no Moto G06 sem Fedora, SSH e sem o aplicativo Termux instalado; pode reutilizar código Termux embutido e licenciado |
+| ADR-016 | Ordenação das fases | DECIDIDO | Após aceite/merge da MYCT-R4/Fix, executar L1A → L1B → L1C antes da MYCT-6/T5 de automações; nenhuma implementação antecipada |
+| ADR-017 | Critério da primeira L1 | DECIDIDO | IDE e arquivos locais, terminal Android/PTY local e prova física de editar, compilar e executar C **offline** no Moto; C++/linguagens adicionais e Linux completo são posteriores |
+| ADR-018 | Tecnologia compilação local | ABERTO | Prova curta compara compilação C para WebAssembly/WASI e alternativa nativa Android segura; sem garantia de compatibilidade com Linux, sem burlar restrições targetSdk 36 |
 
 ## Propostas técnicas (não congelar sem prova)
 | ID | Tema | Proposta | Como decidir |
@@ -310,3 +314,8 @@ sem rede protege esse acoplamento à versão fixada. Não muda autenticação.
 Decisão explícita do proprietário após revisão das capturas reais do Moto G06. O desenho deve seguir a estética tecnológica preto profundo/dourado do Deus Ex: Human Revolution sem reproduzir obras ou texturas do jogo. **Fluidez** é a palavra-guia de interações, transições e organização visual. O proprietário **rejeitou** a recomendação de manter qualquer barra global mínima; tudo que é global fica no drawer acessível por gesto, sem cabeçalho permanente em nenhuma aba. Caminho atual em Arquivos e barra de teclas do Terminal são conteúdos funcionais locais permitidos.
 
 Toda a aplicação — inclusive seções não exemplificadas em capturas — deve adotar a identidade. Explicações longas não críticas ficam sob ícone `i`, mas alertas relevantes para decisão/segurança continuam visíveis no momento oportuno. **R2A só shell e tema; R2B redesenho de telas, com melhoria de Arquivos, Saúde, Cofre, HTTP/Torrents, Opções e diálogos AV.** R-01/lag SSH suspenso após 0.5.9; não reabrir diagnóstico e não fazer a experiência de digitação condição da R2A. Decisão e aceite detalhados em [MYCT-R2](MYCT-R2-IDENTIDADE-VISUAL-E-PLANEJAMENTO.md).
+
+
+## 17/10/2026 — MYCT-L1 e reordenação antes da automação (ADR-015 a ADR-018)
+
+O proprietário quer My-CT como estação de programação offline autossuficiente, não dependente do app Termux, do Fedora ou de internet, com fase inicial para programas de console, e expansão futura em direção a ferramentas Linux completas. O mesmo Sora, explorador e terminal gráfico devem atender **Local** e **Remoto** por backends de dados/execução distintos. A rota L1A (IDE/arquivos locais) → L1B (PTY/shell Android) → L1C (compilação e execução C offline) foi **aprovada para ser a fase seguinte ao fechamento da R4**. MYCT-6/T5 automações foi explicitamente adiada, sem cancelamento. Não presumir compilador funcional no target 36; escolher runtime/compilador após protótipo comprovado. Fonte: [MYCT-L1](MYCT-L1-AMBIENTE-LOCAL.md).
