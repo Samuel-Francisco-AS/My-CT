@@ -21,6 +21,15 @@
 
 | VAL-R08 | Validação futura | **MYCT-5B integrada com aceite parcial em 16/10/2026:** histórico/download real via Android, foco/IME e fim das piscadas dos botões aprovados no Moto G06. Não foram ensaiados fisicamente Ver em Arquivos abrindo diretório, cancelamento, reconexão de histórico na aba, clique durante polling ou progresso lento/maior. | Testar um caso por vez no Moto G06 quando o proprietário pedir; verificar pasta SFTP correta, `.part` após cancelamento, estado após reconexão sem replay e resposta dos cliques durante consulta. Não refazer MYCT-5A. Ver [fechamento 5B](MYCT-5B-ANDROID-DOWNLOADS-REPORT.md) e [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9). |
 
+## Autorização MYCT-R2 — visual e fluidez (16/10/2026)
+
+**Escopo explicitamente acordado e autorizado:** [identidade visual e planejamento MYCT-R2](MYCT-R2-IDENTIDADE-VISUAL-E-PLANEJAMENTO.md).
+
+- **R2A:** tema preto profundo/sombrio + destaques dourado/âmbar, tokens reutilizáveis e **drawer lateral oculto por gesto** contendo *toda* a navegação e funções globais. **Nenhum cabeçalho global ou barra de abas permanece** em qualquer tela; não manter hambúrguer/status/título fixo no topo. Preservar elementos úteis locais (caminho em Arquivos, barra de teclas do Terminal).
+- **R2B (após R2A):** remodelagem visual de todas as abas, inclusive itens ainda não citados, tornando Arquivos/SFTP, Saúde, Cofre, Downloads HTTP/Torrents, Opções e relatórios mais legíveis e estruturados. Ajuda contextual por botão `i` pequeno, sem ocultar avisos críticos. Corrigir movimento do item ao tocar na listagem SFTP. Expor métricas acumuladas reais do Transmission apenas se disponíveis no RPC/adaptador.
+- **Princípio obrigatório: FLUIDEZ.** Movimento suave, transições curtas, feedback imediato, ausência de saltos/recentralização/piscadas e preservação de estado. Não criar animações excessivas nem reabrir lag/SSH.
+- Branch de documentação e futura implementação: `myct-r2a-visual-shell`, baseada em `myct-r1-terminal-files` enquanto PR #22 permanece draft/sem merge. Não misturar R2B, não fazer merge automático.
+
 ## Decisão após o teste físico da 0.5.9 — 16/10/2026
 
 - **Lag R-01 suspenso:** a tentativa R1C (workers dedicados, recepção limitada, resize coalescido e window-change sem ACK) melhorou somente a abertura/fechamento do teclado, **não a digitação percebida** no Moto. Não declarar a R1 concluída quanto ao lag; não iniciar mais diagnósticos, correções ou versão R1D por iniciativa própria. Evidências e código permanecem no [relatório MYCT-R1](MYCT-R1-TERMINAL-FILES.md) e no [PR #22](https://github.com/Samuel-Francisco-AS/My-CT/pull/22).
