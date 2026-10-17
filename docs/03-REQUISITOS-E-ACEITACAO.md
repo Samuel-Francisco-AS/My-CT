@@ -98,9 +98,9 @@ Este checkpoint complementa a tabela de requisitos inicial, **sem reescrever seu
 - Evidências em [MYCT-3C-DASHBOARD-REPORT.md](MYCT-3C-DASHBOARD-REPORT.md). Dívidas de lag, SFTP scroll e background continuam [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9).
 
 
-## E. MYCT-L1 — requisitos aprovados, L1A candidata (17/10/2026)
+## E. MYCT-L1 — requisitos aprovados, L1A parcial e L1B candidata (17/10/2026)
 
-Esta fase foi priorizada **entre MYCT-R4 e MYCT-6/T5**. Os itens abaixo exigem prova física; a L1A implementa LOC-01/LOC-04 e os aspectos de armazenamento/targetSdk de LOC-05, **ainda sem aceite no Moto**:
+Esta fase foi priorizada **entre MYCT-R4 e MYCT-6/T5**. Os itens abaixo exigem prova física; a L1A implementa LOC-01/LOC-04 e os aspectos de armazenamento/targetSdk de LOC-05, **com aceite físico parcial descrito abaixo**:
 
 | ID | Prioridade | Requisito | Evidência mínima para aceite no Moto G06 |
 | --- | --- | --- | --- |
@@ -117,5 +117,16 @@ Esta fase foi priorizada **entre MYCT-R4 e MYCT-6/T5**. Os itens abaixo exigem p
 LOC-01 e LOC-04: workspace privada/SAF, Sora offline, estados independentes e
 salvamento explícito implementados, com testes de filesystem e isolamento.
 LOC-05 aplicável: targetSdk 36 preservado, sem root/permissão ampla/executáveis
-novos. LOC-02/03 e decisão de compilação fora da missão. **Nenhum desses itens
-está aprovado fisicamente pela L1A.** [Relatório, APK e checklist](MYCT-L1A-RELATORIO.md).
+novos. LOC-02/03 ficaram fora da missão L1A. **Retorno posterior do proprietário:**
+criação de pasta/arquivo, edição no Sora, salvamento/persistência após fechar e
+reabrir e renomeação preservando arquivo confirmados na code 24. SAF, isolamento
+completo e regressão remota continuam sem aceite físico individual. [Relatório, APK e checklist](MYCT-L1A-RELATORIO.md).
+
+
+## Checkpoint MYCT-L1B — candidata, LOC-02 pendente no Moto
+
+PTY local real em JNI/C++20, `/system/bin/sh`, workspace da IDE, resize/sinais e
+sessão independente do SSH implementados na code 25. LOC-02/04/05 exigem gate
+físico A–F (modo avião, Gboard/rotação/clipboard, retorno IDE e isolamento com
+SSH real). Testes JVM e PTY no host não aprovam Android. LOC-03 e escolha de
+toolchain não iniciados. [Relatório e checklist](MYCT-L1B-RELATORIO.md).

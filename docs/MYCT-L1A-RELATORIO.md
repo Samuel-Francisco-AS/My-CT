@@ -2,7 +2,13 @@
 
 17/10/2026. **Implementação pronta para revisão e teste físico**, branch
 `myct-l1a-ide-local`, base `41a0a0b` (main sincronizada). Issue #27.
-**Sem merge ou aceite físico.** LOC-01/LOC-04 continuam pendentes no Moto G06.
+**Atualização do proprietário na missão L1B (17/10/2026):** criação de pasta e
+arquivo, edição de `teste.c` no Sora, salvamento/persistência após fechar e
+reabrir e renomeação de pasta preservando arquivo foram confirmados no Moto
+G06 com 0.6.7/code 24. SAF, isolamento completo e regressão remota ainda não
+receberam aceite físico individual. PR #28 continua aberto/draft, sem merge.
+Os trechos abaixo registram a entrega original, anterior a esse retorno.
+Continuidade autorizada em [L1B](MYCT-L1B-RELATORIO.md), empilhada sobre L1A.
 
 ## Critérios registrados antes da implementação
 
