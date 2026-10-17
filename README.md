@@ -4,7 +4,7 @@
 edição direta em árvore SAF autorizada para abrir e compilar os mesmos arquivos
 no Termux. APK **0.7.0-l1d-shared-storage/code 28**, sem compilação embarcada.
 Gate Moto G06/Termux **pendente**, sem merge. L1C cancelada (PR #30 fechado).
-[Relatório e roteiro físico](docs/MYCT-L1D-RELATORIO.md).
+[Relatório e roteiro físico](docs/MYCT-L1D-RELATORIO.md) · [PR #31 draft](https://github.com/Samuel-Francisco-AS/My-CT/pull/31) · [APK e SHA-256](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-l1d-v0.7.0-rc1).
 
 **MYCT-5D-B2 ACEITA no Moto G06 em 16/10/2026; PR #21 integrado à main (merge `ed593cffe798e01177c249b9acffc700184a455a`):** APK
 **0.5.6-antivirus/code 13**, seção Antivírus no relatório de arquivos e

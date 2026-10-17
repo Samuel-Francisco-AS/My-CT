@@ -4,8 +4,12 @@
 Branch `myct-l1d-shared-storage`, criada sobre L1B `e1deac6`, após decisão
 registrada em `8a4e8d2`. L1C cancelada; PR #30 fechado sem merge. Nenhum código,
 compilador, worker, linker ou runtime WCPL/WAMR foi transportado para esta entrega.
-Issue #27 continua aberta; PR L1D empilhado sobre `myct-l1b-local-terminal` enquanto
+Issue #27 continua aberta; [PR #31 draft](https://github.com/Samuel-Francisco-AS/My-CT/pull/31)
+empilhado sobre `myct-l1b-local-terminal` enquanto
 #28/#29 não forem integrados. Não fazer merge sem aceite físico expresso.
+
+Implementação e testes no commit `6c48d38`; commits seguintes desta entrega
+apenas registram os links de publicação.
 
 ## Critérios e implementação
 

@@ -246,3 +246,8 @@ original/renomear, conflitos e permissão revogada. Candidata code 28 para
 atualizar RC2/code 27 sem limpeza; nenhum componente L1C transportado.
 ADB sem aparelho; testes físicos não declarados. [Relatório, validação e gate
 Moto G06/Termux](MYCT-L1D-RELATORIO.md). Sem merge ou deploy Fedora.
+
+Entrega L1D: [PR #31 draft](https://github.com/Samuel-Francisco-AS/My-CT/pull/31)
+com base L1B; [candidata 0.7.0/code 28](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-l1d-v0.7.0-rc1)
+com APKs e SHA-256. Build/JVM/lint offline PASS: 224 testes, 223 aprovados,
+1 handshake opt-in ignorado. Roteiro físico pendente; sem merge.
