@@ -29,6 +29,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -114,6 +115,11 @@ private fun TerminalApp(model: TerminalModel) {
     var selectedTab by rememberSaveable { mutableStateOf(AppSection.Terminal) }
     val active = model.phase == TerminalModel.Phase.CONNECTING || model.phase == TerminalModel.Phase.CONNECTED
     val connected = model.phase == TerminalModel.Phase.CONNECTED
+    val showingLocal = selectedTab == AppSection.Terminal && model.terminalSelection.environment == IdeEnvironment.LOCAL
+    val terminalRunning = model.selectedRunning
+    val input = model.terminalInput()
+    val inputModifiers = input.modifiers
+    val sessionCallbacks = model.selectedCallbacks
     val pin = model.pinForHost()
     fun feedback(text: String) { Toast.makeText(activity, text, Toast.LENGTH_SHORT).show() }
     fun copyToSystemClipboard(text: String) {
@@ -127,12 +133,12 @@ private fun TerminalApp(model: TerminalModel) {
     }
     fun requestSystemPaste(expected: TerminalSession?) {
         try {
-            when (pasteTerminalClipboard(expected, { model.terminal },
-                { model.phase == TerminalModel.Phase.CONNECTED }) {
+            when (pasteTerminalClipboard(expected, { model.selectedTerminal },
+                { input.accepts() }) {
                 val clip = (activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).primaryClip
                 clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
             }) {
-                PasteResult.SENT -> model.modifiers.clear()
+                PasteResult.SENT -> inputModifiers.clear()
                 PasteResult.INVALID_CLIPBOARD -> feedback("A área de transferência precisa conter texto simples de até 64 KiB.")
                 PasteResult.SESSION_CHANGED -> feedback("A sessão mudou ou está desconectada; cole novamente na conexão desejada.")
             }
@@ -150,7 +156,7 @@ private fun TerminalApp(model: TerminalModel) {
     }
     DisposableEffect(activity) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) { password = ""; model.modifiers.clear(); stopPersistenceFor = null }
+            if (event == Lifecycle.Event.ON_STOP) { password = ""; model.clearTerminalModifiers(); stopPersistenceFor = null }
         }
         activity.lifecycle.addObserver(observer)
         onDispose { activity.lifecycle.removeObserver(observer) }
@@ -169,7 +175,7 @@ private fun TerminalApp(model: TerminalModel) {
         backgroundEnabled = model.backgroundEnabled, protectScreenshots = model.protectScreenshots,
         onSelect = { destination ->
             if (selectedTab != destination) {
-                model.modifiers.clear()
+                model.clearTerminalModifiers()
                 if (destination != AppSection.Terminal) (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
                     .hideSoftInputFromWindow(activity.window.decorView.windowToken, 0)
                 selectedTab = destination
@@ -187,8 +193,15 @@ private fun TerminalApp(model: TerminalModel) {
     ) {
         AppSectionContent(selectedTab) {
             Column(Modifier.fillMaxSize()) {
+                if (selectedTab == AppSection.Terminal) Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    IdeEnvironment.entries.forEach { environment ->
+                        FilterChip(selected = model.terminalSelection.environment == environment,
+                            onClick = { model.selectTerminal(environment) }, label = { Text(environment.label) })
+                    }
+                }
                 if (selectedTab == AppSection.Ide) IdeScreen(model.ide,
-                    terminal = { selectedTab = AppSection.Terminal },
+                    terminal = { model.selectTerminal(model.ide.environment); selectedTab = AppSection.Terminal },
                     files = { path -> if (connected && !model.files.busy) { model.files.load(path); selectedTab = AppSection.Files } },
                     modifier = Modifier.weight(1f))
                 else if (selectedTab == AppSection.Downloads) DownloadsScreen(model.downloads, model.torrents, model.files.busy, { path ->
@@ -196,7 +209,18 @@ private fun TerminalApp(model: TerminalModel) {
                 }, Modifier.weight(1f))
                 else if (selectedTab == AppSection.Vault) VaultScreen(model.vault, Modifier.weight(1f))
                 else if (selectedTab == AppSection.Health) HealthScreen(model.health, Modifier.weight(1f))
-                else if (!active) {
+                else if (selectedTab == AppSection.Files && active && !connected) {
+                    Text(model.message, Modifier.padding(12.dp))
+                }
+                else if (showingLocal && model.localTerminal.terminal == null) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(model.localTerminal.message)
+                        MyCtButton(onClick = { model.localTerminal.start() }) { Text("Iniciar shell local") }
+                        Text("/system/bin/sh · workspace da IDE · sem SSH. A sessão dura enquanto o processo do app estiver vivo.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                else if (!showingLocal && !active) {
                     if (model.files.recoveryNotice.isNotEmpty()) Text(model.files.recoveryNotice,
                         modifier = Modifier.padding(horizontal = 12.dp), style = MaterialTheme.typography.bodySmall)
                     Text(model.message, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -230,7 +254,13 @@ private fun TerminalApp(model: TerminalModel) {
                 } else {
                     if (connected && selectedTab == AppSection.Files) FilesScreen(model.files, Modifier.weight(1f))
                     else {
-                    model.terminal?.let { session ->
+                    if (showingLocal) Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(model.localTerminal.message, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                        if (model.localTerminal.active) TextButton(onClick = { model.localTerminal.stop() },
+                            enabled = model.localTerminal.phase != LocalTerminalModel.Phase.STOPPING) { Text("Fechar") }
+                        else TextButton(onClick = { model.localTerminal.start() }) { Text("Novo shell") }
+                    }
+                    model.selectedTerminal?.let { session -> key(session, model.terminalSelection.environment) {
                         var view by remember(session) { mutableStateOf<TerminalView?>(null) }
                         fun showKeyboard() {
                             view?.let { terminalView ->
@@ -240,8 +270,8 @@ private fun TerminalApp(model: TerminalModel) {
                             }
                         }
                         fun interrupt() {
-                            if (model.phase == TerminalModel.Phase.CONNECTED && model.terminal === session) {
-                                model.modifiers.clear()
+                            if (input.accepts()) {
+                                inputModifiers.clear()
                                 view?.inputCodePoint('c'.code, true, false)
                             }
                         }
@@ -262,12 +292,12 @@ private fun TerminalApp(model: TerminalModel) {
                                 override fun requestPaste() { requestSystemPaste(session) }
                             }
                             fun attach() {
-                                model.callbacks.screenChanged = redraw
+                                sessionCallbacks.screenChanged = redraw
                                 session.setUserClipboard(manualClipboard)
                                 current?.onScreenUpdated()
                             }
                             fun detach() {
-                                if (model.callbacks.screenChanged === redraw) model.callbacks.screenChanged = null
+                                if (sessionCallbacks.screenChanged === redraw) sessionCallbacks.screenChanged = null
                                 session.clearUserClipboard(manualClipboard)
                             }
                             val observer = LifecycleEventObserver { _, event ->
@@ -275,13 +305,13 @@ private fun TerminalApp(model: TerminalModel) {
                             }
                             activity.lifecycle.addObserver(observer)
                             if (activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) attach()
-                            onDispose { activity.lifecycle.removeObserver(observer); detach(); model.modifiers.clear() }
+                            onDispose { activity.lifecycle.removeObserver(observer); detach(); inputModifiers.clear() }
                         }
                         AndroidView(factory = { context ->
                             TerminalView(context, null).apply {
                                 setTextSize(fontPx)
                                 tag = fontPx
-                                setTerminalViewClient(ViewCallbacks(model) {
+                                setTerminalViewClient(ViewCallbacks(model, input, !showingLocal) {
                                     requestFocus()
                                     (context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
                                 })
@@ -304,23 +334,23 @@ private fun TerminalApp(model: TerminalModel) {
                                 CustomAccessibilityAction("Ctrl+C") { interrupt(); true })
                         }.onSizeChanged {
                             // TerminalView.onSizeChanged already resizes the local emulator.
-                            model.diagnostics.viewport = "Área: ${it.width}×${it.height} px · PTY: ${session.emulator.mRows}×${session.emulator.mColumns} · fonte: ${model.fontSizeSp} sp / $fontPx px"
+                            if (!showingLocal) model.diagnostics.viewport = "Área: ${it.width}×${it.height} px · PTY: ${session.emulator.mRows}×${session.emulator.mColumns} · fonte: ${model.fontSizeSp} sp / $fontPx px"
                         }, update = { terminalView ->
                             if (terminalView.currentSession !== session) terminalView.attachSession(session)
                             if (terminalView.tag != fontPx) {
                                 terminalView.setTextSize(fontPx); terminalView.tag = fontPx; terminalView.onScreenUpdated()
-                                model.diagnostics.viewport = "Área: ${terminalView.width}×${terminalView.height} px · PTY: ${session.emulator.mRows}×${session.emulator.mColumns} · fonte: ${model.fontSizeSp} sp / $fontPx px"
+                                if (!showingLocal) model.diagnostics.viewport = "Área: ${terminalView.width}×${terminalView.height} px · PTY: ${session.emulator.mRows}×${session.emulator.mColumns} · fonte: ${model.fontSizeSp} sp / $fontPx px"
                             }
                         })
-                        MyCtTerminalKeys(model.modifiers, connected) { key ->
-                            if (model.phase == TerminalModel.Phase.CONNECTED && model.terminal === session) {
+                        MyCtTerminalKeys(inputModifiers, terminalRunning) { key ->
+                            if (input.accepts()) {
                                 view?.let { terminalView ->
                                     terminalView.requestFocus()
-                                    model.modifiers.press(key, session) { terminalView.inputCodePoint(it, false, false) }
+                                    inputModifiers.press(key, session) { terminalView.inputCodePoint(it, false, false) }
                                 }
                             }
                         }
-                    }
+                    } }
                     }
                 }
             }

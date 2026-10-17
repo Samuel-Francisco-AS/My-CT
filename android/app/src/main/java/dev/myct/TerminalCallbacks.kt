@@ -33,8 +33,9 @@ open class SessionCallbacks(private val diagnostics: (() -> TerminalDiagnostics)
     override fun logStackTrace(tag: String, e: Exception) = Unit
 }
 
-class ViewCallbacks(private val model: TerminalModel, private val showKeyboard: () -> Unit) : TerminalViewClient {
-    override fun shouldMeasurePerformance() = model.diagnostics.isSampling
+internal class ViewCallbacks(private val model: TerminalModel, private val target: TerminalInputTarget,
+                             private val remote: Boolean, private val showKeyboard: () -> Unit) : TerminalViewClient {
+    override fun shouldMeasurePerformance() = remote && model.diagnostics.isSampling
     override fun onInputTiming(kind: Int, startedAt: Long, duration: Long, left: Int, right: Int) {
         when (kind) {
             0 -> model.diagnostics.record(TerminalDiagnostics.Stage.COMPOSE, startedAt, duration)
@@ -63,8 +64,8 @@ class ViewCallbacks(private val model: TerminalModel, private val showKeyboard: 
         // Mapped Android keys do not reach onCodePoint. Consume one-shot modifiers here;
         // character/IME input follows TerminalView's existing transformations below.
         if (e.isSystem) return false
-        if (model.terminal !== session || model.phase != TerminalModel.Phase.CONNECTED) return true
-        if (e.isFunctionPressed || (!model.modifiers.ctrl && !model.modifiers.alt)) return false
+        if (!target.accepts(session)) return true
+        if (e.isFunctionPressed || (!target.modifiers.ctrl && !target.modifiers.alt)) return false
         // Preserve TerminalView's local scrollback action for physical Shift+PageUp/PageDown.
         if (e.isShiftPressed && (keyCode == KeyEvent.KEYCODE_PAGE_UP || keyCode == KeyEvent.KEYCODE_PAGE_DOWN)) return false
         var mode = 0
@@ -72,17 +73,17 @@ class ViewCallbacks(private val model: TerminalModel, private val showKeyboard: 
         if (e.isAltPressed) mode = mode or KeyHandler.KEYMOD_ALT
         if (e.isShiftPressed) mode = mode or KeyHandler.KEYMOD_SHIFT
         if (e.isNumLockOn) mode = mode or KeyHandler.KEYMOD_NUM_LOCK
-        return model.modifiers.sendKey(session, keyCode, mode)
+        return target.modifiers.sendKey(session, keyCode, mode)
     }
     override fun onKeyUp(keyCode: Int, e: KeyEvent) = false
     override fun onLongPress(e: MotionEvent) = false
-    override fun readControlKey() = model.modifiers.ctrl
-    override fun readAltKey() = model.modifiers.alt
+    override fun readControlKey() = target.accepts() && target.modifiers.ctrl
+    override fun readAltKey() = target.accepts() && target.modifiers.alt
     override fun readShiftKey() = false
     override fun readFnKey() = false
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean {
-        if (model.terminal !== session || model.phase != TerminalModel.Phase.CONNECTED) return true
-        model.modifiers.clear()
+        if (!target.accepts(session)) return true
+        target.modifiers.clear()
         return false // TerminalView already captured CTRL/ALT and performs the transformation.
     }
     override fun onEmulatorSet() = Unit
