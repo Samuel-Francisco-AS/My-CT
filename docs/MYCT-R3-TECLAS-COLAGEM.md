@@ -1,6 +1,6 @@
 # MYCT-R3 — Teclas auxiliares e colagem direta
 
-**Data:** 17/10/2026. **Status:** escopo acordado com proprietário, não implementado. **Base:** main após fechamento MYCT-R2. **Princípio:** FLUIDEZ.
+**Data:** 17/10/2026. **Status:** implementação candidata; aceite físico no Moto G06 pendente. **Base:** main após fechamento MYCT-R2. **Princípio:** FLUIDEZ.
 
 ## Layout obrigatório — referência Termux no Moto G06
 
@@ -37,3 +37,61 @@ Remover confirmação equivalente criada pelo próprio My-CT em quaisquer outros
 - Aceite físico no Moto: confirmar teclado em duas linhas iguais ao Termux, tecla Alt real, Ctrl+C, Home/End/PgUp/PgDn, haptics sutis, feedback rápido, colar sem confirmação My-CT e estabilidade do espaço da TTY.
 
 Fechar a R3 somente após retorno físico do proprietário.
+
+
+## Implementação candidata — 17/10/2026
+
+Versão **0.6.4-r3-keys-paste / code 21**, pacote `dev.myct`. Alterações limitadas ao Android, sem instalação no Fedora. O layout e os critérios acima continuam sendo o contrato de aceite físico.
+
+- `TerminalExtraKeys.kt`: as 14 posições em duas fileiras fixas de sete colunas. Escape, Tab, setas, Home, End, PgUp/PgDn usam o `KeyHandler` existente, incluindo modo de cursor application. `/` e `−` passam os code points ASCII 47/45 à `TerminalView.inputCodePoint()`.
+- `TerminalCallbacks.kt` e `TerminalModel.kt`: CTRL e ALT one-shot, combináveis e com cancelamento por segundo toque. A view pode ler o mesmo modificador duas vezes num KeyEvent; agora a leitura não o consome antecipadamente. Consumo ao aceitar code point ou tecla mapeada; limpeza ao sair do terminal, parar a tela, desconectar ou encerrar a sessão. Teclas de sistema mantêm seu tratamento Android. Ctrl+C segue a transformação upstream.
+- `MyCtControls.kt`: estilo exclusivo da grade, usando a paleta/geometria R2, cor pressionada imediata e sem ripple/tween. Um `performHapticFeedback(KEYBOARD_TAP)` por acionamento, após encaminhar a tecla, sem flags que ignorem configurações do Android, permissões ou dependências novas. Altura mínima de 48 dp por tecla; largura distribuída igualmente, rótulos ajustáveis ao espaço e descrições acessíveis. Ordem LTR fixa também em locale RTL. O terminal mantém a área restante por peso e a união de insets já existente.
+- `MainActivity.kt` e `TerminalPaste.kt`: removidos `PendingPaste`, estado do texto, preview e diálogo “Enviar texto ao terminal?”. Colagem síncrona lê somente texto simples, valida até 65.536 bytes UTF-8 e verifica identidade, estado conectado e sessão em execução antes e depois da leitura. Encaminha diretamente a `TerminalEmulator.paste()`, preservando bracketed paste, sanitização upstream e ordem de entrada. Cada callback de clipboard continua vinculado à sessão que o originou. Nenhum conteúdo de clipboard é registrado ou retido em estado Compose.
+- A inspeção dos campos comuns não encontrou outra confirmação própria de colagem. Confirmações de desconexão, pareamento e segurança foram preservadas. Tema, drawer, FLAG_SECURE/Cofre, SFTP, downloads, JSch, filas/workers SSH e backend permanecem fora desta alteração; dívida de lag não investigada.
+
+### Ações acessíveis preservadas
+
+**Ctrl+C:** toque CTRL e depois C no teclado Android. **Teclado:** toque na área do terminal. **Colar:** mantenha pressionado o texto do terminal e use a ação de colagem da seleção; o clipboard do teclado Android também permanece disponível. A opção **Mais** da seleção (ou clique secundário do mouse) abre um menu contextual com **Colar**, **Teclado** e **Ctrl+C**. As três ações também têm rótulos nas ações de acessibilidade do terminal. Não existe terceira fileira ou cabeçalho adicional.
+
+CTRL/ALT ficam dourados quando armados; uma tecla efetivamente enviada os desarma. Não há modo de trava por toque longo. A colagem não aplica modificadores ao conteúdo e desarma os modificadores após envio.
+
+### Validação e retomada
+
+Ferramentas inspecionadas: JBR/OpenJDK 21.0.10, SDK/Build Tools 36, Gradle 8.14.3, AGP 8.13.0, Kotlin 2.2.20, Compose UI 1.9.3/Material3 1.4.0, GitHub CLI 2.97.0. Nenhuma dependência instalada.
+
+```sh
+JAVA_HOME=/opt/android-studio/jbr ANDROID_HOME=/home/sam/Android/Sdk \
+  android/gradlew -p android :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --offline --console=plain
+python3 android/terminal/upstream/verify.py
+for patch in android/terminal/upstream/*.patch; do git apply --reverse --check "$patch" || exit; done
+git diff --check
+```
+
+Os novos testes em `TerminalExtraKeysTest.kt` e `TerminalPasteTest.kt` cobrem as 14 posições, sequências normais/application, CTRL/ALT combinados e one-shot, Ctrl+C, literais ASCII, ordem IME/teclas/colagem, colagem simples/multilinha/bracketed imediata, clipboard inválido/limite/exceção, sessão ausente/desconectada/substituída/encerrada e mudança durante a leitura. Os testes de code points executam o método real da view upstream numa instância sem construtor Android, com cliente de teste; isso **não simula renderização, toque, integração Gboard, acessibilidade ou vibração reais**.
+
+Fontes lidas: adaptador local `TerminalSession`, `TerminalView`, `KeyHandler`, `TerminalEmulator.paste()` e [TerminalSession upstream fixada no commit usado pelo projeto](https://github.com/termux/termux-app/blob/5b657c6adf4304e5198951ce815fe0205dcac29c/terminal-emulator/src/main/java/com/termux/terminal/TerminalSession.java). Nenhum arquivo vendorizado foi alterado. Integridade offline: **21 arquivos, três arquivos com patches documentados e quatro patches reversos verificados**.
+
+### Resultados automatizados e APK
+
+**Rodada final offline: BUILD SUCCESSFUL**, build/JVM/lint. **150 testes: 149 aprovados, um handshake local opt-in ignorado, zero falhas/erros**; os 14 novos testes direcionados também passaram isoladamente. Lint com **zero erros e dois avisos preexistentes**, sobre versões de Gradle e org.json; nenhuma supressão acrescentada. A fixture JVM inicialmente não compilou por referência direta a uma API interna do JDK; o acesso foi limitado ao runtime de teste por reflexão e as rodadas direcionada e completa passaram após a correção. Isso não adiciona dependência/API privada ao app.
+
+APK local: `artifacts/myct-r3-0.6.4-debug.apk`, **14.074.882 bytes (13,42 MiB)**, +440.511 bytes sobre 0.6.3. `aapt2` confirmou `dev.myct`, **0.6.4-r3-keys-paste / code 21**. `apksigner verify --verbose --print-certs` validou o APK e confirmou o mesmo certificado SHA-256 da candidata 0.6.3 cujo hash consta no fechamento R2. Atualizar sem desinstalar/apagar dados. Checksum em `artifacts/myct-r3-0.6.4-debug.apk.sha256`:
+
+```text
+32752516b8c715370922b219b39a14ccdb2abb7422e31886c0db93a094fb1f3b
+```
+
+Build final medido por `/usr/bin/time -v`: **1 min 54,06 s**, CPU de usuário 508,38 s e sistema 7,08 s, pico RSS **1.771.804 KiB (~1,69 GiB)**, zero swap. Os limites Gradle existentes foram preservados. Logs/relatórios locais ignorados pelo Git: `artifacts/myct-r3-build-final.log`, `myct-r3-build-time.txt`, `myct-r3-targeted-tests.log`, `myct-r3-validation-notes.txt`, `myct-r3-validation.json`, `myct-r3-jvm-results/` e `myct-r3-lint-results-debug.{html,xml}`.
+
+### Gate físico — ainda pendente
+
+ADB não apresentou dispositivo conectado nesta execução. Não houve instalação no Moto, conexão SSH autenticada, medição de RAM/CPU Android ou aceite físico. O custo de build e o tamanho do APK não são medidas de consumo do app.
+
+1. Atualizar sobre 0.6.3 sem desinstalar nem apagar dados; conectar normalmente ao Fedora.
+2. Conferir as duas fileiras na ordem exata, IME aberta/fechada, retrato/paisagem, fonte ampliada, insets e área do terminal; conferir descrições/ações com TalkBack.
+3. Exercitar ESC, Tab, `/`, `-`, setas, Home/End e PgUp/PgDn em shell, nano e tmux. Conferir CTRL+C, ALT+B/F, combinações com setas e desarme após um uso; segundo toque cancela modificador.
+4. Avaliar vibração breve, ausência de duplicação e respeito à configuração desativada do Android; avaliar resposta visual rápida ao pressionar/soltar.
+5. Colar texto simples e multilinha pelas ações de seleção/menu e clipboard do teclado, sem popup My-CT; testar bracketed paste num programa compatível. Campos comuns mantêm o fluxo Android/Gboard.
+6. Desconectar/reconectar e confirmar que ações antigas não colam em outra sessão. Confirmar estabilidade do teclado e ausência de regressão nos fluxos preservados.
+
+A R3 só pode ser fechada após o retorno físico do proprietário. Não fazer merge automaticamente.

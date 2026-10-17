@@ -4,5 +4,4 @@ package dev.myct
 object ClipboardPolicy {
     const val MAX_BYTES = 65_536
     fun allowed(text: String) = text.isNotEmpty() && text.toByteArray(Charsets.UTF_8).size <= MAX_BYTES
-    fun preview(text: String) = text.take(300)
 }

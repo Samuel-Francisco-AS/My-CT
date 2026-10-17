@@ -8,7 +8,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.termux.terminal.KeyHandler
 import com.termux.terminal.TerminalSession
 import kotlinx.coroutines.*
 import java.nio.CharBuffer
@@ -27,8 +26,7 @@ class TerminalModel(application: Application) {
         private set
     var terminal by mutableStateOf<TerminalSession?>(null)
         private set
-    var ctrl by mutableStateOf(false)
-        private set
+    internal val modifiers = TerminalModifiers()
     val callbacks = SessionCallbacks { diagnostics }
     private val prefs = application.getSharedPreferences("ssh-pins", 0)
     var host by mutableStateOf(prefs.getString("last-host", "") ?: "")
@@ -70,15 +68,6 @@ class TerminalModel(application: Application) {
         prefs.edit { remove("pin:${host.trim()}:${port.toIntOrNull()}") }
         message = "Pareamento removido. Confira novamente o fingerprint diretamente no Fedora."
     }
-    fun toggleCtrl() { ctrl = !ctrl }
-    fun consumeCtrl(): Boolean = ctrl.also { ctrl = false }
-    fun sendKey(keyCode: Int) {
-        val session = terminal ?: return
-        val emulator = session.emulator
-        val sequence = KeyHandler.getCode(keyCode, 0, emulator.isCursorKeysApplicationMode, emulator.isKeypadApplicationMode)
-        if (sequence != null) session.write(sequence)
-    }
-    fun sendCtrlC() { ctrl = false; terminal?.write("\u0003") }
 
     fun connect(password: CharArray, newPin: String) {
         // Reattaching UI or rapid duplicate taps must never create another connection.
@@ -171,7 +160,7 @@ class TerminalModel(application: Application) {
                 workers?.close(); queue.close()
                 // Close the socket before joining blocking workers, always off main.
                 withContext(NonCancellable + Dispatchers.IO) { current.close(); workers?.awaitStopped() }
-                if (id == generation) { transport = null; screen.finish(); connection = null; pending = null; ctrl = false; files.attach(null); health.attach(null); vault.attach(null); downloads.attach(null); torrents.attach(null); antivirusSignatures.attach(null) }
+                if (id == generation) { transport = null; screen.finish(); connection = null; pending = null; modifiers.clear(); files.attach(null); health.attach(null); vault.attach(null); downloads.attach(null); torrents.attach(null); antivirusSignatures.attach(null) }
             }
         }
     }
@@ -187,12 +176,13 @@ class TerminalModel(application: Application) {
         pending?.close(); pending = null
         job?.cancel(); job = null
         terminal?.finish()
-        ctrl = false
+        modifiers.clear()
         updatePhase(Phase.ENDED)
         message = reason
         if (old != null) scope.launch(Dispatchers.IO) { old.close() }
     }
     private fun updatePhase(value: Phase) {
+        if (value != Phase.CONNECTED) modifiers.clear()
         if (value != Phase.CONNECTED) { health.attach(null); vault.attach(null); downloads.attach(null); torrents.attach(null); antivirusSignatures.attach(null) }
         phase = value
         onConnectionStateChanged?.invoke()

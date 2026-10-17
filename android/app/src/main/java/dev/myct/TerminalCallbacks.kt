@@ -2,6 +2,7 @@ package dev.myct
 
 import android.view.KeyEvent
 import android.view.MotionEvent
+import com.termux.terminal.KeyHandler
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import com.termux.view.TerminalViewClient
@@ -58,14 +59,32 @@ class ViewCallbacks(private val model: TerminalModel, private val showKeyboard: 
     override fun shouldUseCtrlSpaceWorkaround() = false
     override fun isTerminalViewSelected() = true
     override fun copyModeChanged(copyMode: Boolean) = Unit
-    override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession) = false
+    override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean {
+        // Mapped Android keys do not reach onCodePoint. Consume one-shot modifiers here;
+        // character/IME input follows TerminalView's existing transformations below.
+        if (e.isSystem) return false
+        if (model.terminal !== session || model.phase != TerminalModel.Phase.CONNECTED) return true
+        if (e.isFunctionPressed || (!model.modifiers.ctrl && !model.modifiers.alt)) return false
+        // Preserve TerminalView's local scrollback action for physical Shift+PageUp/PageDown.
+        if (e.isShiftPressed && (keyCode == KeyEvent.KEYCODE_PAGE_UP || keyCode == KeyEvent.KEYCODE_PAGE_DOWN)) return false
+        var mode = 0
+        if (e.isCtrlPressed) mode = mode or KeyHandler.KEYMOD_CTRL
+        if (e.isAltPressed) mode = mode or KeyHandler.KEYMOD_ALT
+        if (e.isShiftPressed) mode = mode or KeyHandler.KEYMOD_SHIFT
+        if (e.isNumLockOn) mode = mode or KeyHandler.KEYMOD_NUM_LOCK
+        return model.modifiers.sendKey(session, keyCode, mode)
+    }
     override fun onKeyUp(keyCode: Int, e: KeyEvent) = false
     override fun onLongPress(e: MotionEvent) = false
-    override fun readControlKey(): Boolean = model.consumeCtrl()
-    override fun readAltKey() = false
+    override fun readControlKey() = model.modifiers.ctrl
+    override fun readAltKey() = model.modifiers.alt
     override fun readShiftKey() = false
     override fun readFnKey() = false
-    override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession) = false
+    override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean {
+        if (model.terminal !== session || model.phase != TerminalModel.Phase.CONNECTED) return true
+        model.modifiers.clear()
+        return false // TerminalView already captured CTRL/ALT and performs the transformation.
+    }
     override fun onEmulatorSet() = Unit
     override fun logError(tag: String, message: String) = Unit
     override fun logWarn(tag: String, message: String) = Unit

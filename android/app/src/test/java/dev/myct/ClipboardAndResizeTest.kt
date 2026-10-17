@@ -48,7 +48,6 @@ class ClipboardAndResizeTest {
         assertFalse(ClipboardPolicy.allowed("x".repeat(65_537)))
         assertFalse(ClipboardPolicy.allowed("😀".repeat(20_000)))
         assertFalse(ClipboardPolicy.allowed(""))
-        assertEquals(300, ClipboardPolicy.preview("a".repeat(500)).length)
     }
     @Test fun repeatedSizeIsDeduplicatedAndResizeCarriesPixelDimensions() {
         val sizes = mutableListOf<List<Int>>()
