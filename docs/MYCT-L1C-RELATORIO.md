@@ -1,7 +1,7 @@
 # MYCT-L1C — compilação e execução C offline
 
 17/10/2026. Issue #27. Branch `myct-l1c-offline-c`, base L1B `e1deac6`.
-PRs #28/#29 abertos antes do início; L1C será draft empilhado sobre L1B.
+PRs #28/#29 abertos antes do início; [PR #30 draft](https://github.com/Samuel-Francisco-AS/My-CT/pull/30) empilhado sobre L1B.
 **Candidata implementada e validada no Fedora; gate físico Android/Moto obrigatório PENDENTE.**
 
 ## Critérios antes da integração definitiva
@@ -324,5 +324,12 @@ Medição do comando de build completo: pico RSS 2.308.260 KiB (~2,20 GiB),
 CPU usuário 723,70 s distribuída entre threads/processos, 2m28,40s de parede,
 sem swap reportado. Não corresponde ao consumo do aplicativo no Moto.
 
-Pré-release prevista: [myct-l1c-v0.6.9-rc1](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-l1c-v0.6.9-rc1).
+Pré-release candidata: [myct-l1c-v0.6.9-rc1](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-l1c-v0.6.9-rc1).
 O resultado físico continua pendente, mesmo após publicar a candidata.
+
+PR #30 publicado como **draft**, base `myct-l1b-local-terminal`, sem duplicar
+commits L1A/L1B. Pré-release candidata com APK, APK de instrumentação, SHA-256,
+relatório e pacote de evidências. Nenhum merge, branch excluída ou issue
+encerrada. Fonte de entrega é esta branch/tag; preservar os dados na atualização.
+O teste de prompt lida também com leituras parciais de pipe, aguardando os oito
+bytes antes de enviar entrada; não presume que uma leitura devolva tudo.

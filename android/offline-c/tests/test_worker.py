@@ -61,9 +61,14 @@ printf("dobro=%d\\n",n*2); return 0; }''')
         try:
             with selectors.DefaultSelector() as sel:
                 sel.register(p.stdout, selectors.EVENT_READ)
-                self.assertTrue(sel.select(3), 'Prompt did not arrive before input')
-                prompt = os.read(p.stdout.fileno(), 8)
-            self.assertEqual(prompt, b'Numero: ')
+                prompt = bytearray()
+                deadline = time.monotonic() + 3
+                while len(prompt) < 8:
+                    self.assertTrue(sel.select(max(0, deadline-time.monotonic())), 'Prompt did not arrive before input')
+                    chunk = os.read(p.stdout.fileno(), 8-len(prompt))
+                    self.assertTrue(chunk, 'Program exited before its prompt')
+                    prompt.extend(chunk)
+            self.assertEqual(bytes(prompt), b'Numero: ')
             out, err = p.communicate(b'21\n', timeout=3)
             self.assertEqual(p.returncode, 0, err)
             self.assertEqual(out, b'dobro=42\n')
