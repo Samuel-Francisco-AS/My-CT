@@ -1,5 +1,7 @@
 package dev.myct
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.systemGestureExclusion
@@ -18,10 +20,14 @@ import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
 // Small original line icons, built once; no icon pack, bitmap assets or runtime downloads.
@@ -52,6 +58,7 @@ internal fun AppShell(
     onSelect: (AppSection) -> Unit,
     onOptions: () -> Unit,
     onCaptureChange: (Boolean) -> Unit,
+    onPersistenceChange: (Boolean) -> Unit,
     onDisconnect: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
@@ -77,64 +84,89 @@ internal fun AppShell(
             ModalDrawerSheet(
                 drawerState = drawer,
                 modifier = Modifier.widthIn(max = 320.dp).fillMaxHeight(),
+                drawerShape = MyCtGeometry.Drawer,
                 drawerContainerColor = MaterialTheme.colorScheme.surface,
                 drawerTonalElevation = 0.dp,
                 windowInsets = WindowInsets(0, 0, 0, 0)
             ) {
                 Column(Modifier.verticalScroll(rememberScrollState()).padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("My-CT", style = MaterialTheme.typography.headlineLarge,
-                            color = MaterialTheme.colorScheme.primary)
-                        Text(status, style = MaterialTheme.typography.labelLarge, color = when {
-                            connected -> MaterialTheme.colorScheme.tertiary
-                            phase == TerminalModel.Phase.ERROR -> MaterialTheme.colorScheme.error
-                            phase == TerminalModel.Phase.CONNECTING -> colorResource(R.color.myct_warning)
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                        })
-                        if (host.isNotBlank()) Text(
-                            "${user.takeIf { it.isNotBlank() }?.let { "$it@" } ?: ""}$host:$port",
-                            style = MaterialTheme.typography.bodySmall, maxLines = 2,
-                            overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-                    AppSection.entries.forEach { destination ->
-                        NavigationDrawerItem(
-                            label = { Text(destination.label) },
-                            icon = { Icon(checkNotNull(sectionIcons[destination]), contentDescription = null) },
-                            selected = section == destination,
-                            onClick = {
-                                // Register navigation immediately; never wait for animation before accepting input.
-                                onSelect(destination)
-                                closeMenu()
+                    val palette = MaterialTheme.colorScheme
+                    Surface(shape = MyCtGeometry.Panel, color = palette.background,
+                        border = BorderStroke(1.dp, palette.outlineVariant), shadowElevation = 2.dp) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Box(Modifier.width(3.dp).height(36.dp).background(palette.primary))
+                                Column {
+                                    Text("My-CT", style = MaterialTheme.typography.headlineLarge)
+                                    Text("PAINEL REMOTO", style = MaterialTheme.typography.labelSmall,
+                                        color = palette.secondary, letterSpacing = 1.8.sp)
+                                }
                             }
-                        )
-                    }
-                    HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-                    NavigationDrawerItem(
-                        label = { Text("Opções") }, selected = false,
-                        icon = { Icon(optionsIcon, contentDescription = null) },
-                        onClick = { closeMenu(); onOptions() }
-                    )
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Proteger capturas", style = MaterialTheme.typography.bodyMedium)
-                            Text(if (section == AppSection.Vault) "Cofre sempre protegido"
-                                else if (protectScreenshots) "Captura protegida" else "Captura livre", style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            MyCtPanelRule()
+                            val statusColor = when {
+                                connected -> palette.tertiary
+                                phase == TerminalModel.Phase.ERROR -> palette.error
+                                phase == TerminalModel.Phase.CONNECTING -> colorResource(R.color.myct_warning)
+                                else -> palette.onSurfaceVariant
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Box(Modifier.size(6.dp).background(statusColor))
+                                Text(status, style = MaterialTheme.typography.labelMedium, color = statusColor)
+                            }
+                            if (host.isNotBlank()) Text(
+                                "${user.takeIf { it.isNotBlank() }?.let { "$it@" } ?: ""}$host:$port",
+                                style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+                                maxLines = 2, overflow = TextOverflow.Ellipsis, color = palette.onSurfaceVariant)
                         }
-                        Switch(checked = protectScreenshots, onCheckedChange = onCaptureChange,
-                            modifier = Modifier.semantics { contentDescription = "Proteção global de capturas" })
                     }
-                    TextButton(onClick = { onDisconnect(); closeMenu() }, enabled = active,
+                    DrawerCaption("NAVEGAÇÃO")
+                    AppSection.entries.forEach { destination ->
+                        DrawerDestination(destination.label, checkNotNull(sectionIcons[destination]), section == destination) {
+                            // Accept navigation immediately; the overlay closes without a layout transition.
+                            onSelect(destination)
+                            closeMenu()
+                        }
+                    }
+                    DrawerCaption("CONTROLES")
+                    Surface(shape = MyCtGeometry.Panel, color = palette.surfaceVariant,
+                        border = BorderStroke(1.dp, palette.outlineVariant)) {
+                        Column {
+                            MyCtOperationalToggle(
+                                label = "Manter conexão ativa",
+                                description = when {
+                                    !connected -> if (active) "Aguarde a conexão SSH" else "Disponível após conectar"
+                                    backgroundEnabled -> "Notificação SSH ativa"
+                                    else -> "Continuar em segundo plano"
+                                },
+                                checked = backgroundEnabled, enabled = connected, onCheckedChange = onPersistenceChange
+                            )
+                            HorizontalDivider(Modifier.padding(horizontal = 12.dp), color = palette.outlineVariant)
+                            MyCtOperationalToggle(
+                                label = "Proteger capturas",
+                                description = if (section == AppSection.Vault) "Cofre sempre protegido"
+                                    else if (protectScreenshots) "Captura protegida" else "Captura livre",
+                                checked = protectScreenshots, onCheckedChange = onCaptureChange
+                            )
+                        }
+                    }
+                    MyCtPanelRule()
+                    Surface(onClick = { closeMenu(); onOptions() }, shape = MyCtGeometry.Control,
+                        color = palette.surface, border = BorderStroke(1.dp, palette.outlineVariant)) {
+                        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Icon(optionsIcon, contentDescription = null, tint = palette.secondary)
+                            Text("Opções", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                    MyCtTextButton(onClick = { onDisconnect(); closeMenu() }, enabled = active,
+                        colors = ButtonDefaults.textButtonColors(contentColor = palette.error),
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                         Icon(powerIcon, contentDescription = null)
                         Spacer(Modifier.width(12.dp))
                         Text(if (connected) "Encerrar SSH" else if (active) "Cancelar conexão" else "SSH desconectado")
                     }
-                    TextButton(onClick = closeMenu, modifier = Modifier.fillMaxWidth()) { Text("Fechar menu") }
+                    MyCtTextButton(onClick = closeMenu, modifier = Modifier.fillMaxWidth()) { Text("Fechar menu") }
                 }
             }
         }
@@ -154,6 +186,37 @@ internal fun AppShell(
                         onClick(label = "Abrir menu de navegação") { openMenu(); true }
                     })
             }
+        }
+    }
+}
+
+
+@Composable
+private fun DrawerCaption(label: String) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(label, modifier = Modifier.semantics { heading() }, style = MaterialTheme.typography.labelSmall,
+            fontFamily = FontFamily.Monospace, letterSpacing = 1.4.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        HorizontalDivider(Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
+    }
+}
+
+@Composable
+private fun DrawerDestination(label: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
+    val palette = MaterialTheme.colorScheme
+    Surface(selected = selected, onClick = onClick, shape = MyCtGeometry.Control,
+        color = if (selected) palette.primaryContainer else palette.surface,
+        contentColor = if (selected) palette.primary else palette.onSurfaceVariant,
+        border = if (selected) BorderStroke(1.dp, palette.outline) else null,
+        shadowElevation = if (selected) 1.dp else 0.dp) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Fixed geometry: selection changes color/weight, never row position or size.
+            Box(Modifier.width(3.dp).height(24.dp).background(if (selected) palette.primary else Color.Transparent))
+            Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+            Text(label, style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium, modifier = Modifier.weight(1f))
+            Box(Modifier.size(5.dp).background(if (selected) palette.secondary else Color.Transparent))
         }
     }
 }

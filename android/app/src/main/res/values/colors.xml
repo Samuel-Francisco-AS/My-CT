@@ -3,6 +3,7 @@
     <color name="myct_background">#070908</color>
     <color name="myct_surface">#131613</color>
     <color name="myct_surface_elevated">#1C1E19</color>
+    <color name="myct_surface_raised">#25261F</color>
     <color name="myct_outline">#383327</color>
     <color name="myct_gold">#F0B83E</color>
     <color name="myct_gold_secondary">#D6A44C</color>

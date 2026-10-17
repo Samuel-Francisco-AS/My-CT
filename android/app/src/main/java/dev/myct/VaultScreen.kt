@@ -45,15 +45,15 @@ fun VaultScreen(model: VaultModel, modifier: Modifier = Modifier) {
         Text(state.message)
         Text("GNOME Keyring · coleção login", style = MaterialTheme.typography.bodySmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = model::refresh, enabled = state.phase != VaultPhase.NO_SSH &&
+            MyCtButton(onClick = model::refresh, enabled = state.phase != VaultPhase.NO_SSH &&
                 !state.busy && state.phase != VaultPhase.PASSWORD) { Text("Consultar estado") }
             if (state.phase == VaultPhase.LOCKED && state.compatible) {
-                Button(onClick = model::beginUnlock) { Text("Desbloquear") }
+                MyCtButton(onClick = model::beginUnlock) { Text("Desbloquear") }
             }
         }
         if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         if (state.phase == VaultPhase.PREPARING || state.phase == VaultPhase.UNLOCKING) {
-            TextButton(onClick = model::cancelUnlock) { Text("Cancelar") }
+            MyCtTextButton(onClick = model::cancelUnlock) { Text("Cancelar") }
         }
         if (state.phase == VaultPhase.PASSWORD) {
             OutlinedTextField(
@@ -66,12 +66,12 @@ fun VaultScreen(model: VaultModel, modifier: Modifier = Modifier) {
                 modifier = Modifier.fillMaxWidth()
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = {
+                MyCtButton(onClick = {
                     val chars = password.toCharArray()
                     password = ""
                     model.submitPassword(chars)
                 }, enabled = password.isNotEmpty()) { Text("Confirmar") }
-                TextButton(onClick = { password = ""; model.cancelUnlock() }) { Text("Cancelar") }
+                MyCtTextButton(onClick = { password = ""; model.cancelUnlock() }) { Text("Cancelar") }
             }
         }
         Text("A senha é enviada somente pela sessão SSH autenticada, a um terminal privado do myct-vault. " +

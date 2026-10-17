@@ -32,7 +32,7 @@ class ThemeContrastTest {
     }
 
     @Test fun bodyAndMetadataRemainReadableOnEverySurface() {
-        listOf("background", "surface", "surface_elevated").forEach { surface ->
+        listOf("background", "surface", "surface_elevated", "surface_raised").forEach { surface ->
             listOf("text", "text_secondary", "error", "success", "warning").forEach { checkContrast(it, surface) }
         }
     }

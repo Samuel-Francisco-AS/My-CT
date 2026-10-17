@@ -1,6 +1,6 @@
 package dev.myct
 
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
@@ -10,18 +10,29 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+/** Shared geometry; Material buttons have full-round defaults independent of theme Shapes. */
+internal object MyCtGeometry {
+    val Control = CutCornerShape(topStart = 0.dp, topEnd = 6.dp, bottomEnd = 0.dp, bottomStart = 6.dp)
+    val Panel = CutCornerShape(topStart = 0.dp, topEnd = 10.dp, bottomEnd = 0.dp, bottomStart = 10.dp)
+    val Drawer = CutCornerShape(topEnd = 12.dp, bottomEnd = 12.dp)
+    val SwitchTrack = CutCornerShape(2.dp)
+}
 
 private val MyCtTypography = Typography().let {
     it.copy(
+        headlineLarge = it.headlineLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp),
         titleLarge = it.titleLarge.copy(fontWeight = FontWeight.SemiBold),
         titleMedium = it.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-        labelLarge = it.labelLarge.copy(fontWeight = FontWeight.Medium)
+        labelLarge = it.labelLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.4.sp),
+        labelSmall = it.labelSmall.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.6.sp)
     )
 }
 private val MyCtShapes = Shapes(
-    extraSmall = RoundedCornerShape(4.dp), small = RoundedCornerShape(8.dp),
-    medium = RoundedCornerShape(12.dp), large = RoundedCornerShape(16.dp),
-    extraLarge = RoundedCornerShape(20.dp)
+    extraSmall = CutCornerShape(2.dp), small = CutCornerShape(4.dp),
+    medium = MyCtGeometry.Control, large = CutCornerShape(8.dp),
+    extraLarge = MyCtGeometry.Panel
 )
 
 /** Fixed identity, including dialogs/forms; ANSI and the native terminal renderer stay untouched. */
@@ -30,6 +41,7 @@ internal fun MyCtTheme(content: @Composable () -> Unit) {
     val background = colorResource(R.color.myct_background)
     val surface = colorResource(R.color.myct_surface)
     val elevated = colorResource(R.color.myct_surface_elevated)
+    val raised = colorResource(R.color.myct_surface_raised)
     val text = colorResource(R.color.myct_text)
     val secondaryText = colorResource(R.color.myct_text_secondary)
     val gold = colorResource(R.color.myct_gold)
@@ -61,9 +73,9 @@ internal fun MyCtTheme(content: @Composable () -> Unit) {
             errorContainer = colorResource(R.color.myct_error_container), onErrorContainer = text,
             outline = colorResource(R.color.myct_bronze), outlineVariant = colorResource(R.color.myct_outline),
             scrim = Color.Black,
-            surfaceBright = elevated, surfaceDim = background,
+            surfaceBright = raised, surfaceDim = background,
             surfaceContainerLowest = background, surfaceContainerLow = surface,
-            surfaceContainer = surface, surfaceContainerHigh = elevated, surfaceContainerHighest = elevated
+            surfaceContainer = surface, surfaceContainerHigh = raised, surfaceContainerHighest = raised
         ),
         typography = MyCtTypography,
         shapes = MyCtShapes,

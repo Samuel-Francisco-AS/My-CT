@@ -94,20 +94,20 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
             Text("Arquivos · SFTP", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             if (model.recoveryNotice.isNotEmpty()) {
                 Text(model.recoveryNotice, style = MaterialTheme.typography.bodySmall)
-                TextButton(onClick = { model.dismissRecoveryNotice() }) { Text("Entendi") }
+                MyCtTextButton(onClick = { model.dismissRecoveryNotice() }) { Text("Entendi") }
             }
             Text(listing?.path ?: "Diretório inicial", maxLines = 3, overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 6.dp))
             Row {
-                TextButton(enabled = !model.busy && listing != null && listing.path != "/",
+                MyCtTextButton(enabled = !model.busy && listing != null && listing.path != "/",
                     onClick = { listing?.let { openDirectory(RemotePath.parent(it.path)) } }) { Text("↑ Pai") }
-                TextButton(enabled = !model.busy, onClick = { model.load() }) { Text("Atualizar") }
-                TextButton(enabled = !model.busy && listing != null, onClick = {
+                MyCtTextButton(enabled = !model.busy, onClick = { model.load() }) { Text("Atualizar") }
+                MyCtTextButton(enabled = !model.busy && listing != null, onClick = {
                     if (model.beginUploadSelection()) upload.launch(arrayOf("*/*"))
                 }) { Text("Enviar…") }
             }
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                TextButton(onClick = { saveScroll(); model.toggleHiddenFiles() }) {
+                MyCtTextButton(onClick = { saveScroll(); model.toggleHiddenFiles() }) {
                     Text(if (showHidden) "Ocultar ocultos" else "Mostrar ocultos")
                 }
                 listing?.let {
@@ -118,14 +118,14 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
             }
             Text("Com notificações permitidas, a transferência continua em segundo plano enquanto o serviço e a rede permanecerem ativos. Sem serviço, mantenha o app visível. Sem retomada automática.",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (!notificationsGranted && Build.VERSION.SDK_INT >= 33) TextButton(onClick = {
+            if (!notificationsGranted && Build.VERSION.SDK_INT >= 33) MyCtTextButton(onClick = {
                 notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             }) { Text("Permitir notificações de transferência") }
             if (model.busy) {
                 if (status.phase == FilePhase.TRANSFERRING && status.total != null && status.total > 0)
                     LinearProgressIndicator(progress = { (status.bytes.toFloat() / status.total).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
                 else LinearProgressIndicator(Modifier.fillMaxWidth())
-                TextButton(enabled = status.phase != FilePhase.CANCELLING, onClick = { model.cancel() }) { Text("Cancelar operação") }
+                MyCtTextButton(enabled = status.phase != FilePhase.CANCELLING, onClick = { model.cancel() }) { Text("Cancelar operação") }
             }
             Text(status.message, style = MaterialTheme.typography.bodySmall,
                 color = if (status.phase == FilePhase.ERROR) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground,
@@ -133,7 +133,7 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
             if (status.name.isNotEmpty()) Text("${status.name} · ${formatFileSize(status.bytes)} / ${status.total?.let(::formatFileSize) ?: "?"}", maxLines = 2,
                 overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             model.completedDownload?.let { uri ->
-                TextButton(onClick = {
+                MyCtTextButton(onClick = {
                     try {
                         val reported = context.contentResolver.getType(uri)
                         val inferred = MimeTypeMap.getSingleton().getMimeTypeFromExtension(status.name.substringAfterLast('.', "").lowercase())
@@ -167,17 +167,17 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
                     Text("Destino: ${choice.directory}")
                     Text("${choice.size?.let(::formatFileSize) ?: "Tamanho desconhecido"}${choice.size?.let { " ($it bytes)" } ?: ""}. Existentes não serão substituídos.")
                     OutlinedTextField(name, { if (it.length <= 512) name = it }, label = { Text("Nome no Fedora") }, singleLine = true)
-                } }, confirmButton = { TextButton(onClick = { model.upload(name) }) { Text("Enviar") } },
-                dismissButton = { TextButton(onClick = { model.dismissUpload() }) { Text("Cancelar") } })
+                } }, confirmButton = { MyCtTextButton(onClick = { model.upload(name) }) { Text("Enviar") } },
+                dismissButton = { MyCtTextButton(onClick = { model.dismissUpload() }) { Text("Cancelar") } })
         }
         model.downloadChoice?.let { choice ->
             AlertDialog(onDismissRequest = { model.dismissDownload() }, title = { Text("Arquivo no Fedora") },
                 text = { Text("${choice.entry.name} · ${formatFileSize(choice.entry.size)} (${choice.entry.size} bytes)\nEscolha um novo documento no Android. Nomes existentes são tratados pelo seletor SAF. Se interrompido, o provedor pode manter um arquivo parcial.") },
                 confirmButton = { Column {
-                    TextButton(onClick = { model.inspectSelected() }) { Text("Verificar arquivo") }
-                    TextButton(onClick = { download.launch(choice.entry.name) }) { Text("Escolher destino…") }
+                    MyCtTextButton(onClick = { model.inspectSelected() }) { Text("Verificar arquivo") }
+                    MyCtTextButton(onClick = { download.launch(choice.entry.name) }) { Text("Escolher destino…") }
                 } },
-                dismissButton = { TextButton(onClick = { model.dismissDownload() }) { Text("Cancelar") } })
+                dismissButton = { MyCtTextButton(onClick = { model.dismissDownload() }) { Text("Cancelar") } })
         }
         if (model.inspectionVisible) {
             var checksum by remember { mutableStateOf("") }
@@ -195,7 +195,7 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
                         if (declaredType != null && result.type.isNotEmpty() && declaredType != result.type)
                             Text("A extensão sugere $declaredType; o conteúdo foi identificado como ${result.type}.")
                         Text("SHA-256: ${result.sha256}")
-                        TextButton(onClick = {
+                        MyCtTextButton(onClick = {
                             context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("SHA-256", result.sha256))
                             Toast.makeText(context, "SHA-256 copiado", Toast.LENGTH_SHORT).show()
                         }) { Text("Copiar SHA-256") }
@@ -207,15 +207,15 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
                         Text(result.warning, style = MaterialTheme.typography.bodySmall)
                     }
                     AntivirusScanSection(model.antivirus, enabled = !model.inspecting)
-                } }, confirmButton = { TextButton(onClick = { model.closeInspection() }) {
+                } }, confirmButton = { MyCtTextButton(onClick = { model.closeInspection() }) {
                     Text(if (model.inspecting) "Cancelar inspeção" else "Fechar")
                 } })
         }
         link?.let { entry ->
             AlertDialog(onDismissRequest = { link = null }, title = { Text("Link simbólico") },
                 text = { Text("${entry.name}\nAbrir seguirá o link somente para navegar, se o destino for um diretório acessível. Links não são baixados nem modificados por esta tela.") },
-                confirmButton = { TextButton(onClick = { listing?.let { openDirectory(RemotePath.child(it.path, entry.name)) }; link = null }) { Text("Abrir diretório") } },
-                dismissButton = { TextButton(onClick = { link = null }) { Text("Cancelar") } })
+                confirmButton = { MyCtTextButton(onClick = { listing?.let { openDirectory(RemotePath.child(it.path, entry.name)) }; link = null }) { Text("Abrir diretório") } },
+                dismissButton = { MyCtTextButton(onClick = { link = null }) { Text("Cancelar") } })
         }
     }
 }

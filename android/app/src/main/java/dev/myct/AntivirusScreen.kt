@@ -34,7 +34,7 @@ internal fun AntivirusScanSection(model: AntivirusScanModel, enabled: Boolean) {
     if (model.busy) {
         LinearProgressIndicator(Modifier.fillMaxWidth())
         Text(model.message, style = MaterialTheme.typography.bodySmall)
-        TextButton(onClick = { model.cancel() }) { Text("Cancelar análise") }
+        MyCtTextButton(onClick = { model.cancel() }) { Text("Cancelar análise") }
     } else {
         result?.let {
             Text(it.state.label, style = MaterialTheme.typography.titleMedium,
@@ -48,13 +48,13 @@ internal fun AntivirusScanSection(model: AntivirusScanModel, enabled: Boolean) {
             it.durationMs?.let { ms -> Text("Duração: ${ms / 1000.0} s", style = MaterialTheme.typography.bodySmall) }
             var details by remember(result) { mutableStateOf(false) }
             if (it.rssKib != null) {
-                TextButton(onClick = { details = !details }) { Text(if (details) "Ocultar detalhes" else "Detalhes de consumo") }
+                MyCtTextButton(onClick = { details = !details }) { Text(if (details) "Ocultar detalhes" else "Detalhes de consumo") }
                 if (details) Text("Pico RSS: ${formatFileSize(it.rssKib * 1024)}", style = MaterialTheme.typography.bodySmall)
             }
         }
         if (model.message.isNotBlank()) Text(model.message, style = MaterialTheme.typography.bodySmall)
         if (model.tooLarge) Text(AV_LIMIT_NOTICE, color = MaterialTheme.colorScheme.error)
-        TextButton(onClick = { model.scan() }, enabled = model.canScan && enabled) { Text("Verificar antivírus") }
+        MyCtTextButton(onClick = { model.scan() }, enabled = model.canScan && enabled) { Text("Verificar antivírus") }
     }
     Text("Até 2 GB decimais; limites de tempo, memória e expansão podem tornar a análise incompleta. O arquivo permanece intocado.",
         style = MaterialTheme.typography.bodySmall)
@@ -87,7 +87,7 @@ internal fun AntivirusSignaturesSection(model: AntivirusSignaturesModel) {
     if (model.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
     Text(model.message, style = MaterialTheme.typography.bodySmall)
     if (model.unconfirmed) Text("Dados anteriores não confirmam o estado atual.", style = MaterialTheme.typography.bodySmall)
-    TextButton(onClick = { model.requestUpdate() }, enabled = model.connected && !model.busy) { Text("Atualizar assinaturas") }
-    TextButton(onClick = { model.refresh() }, enabled = model.connected && !model.busy) { Text("Consultar estado") }
+    MyCtTextButton(onClick = { model.requestUpdate() }, enabled = model.connected && !model.busy) { Text("Atualizar assinaturas") }
+    MyCtTextButton(onClick = { model.refresh() }, enabled = model.connected && !model.busy) { Text("Consultar estado") }
     Text("A atualização continua no Fedora ao fechar Opções. A agenda existente é de 36 horas.", style = MaterialTheme.typography.bodySmall)
 }

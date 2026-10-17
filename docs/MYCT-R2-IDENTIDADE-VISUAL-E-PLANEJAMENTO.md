@@ -1,6 +1,6 @@
 # MYCT-R2 — identidade visual, experiência e planejamento
 
-**Decisão do proprietário:** 16/10/2026. **Status:** R2A implementada como candidata; aceite visual/físico no Moto G06 pendente. **Princípio obrigatório: FLUIDEZ.**
+**Decisão do proprietário:** 16/10/2026. **Status:** R2A testada visualmente pelo proprietário; complemento R2A.1 candidato a novo aceite visual/funcional no Moto G06. **Princípio obrigatório: FLUIDEZ.**
 
 **Referências:** [trilha de refinamento](09-TRILHA-REFINAMENTO-ANDROID.md), [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9), [decisões](05-DECISOES-E-QUESTOES.md), [histórico MYCT-R1](MYCT-R1-TERMINAL-FILES.md).
 
@@ -131,3 +131,31 @@ git diff --check
 ```
 
 **Gate físico:** ADB sem dispositivo conectado nesta sessão; nenhum teste visual ou funcional novo no Moto. Atualizar sobre 0.5.9 sem desinstalar/apagar dados e executar o checklist da seção 5, incluindo seleção/clipboard e abertura pela região central da borda esquerda com navegação Android por gestos. Não há aceite de fluidez nem prova de consumo Android; risco de conflito de gesto/IME permanece para verificação física. R-01/lag continua suspenso; R2B, Fedora e serviços remotos não foram alterados.
+
+
+## 8. Complemento R2A.1 — Industrial Futurista (17/10/2026)
+
+**Retorno físico do proprietário sobre 0.6.0/code 17:** aparência/navegação melhoraram e a paleta foi aprovada; componentes ainda genéricos. Isso não constitui aceite de todos os itens funcionais. Direção aprovada: Industrial Futurista, mantendo FLUIDEZ e o recorte R2A antes da R2B.
+
+**Critérios antes da implementação:** substituir cápsulas do shell por geometria chanfrada, linhas finas e marcador lateral dourado; reforçar a hierarquia de identidade, navegação e controles; centralizar formas/estilos leves; agrupar Manter conexão ativa e Proteger capturas no drawer. Retirar persistência e sua explicação extensa de Opções. Ativar somente conectado, pelas chamadas existentes; refletir apenas o estado confirmado do serviço. Desligar exige confirmação explícita de encerramento da sessão atual; cancelar não muda estado/serviço. Nenhuma mudança no FGS, SSH, SFTP, Cofre, motores ou Fedora.
+
+**Aceite físico da nova candidata:** identidade distinta e legível, seleção angular/marcador, dois interruptores agrupados, controle ausente de Opções; ativação/notificação, cancelamento e confirmação de desativação; drawer/Back/scrim, foco/IME, cinco seções, SFTP e captura obrigatória do Cofre. Sem aceite antecipado da R2A.1.
+
+
+**Implementação:** `MyCtGeometry` centraliza chanfros de controles/painéis/drawer; tema aumenta a separação entre preto, superfície e grafite elevado. `MyCtControls.kt` preserva Button/TextButton Material3 (entrada, foco e ripple) com forma própria e oferece interruptores geométricos leves com semântica `Role.Switch`, ação única e alvo mínimo de 48 dp (64 dp nas linhas operacionais). Thumb transiciona em 140 ms somente quando o estado confirmado muda; sem animação contínua. Ícones próprios preservados; zero dependências/assets/fontes adicionais. Cards, campos, chips e diálogos recebem as formas pelo tema, sem reformular seus conteúdos.
+
+**Drawer:** identidade em painel de fundo profundo, metadados monoespaçados, indicadores geométricos estáticos, hierarquia de seções, seleção com faixa lateral de 3 dp e superfície quente/contorno bronze. Dois controles vizinhos no mesmo grupo: persistência (desabilitada fora de CONNECTED) e captura. Opções e Encerrar SSH permanecem separados. Sem cabeçalho global/hambúrguer; gestos, insets e ciclo de vida do conteúdo da R2A preservados.
+
+**Persistência:** callback `onPersistenceChange` reutiliza `enablePersistentConnection()`; não escreve `backgroundEnabled`. Estado/ativação, permissões, canal e notificação permanecem sob Activity/FGS originais. Desativar apenas abre confirmação; confirmar verifica conexão persistente e identidade da sessão antes de chamar `stopPersistentConnection()`. Cancelar/Back/toque externo não chama parada nem muda o interruptor. Confirmação é descartada ao sair da Activity ou perder/trocar a sessão. Interruptor/texto extenso removidos de Opções, sem duplicação. `SshForegroundService.kt` e métodos de permissão/ativação/parada da Activity permanecem byte a byte iguais à 0.6.0.
+
+**Validação real:** mesmos comandos offline/upstream/patches da seção 7. **Build SUCCESS em 1m53s; 127 testes JVM, 126 aprovados e 1 ignorado** (handshake local opt-in). Cinco novos testes de callbacks/guardas: indisponibilidade desconectado/conectando, ativação, pedido de confirmação/cancelamento, requisições sem mudança e confirmação inválida após perda de estado/troca de sessão. Teste de contraste estendido ao novo grafite elevado, mínimo textual 4,5:1. **Lint: 0 erros, dois avisos preexistentes de versões** (Gradle e org.json). Upstream: 21 arquivos, três arquivos com alterações documentadas, quatro patches reversos aprovados; `git diff --check` limpo. Revisão normalizada confirmou que todas as mudanças nas telas internas são apenas nomes dos botões compartilhados; ações, layout e âncoras SFTP não mudaram. FGS/modelos/renderer/backend inalterados.
+
+Build com JBR/Java 21, SDK 36, Gradle 8.14.3, Kotlin 2.2.20/AGP 8.13.0, Compose 1.9.3/Material3 1.4.0 existentes. CPU acumulada ~501 s, RSS máximo do build ~1.876 MiB, zero swaps; aviso de metaspace ao terminar, sem alteração dos limites. Evidências locais: `artifacts/myct-r2a1-validation/`. Consumo Android e acessibilidade/fluidez física não foram medidos; ADB sem aparelho. Testes JVM não validam renderização, permissão/notificação real ou gestos.
+
+**APK:** `artifacts/myct-r2a1-0.6.1-debug.apk`, **0.6.1-r2a1-industrial / code 18**, 13.585.223 bytes (12,96 MiB). `dev.myct` e assinatura idêntica à 0.6.0, verificados por aapt2/apksigner. [Prévia com APK e checksum](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-r2a1-v0.6.1-rc1). Atualizar sem desinstalar/apagar dados. SHA-256:
+
+```text
+5e3355d66eb413c0f72972e37b30cc81d7db80ad35ab51b701b61ba34f026a93
+```
+
+Manter [PR #23](https://github.com/Samuel-Francisco-AS/My-CT/pull/23) draft, base `myct-r1-terminal-files`, sem merge. R2B e lag R-01 continuam fora desta rodada. Proprietário deve executar o aceite descrito acima, incluindo cancelamento da confirmação, notificação real, captura do Cofre, navegação/foco/IME, seleção, SFTP, Saúde e Downloads; nova geometria/interruptores também exigem avaliação de contraste, fonte ampliada e TalkBack no Moto.
