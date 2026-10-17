@@ -387,3 +387,16 @@ MYCT-R1C: **0.5.9-r1c-terminal/code 16**, candidata de implementação sobre
 sem espera de resposta. Mesmo pacote/assinatura; atualizar sem desinstalar ou
 apagar dados. Testar digitação/Backspace, abrir/fechar teclado, nano/tmux e
 comparação Termux SSH. [APK e validação](../docs/MYCT-R1-TERMINAL-FILES.md).
+
+## MYCT-R4 — IDE remota (0.6.5/code 22, candidata)
+
+Conecte pelo Terminal e abra **drawer → IDE**. Navegue até um projeto/arquivo
+UTF-8, edite com Sora (linhas, destaque, indentação, undo/redo e busca/troca) e
+use **Salvar** explicitamente. **Terminal** volta à sessão SSH existente para
+GCC/G++, Cargo, Python e Git; nenhum comando é enviado automaticamente.
+O buffer permanece em memória ao alternar seções/desconectar. Salve antes de
+fechar o processo Android. Conflitos recusam a gravação; backups e resultado
+incerto aparecem em **Detalhes**. Limite inicial 1 MiB, um arquivo por vez.
+[Operação, recuperação e limites](../docs/MYCT-R4-TERMINAL-IDE.md) ·
+[Licenças/fontes/reconstrução](IDE-LICENSES.md).
+Aceite/fluidez e navegação no Moto G06 permanecem pendentes.

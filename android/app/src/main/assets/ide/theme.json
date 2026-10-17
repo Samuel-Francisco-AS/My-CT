@@ -1,0 +1,17 @@
+{
+  "name": "My-CT Industrial",
+  "colors": {
+    "editor.background": "#08090B", "editor.foreground": "#E6E0CE",
+    "editor.lineHighlightBackground": "#141519", "editorCursor.foreground": "#DCB85B",
+    "editor.selectionBackground": "#514424", "editorLineNumber.foreground": "#756A4D"
+  },
+  "tokenColors": [
+    {"settings": {"foreground": "#E6E0CE", "background": "#08090B"}},
+    {"scope": "comment", "settings": {"foreground": "#818B79"}},
+    {"scope": "string", "settings": {"foreground": "#A9C88B"}},
+    {"scope": "keyword, storage", "settings": {"foreground": "#DCB85B"}},
+    {"scope": "constant.numeric, constant.language", "settings": {"foreground": "#D09B75"}},
+    {"scope": "entity.name.function, support.function", "settings": {"foreground": "#8DBCB6"}},
+    {"scope": "entity.name.type, support.type", "settings": {"foreground": "#C9BE8C"}}
+  ]
+}

@@ -3,3 +3,8 @@ android/gradlew.bat -text whitespace=cr-at-eol
 android/app/src/main/assets/THIRD_PARTY_LICENSES.txt whitespace=-blank-at-eol,-blank-at-eof
 android/terminal/src/main/java/com/termux/view/textselection/TextSelectionCursorController.java whitespace=-blank-at-eol
 android/terminal/upstream/*.patch whitespace=-blank-at-eol
+
+# Preserve R4 upstream regex layout and license texts verbatim.
+android/app/src/main/assets/ide/*.tmLanguage whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
+android/app/src/main/assets/ide/*.txt whitespace=-blank-at-eol,-blank-at-eof,cr-at-eol
+android/app/src/main/assets/ide/licenses/*.txt whitespace=-blank-at-eol,-blank-at-eof,cr-at-eol

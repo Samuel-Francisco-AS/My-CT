@@ -55,7 +55,7 @@ interface RemoteStore : Closeable {
     fun removeTemporaryDirectory(path: String)
 }
 
-class JschRemoteStore(private val channel: ChannelSftp, private val release: () -> Unit) : RemoteStore {
+internal class JschRemoteStore(private val channel: ChannelSftp, private val release: () -> Unit) : RemoteEditorStore {
     private val closed = AtomicBoolean()
     override fun close() { if (closed.compareAndSet(false, true)) release() }
     override fun home() = RemotePath.absolute(channel.home)
@@ -89,6 +89,29 @@ class JschRemoteStore(private val channel: ChannelSftp, private val release: () 
             if (runCatching { stat(target) != null }.getOrDefault(false)) throw NameConflict()
             throw e
         }
+    }
+    override fun privateDirectory(path: String) {
+        channel.mkdir(path)
+        channel.chmod(0x1C0, RemotePath.literal(path)) // 0700: backups stay private.
+    }
+    override fun editMetadata(path: String): EditMetadata {
+        val attrs = channel.lstat(RemotePath.literal(path))
+        require(attrs.isReg) { "Regular file required" }
+        return EditMetadata(attrs.size, attrs.mTime.toLong() and 0xffffffffL,
+            attrs.permissions and 0xFFF, attrs.uId, attrs.gId)
+    }
+    override fun prepareMode(path: String, original: EditMetadata) {
+        val current = editMetadata(path)
+        // Refuse changing ownership or bypassing another user's file permissions by rename.
+        if (current.uid != original.uid) throw EditRejected("Edição limitada a arquivos do usuário SSH.")
+        if (current.gid != original.gid) channel.chgrp(original.gid, RemotePath.literal(path))
+        channel.chmod(original.mode, RemotePath.literal(path))
+    }
+    override fun supportsAtomicEdit() = supportsSafePublish() && channel.getExtension("posix-rename@openssh.com") == "1"
+    override fun backup(source: String, backup: String) = channel.hardlink(RemotePath.literal(source), RemotePath.literal(backup))
+    override fun replace(temporary: String, target: String) {
+        check(supportsAtomicEdit())
+        channel.rename(RemotePath.literal(temporary), RemotePath.literal(target))
     }
     override fun removeTemporary(path: String) = channel.rm(RemotePath.literal(path))
     override fun removeTemporaryDirectory(path: String) = channel.rmdir(RemotePath.literal(path))

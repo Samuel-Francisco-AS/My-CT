@@ -10,8 +10,8 @@ android {
         applicationId = "dev.myct"
         minSdk = 26
         targetSdk = 36
-        versionCode = 21
-        versionName = "0.6.4-r3-keys-paste"
+        versionCode = 22
+        versionName = "0.6.5-r4-ide"
     }
     buildFeatures { compose = true }
     compileOptions {
@@ -23,6 +23,8 @@ android {
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 dependencies {
     implementation(project(":terminal"))
+    implementation("io.github.Rosemoe.sora-editor:editor:0.23.6")
+    implementation("io.github.Rosemoe.sora-editor:language-textmate:0.23.6")
     implementation("androidx.activity:activity-compose:1.11.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.4")
     implementation("androidx.compose.ui:ui:1.9.3")

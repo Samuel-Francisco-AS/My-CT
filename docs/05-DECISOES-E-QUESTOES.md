@@ -310,3 +310,24 @@ sem rede protege esse acoplamento à versão fixada. Não muda autenticação.
 Decisão explícita do proprietário após revisão das capturas reais do Moto G06. O desenho deve seguir a estética tecnológica preto profundo/dourado do Deus Ex: Human Revolution sem reproduzir obras ou texturas do jogo. **Fluidez** é a palavra-guia de interações, transições e organização visual. O proprietário **rejeitou** a recomendação de manter qualquer barra global mínima; tudo que é global fica no drawer acessível por gesto, sem cabeçalho permanente em nenhuma aba. Caminho atual em Arquivos e barra de teclas do Terminal são conteúdos funcionais locais permitidos.
 
 Toda a aplicação — inclusive seções não exemplificadas em capturas — deve adotar a identidade. Explicações longas não críticas ficam sob ícone `i`, mas alertas relevantes para decisão/segurança continuam visíveis no momento oportuno. **R2A só shell e tema; R2B redesenho de telas, com melhoria de Arquivos, Saúde, Cofre, HTTP/Torrents, Opções e diálogos AV.** R-01/lag SSH suspenso após 0.5.9; não reabrir diagnóstico e não fazer a experiência de digitação condição da R2A. Decisão e aceite detalhados em [MYCT-R2](MYCT-R2-IDENTIDADE-VISUAL-E-PLANEJAMENTO.md).
+
+## MYCT-R4 — 17/10/2026 — editor remoto pessoal
+
+Autorização expressa: última auditoria SSH + IDE na mesma sessão. Auditoria não
+identificou nova causa demonstrável; transporte/emulador permanecem como R3.
+IDE usa Sora 0.23.6 LGPL, AndroidView e TextMate local (C/C++, Rust, Python,
+Kotlin, Shell e JavaScript), reusando sessão e canais SFTP existentes. Sem LSP,
+NDK, Core, banco, execução automática ou serviço adicional. Um buffer em memória,
+limites 1 MiB/30 mil linhas, snapshot só em abrir/salvar: fluidez antes de abas.
+Save explícito com comparação integral, temporário verificado, modo/uid/gid,
+hardlink de backup privado e posix-rename OpenSSH; resultado incerto bloqueia
+novos saves até revisão/reabertura. SFTP não oferece CAS, ACL/xattr/hardlinks
+existentes não são reproduzidos no novo inode; backup conserva inode anterior.
+Evitar outro escritor no intervalo final; sem promessa de sincronização concorrente.
+Arquivo deve pertencer ao usuário SSH, ter escrita de proprietário e não ter bits
+especiais. Sem essas garantias/extensões, recusar em vez de truncar o original.
+Buffers/undo sobrevivem à navegação, recriação da Activity e desconexão dentro do
+mesmo processo; nenhuma cópia persistente/autosave silencioso. Back avisa sobre
+buffer sujo; encerramento forçado do processo Android exige salvar antes.
+Fontes/licenças e reconstrução em `android/IDE-LICENSES.md`; evidências e limites
+em `docs/MYCT-R4-TERMINAL-IDE.md`. Aceite Moto continua obrigatório e pendente.

@@ -1,0 +1,52 @@
+{
+  "languages": [
+    {
+      "name": "rust.tmLanguage.json",
+      "scopeName": "source.rust",
+      "grammar": "ide/rust.tmLanguage.json",
+      "languageConfiguration": "ide/rust-configuration.json"
+    },
+    {
+      "name": "shell-unix-bash.tmLanguage.json",
+      "scopeName": "source.shell",
+      "grammar": "ide/shell-unix-bash.tmLanguage.json",
+      "languageConfiguration": "ide/shellscript-configuration.json"
+    },
+    {
+      "name": "MagicPython.tmLanguage.json",
+      "scopeName": "source.python",
+      "grammar": "ide/MagicPython.tmLanguage.json",
+      "languageConfiguration": "ide/python-configuration.json"
+    },
+    {
+      "name": "JavaScript.tmLanguage.json",
+      "scopeName": "source.js",
+      "grammar": "ide/JavaScript.tmLanguage.json",
+      "languageConfiguration": "ide/javascript-configuration.json"
+    },
+    {
+      "name": "kotlin",
+      "scopeName": "source.kotlin",
+      "grammar": "ide/kotlin.tmLanguage.json",
+      "languageConfiguration": "ide/kotlin-configuration.json"
+    },
+    {
+      "name": "c.tmLanguage",
+      "scopeName": "source.c",
+      "grammar": "ide/c.tmLanguage",
+      "languageConfiguration": "ide/cpp-configuration.json"
+    },
+    {
+      "name": "cpp.tmLanguage",
+      "scopeName": "source.c++",
+      "grammar": "ide/cpp.tmLanguage",
+      "languageConfiguration": "ide/cpp-configuration.json"
+    },
+    {
+      "name": "platform.tmLanguage",
+      "scopeName": "source.c.platform",
+      "grammar": "ide/platform.tmLanguage",
+      "languageConfiguration": "ide/cpp-configuration.json"
+    }
+  ]
+}

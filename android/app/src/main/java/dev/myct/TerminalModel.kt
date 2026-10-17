@@ -39,6 +39,7 @@ class TerminalModel(application: Application) {
     var diagnostics = TerminalDiagnostics()
         private set
     val files = FilesModel(application)
+    internal val ide = IdeModel()
     val health = HealthModel()
     val vault = VaultModel()
     internal val antivirusSignatures = AntivirusSignaturesModel()
@@ -124,6 +125,7 @@ class TerminalModel(application: Application) {
                 }
                 updatePhase(Phase.CONNECTED)
                 files.attach(current)
+                ide.attach(current, "$hostname:$sshPort/$username/$expected")
                 health.attach(current)
                 vault.attach(current)
                 downloads.attach(current); torrents.attach(current); antivirusSignatures.attach(current)
@@ -160,13 +162,13 @@ class TerminalModel(application: Application) {
                 workers?.close(); queue.close()
                 // Close the socket before joining blocking workers, always off main.
                 withContext(NonCancellable + Dispatchers.IO) { current.close(); workers?.awaitStopped() }
-                if (id == generation) { transport = null; screen.finish(); connection = null; pending = null; modifiers.clear(); files.attach(null); health.attach(null); vault.attach(null); downloads.attach(null); torrents.attach(null); antivirusSignatures.attach(null) }
+                if (id == generation) { transport = null; screen.finish(); connection = null; pending = null; modifiers.clear(); files.attach(null); ide.attach(null); health.attach(null); vault.attach(null); downloads.attach(null); torrents.attach(null); antivirusSignatures.attach(null) }
             }
         }
     }
 
     fun disconnect(reason: String = "Sessão encerrada. Você pode reconectar.") {
-        files.attach(null)
+        files.attach(null); ide.attach(null)
         health.attach(null)
         vault.attach(null); downloads.attach(null); torrents.attach(null); antivirusSignatures.attach(null)
         generation++
