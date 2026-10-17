@@ -237,10 +237,11 @@ Apksigner confirmou certificado SHA-256
 `artifacts/myct-r4-fix-0.6.6-debug.apk`; checksum em `artifacts/myct-r4-fix-SHA256SUMS.txt`.
 SHA-256 APK: `63a2f6622fc0e92b166262f5d9c84eb55b7052f5dbd0b1ab4eebb71b85273c11`.
 
-Publicação: fonte/commit enviados na branch do PR #26, que deve continuar draft.
-A API da CLI GitHub retornou HTTP 401, apesar de Git SSH e conector do PR
-funcionarem. Release candidata preparada com tag `myct-r4-fix-v0.6.6-rc1`; a
-publicação do binário depende de renovar `gh auth login -h github.com` pelo
-proprietário. Nenhum token/senha solicitado ao agente. Não confundir APK local
-validado com release já publicada. Retomar pela conclusão dessa publicação e
-pelos oito critérios físicos solicitados, sem reabrir SSH nem fazer merge.
+Publicação concluída: [release candidata 0.6.6/code 23](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-r4-fix-v0.6.6-rc1),
+com APK e SHA256SUMS anexados. Digest SHA-256 retornado pelo GitHub confere com
+`63a2f6622fc0e92b166262f5d9c84eb55b7052f5dbd0b1ab4eebb71b85273c11`.
+Tag `myct-r4-fix-v0.6.6-rc1` aponta à implementação `93c7823`; código e relatório
+na branch existente. [PR #26](https://github.com/Samuel-Francisco-AS/My-CT/pull/26)
+continua **draft/aberto, sem merge**. Retomar instalando sobre a 0.6.5 sem apagar
+dados e validar os oito critérios físicos solicitados. Não reabrir SSH. O teste
+básico de C/GCC da 0.6.5 continua comprovado; **não é aceite da Fix 0.6.6**.
