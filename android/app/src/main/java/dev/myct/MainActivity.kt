@@ -11,7 +11,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
 import android.os.PersistableBundle
-import android.view.KeyEvent
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
@@ -21,7 +20,6 @@ import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -32,6 +30,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -97,8 +98,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private data class PendingPaste(val session: TerminalSession, val text: String)
-
 @Composable
 private fun TerminalApp(model: TerminalModel) {
     val activity = checkNotNull(LocalActivity.current as? MainActivity)
@@ -111,7 +110,6 @@ private fun TerminalApp(model: TerminalModel) {
     var captureWarning by remember { mutableStateOf(false) }
     var stopPersistenceFor by remember { mutableStateOf<TerminalSession?>(null) }
     var measurements by remember { mutableStateOf<String?>(null) }
-    var pendingPaste by remember { mutableStateOf<PendingPaste?>(null) }
     var selectedTab by rememberSaveable { mutableStateOf(AppSection.Terminal) }
     val active = model.phase == TerminalModel.Phase.CONNECTING || model.phase == TerminalModel.Phase.CONNECTED
     val connected = model.phase == TerminalModel.Phase.CONNECTED
@@ -126,15 +124,17 @@ private fun TerminalApp(model: TerminalModel) {
             feedback("Texto copiado para a área de transferência do Android.")
         } catch (_: Exception) { feedback("Não foi possível copiar.") }
     }
-    fun requestSystemPaste() {
-        if (!connected) return
+    fun requestSystemPaste(expected: TerminalSession?) {
         try {
-            val clip = (activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).primaryClip
-            val text = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
-            if (text == null || !ClipboardPolicy.allowed(text)) {
-                feedback("A área de transferência precisa conter texto simples de até 64 KiB."); return
+            when (pasteTerminalClipboard(expected, { model.terminal },
+                { model.phase == TerminalModel.Phase.CONNECTED }) {
+                val clip = (activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).primaryClip
+                clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
+            }) {
+                PasteResult.SENT -> model.modifiers.clear()
+                PasteResult.INVALID_CLIPBOARD -> feedback("A área de transferência precisa conter texto simples de até 64 KiB.")
+                PasteResult.SESSION_CHANGED -> feedback("A sessão mudou ou está desconectada; cole novamente na conexão desejada.")
             }
-            model.terminal?.let { pendingPaste = PendingPaste(it, text) }
         } catch (_: Exception) { feedback("Não foi possível ler o clipboard nesta tela.") }
     }
     // Always block screenshots on the vault tab, regardless of the general preference.
@@ -149,7 +149,7 @@ private fun TerminalApp(model: TerminalModel) {
     }
     DisposableEffect(activity) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) { password = ""; pendingPaste = null; stopPersistenceFor = null }
+            if (event == Lifecycle.Event.ON_STOP) { password = ""; model.modifiers.clear(); stopPersistenceFor = null }
         }
         activity.lifecycle.addObserver(observer)
         onDispose { activity.lifecycle.removeObserver(observer) }
@@ -161,7 +161,7 @@ private fun TerminalApp(model: TerminalModel) {
         backgroundEnabled = model.backgroundEnabled, protectScreenshots = model.protectScreenshots,
         onSelect = { destination ->
             if (selectedTab != destination) {
-                pendingPaste = null
+                model.modifiers.clear()
                 if (destination != AppSection.Terminal) (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
                     .hideSoftInputFromWindow(activity.window.decorView.windowToken, 0)
                 selectedTab = destination
@@ -220,6 +220,19 @@ private fun TerminalApp(model: TerminalModel) {
                     else {
                     model.terminal?.let { session ->
                         var view by remember(session) { mutableStateOf<TerminalView?>(null) }
+                        fun showKeyboard() {
+                            view?.let { terminalView ->
+                                terminalView.requestFocus()
+                                (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
+                                    .showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT)
+                            }
+                        }
+                        fun interrupt() {
+                            if (model.phase == TerminalModel.Phase.CONNECTED && model.terminal === session) {
+                                model.modifiers.clear()
+                                view?.inputCodePoint('c'.code, true, false)
+                            }
+                        }
                         val fontPx = with(LocalDensity.current) { model.fontSizeSp.sp.toPx().roundToInt() }
                         var appliedCharBasedInput by remember(view) { mutableStateOf(model.enforceCharBasedInput) }
                         LaunchedEffect(view, model.enforceCharBasedInput, settings) {
@@ -229,16 +242,12 @@ private fun TerminalApp(model: TerminalModel) {
                                 appliedCharBasedInput = model.enforceCharBasedInput
                             }
                         }
-                        val clipboardActions = rememberUpdatedState(object : TerminalSession.UserClipboard {
-                            override fun copy(text: String) { copyToSystemClipboard(text) }
-                            override fun requestPaste() { requestSystemPaste() }
-                        })
                         DisposableEffect(session, view, activity) {
                             val current = view
                             val redraw: () -> Unit = { current?.onScreenUpdated(); Unit }
                             val manualClipboard = object : TerminalSession.UserClipboard {
-                                override fun copy(text: String) { clipboardActions.value.copy(text) }
-                                override fun requestPaste() { clipboardActions.value.requestPaste() }
+                                override fun copy(text: String) { copyToSystemClipboard(text) }
+                                override fun requestPaste() { requestSystemPaste(session) }
                             }
                             fun attach() {
                                 model.callbacks.screenChanged = redraw
@@ -254,7 +263,7 @@ private fun TerminalApp(model: TerminalModel) {
                             }
                             activity.lifecycle.addObserver(observer)
                             if (activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) attach()
-                            onDispose { activity.lifecycle.removeObserver(observer); detach() }
+                            onDispose { activity.lifecycle.removeObserver(observer); detach(); model.modifiers.clear() }
                         }
                         AndroidView(factory = { context ->
                             TerminalView(context, null).apply {
@@ -264,12 +273,24 @@ private fun TerminalApp(model: TerminalModel) {
                                     requestFocus()
                                     (context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
                                 })
+                                // Selection toolbar → More (or secondary mouse click). Standard paste
+                                // also remains directly available in the selection toolbar.
+                                setOnCreateContextMenuListener { menu, _, _ ->
+                                    menu.add("Colar").setOnMenuItemClickListener { requestSystemPaste(session); true }
+                                    menu.add("Teclado").setOnMenuItemClickListener { showKeyboard(); true }
+                                    menu.add("Ctrl+C").setOnMenuItemClickListener { interrupt(); true }
+                                }
                                 isFocusableInTouchMode = true
                                 attachSession(session)
                                 requestFocus()
                                 view = this
                             }
-                        }, modifier = Modifier.fillMaxWidth().weight(1f).onSizeChanged {
+                        }, modifier = Modifier.fillMaxWidth().weight(1f).semantics {
+                            customActions = listOf(
+                                CustomAccessibilityAction("Colar") { requestSystemPaste(session); true },
+                                CustomAccessibilityAction("Mostrar teclado") { showKeyboard(); true },
+                                CustomAccessibilityAction("Ctrl+C") { interrupt(); true })
+                        }.onSizeChanged {
                             // TerminalView.onSizeChanged already resizes the local emulator.
                             model.diagnostics.viewport = "Área: ${it.width}×${it.height} px · PTY: ${session.emulator.mRows}×${session.emulator.mColumns} · fonte: ${model.fontSizeSp} sp / $fontPx px"
                         }, update = { terminalView ->
@@ -279,21 +300,13 @@ private fun TerminalApp(model: TerminalModel) {
                                 model.diagnostics.viewport = "Área: ${terminalView.width}×${terminalView.height} px · PTY: ${session.emulator.mRows}×${session.emulator.mColumns} · fonte: ${model.fontSizeSp} sp / $fontPx px"
                             }
                         })
-                        Row(Modifier.fillMaxWidth().height(48.dp).horizontalScroll(rememberScrollState())) {
-                            MyCtTextButton(onClick = { model.toggleCtrl(); view?.requestFocus() }) { Text(if (model.ctrl) "Ctrl ●" else "Ctrl") }
-                            MyCtTextButton(onClick = { model.sendCtrlC(); view?.requestFocus() }) { Text("Ctrl-C") }
-                            listOf("Esc" to KeyEvent.KEYCODE_ESCAPE, "Tab" to KeyEvent.KEYCODE_TAB,
-                                "←" to KeyEvent.KEYCODE_DPAD_LEFT, "↑" to KeyEvent.KEYCODE_DPAD_UP,
-                                "↓" to KeyEvent.KEYCODE_DPAD_DOWN, "→" to KeyEvent.KEYCODE_DPAD_RIGHT).forEach { (label, key) ->
-                                MyCtTextButton(onClick = { model.sendKey(key); view?.requestFocus() }) { Text(label) }
-                            }
-                            MyCtTextButton(onClick = { requestSystemPaste() }, enabled = connected) { Text("Colar…") }
-                            MyCtTextButton(onClick = {
+                        MyCtTerminalKeys(model.modifiers, connected) { key ->
+                            if (model.phase == TerminalModel.Phase.CONNECTED && model.terminal === session) {
                                 view?.let { terminalView ->
                                     terminalView.requestFocus()
-                                    (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT)
+                                    model.modifiers.press(key, session) { terminalView.inputCodePoint(it, false, false) }
                                 }
-                            }) { Text("Teclado") }
+                            }
                         }
                     }
                     }
@@ -368,17 +381,6 @@ private fun TerminalApp(model: TerminalModel) {
         text = { Text("Screenshots e a tela de apps recentes poderão expor comandos e segredos. A preferência é local; a conexão SSH não será reiniciada.") },
         confirmButton = { MyCtTextButton(onClick = { model.setCaptureProtection(false); captureWarning = false }) { Text("Permitir") } },
         dismissButton = { MyCtTextButton(onClick = { captureWarning = false }) { Text("Cancelar") } })
-    pendingPaste?.let { paste ->
-        AlertDialog(onDismissRequest = { pendingPaste = null }, title = { Text("Enviar texto ao terminal?") },
-            text = { Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text("Quebras de linha podem executar comandos. Confira antes de enviar.")
-                Text(ClipboardPolicy.preview(paste.text))
-            } }, confirmButton = { MyCtTextButton(onClick = {
-                if (connected && model.terminal === paste.session) paste.session.emulator.paste(paste.text)
-                else feedback("A sessão mudou; cole novamente na conexão desejada.")
-                pendingPaste = null
-            }) { Text("Enviar") } }, dismissButton = { MyCtTextButton(onClick = { pendingPaste = null }) { Text("Cancelar") } })
-    }
     measurements?.let { text -> AlertDialog(onDismissRequest = { measurements = null }, title = { Text("Diagnóstico sem conteúdo") },
         text = { Text(text, Modifier.verticalScroll(rememberScrollState())) }, confirmButton = { MyCtTextButton(onClick = { measurements = null }) { Text("Fechar") } }) }
     if (forgetDialog) AlertDialog(onDismissRequest = { forgetDialog = false }, title = { Text("Refazer pareamento do host?") },
