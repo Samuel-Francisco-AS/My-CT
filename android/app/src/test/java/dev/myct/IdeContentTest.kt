@@ -29,4 +29,17 @@ class IdeContentTest {
         doc.confirmSaved(EditSaved(initial.copy(bytes = encodeCode(doc.content.toString())), "/work/backup2"), doc.content.documentVersion)
         assertFalse(doc.dirty)
     }
+    @Test fun visualStateChangesKeepSoraContentSelectionVersionDirtyAndUndo() {
+        val doc = IdeDocument("same-host", EditSnapshot("/work/a.c", "int x;\n".toByteArray(), EditMetadata(7, 1, 0x1A4, 1000, 1000)))
+        doc.content.insert(0, 5, "y")
+        doc.content.cursor.setLeft(0, 1); doc.content.cursor.setRight(0, 3)
+        val version = doc.content.documentVersion
+        val content = doc.content
+        repeat(5) { doc.viewport = IdeViewport(0, 200); doc.viewport = doc.viewport!!.bounded(300, 400) }
+        assertSame(content, doc.content); assertEquals(version, doc.content.documentVersion)
+        assertEquals(1, doc.content.cursor.leftColumn); assertEquals(3, doc.content.cursor.rightColumn)
+        assertTrue(doc.dirty); assertTrue(doc.content.canUndo())
+        doc.content.undo(); assertEquals("int x;\n", doc.content.toString())
+    }
+
 }

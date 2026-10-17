@@ -7,6 +7,7 @@ import kotlinx.coroutines.*
 
 internal class IdeDocument(val identity: String, var snapshot: EditSnapshot) {
     val content = Content(decodeCode(snapshot.bytes))
+    var viewport: IdeViewport? = null
     var dirty by mutableStateOf(false)
     var uncertain by mutableStateOf(false)
     var backupPath by mutableStateOf<String?>(null)
@@ -34,6 +35,7 @@ internal class IdeModel {
     private var connection: SshConnection? = null
     private var identity = ""
     private var epoch = 0
+    internal val scroll = IdeScrollHistory()
     private var control: TransferControl? = null
     private var savingDocument: IdeDocument? = null
     private var savingBackupPath: String? = null
@@ -43,6 +45,7 @@ internal class IdeModel {
     var document by mutableStateOf<IdeDocument?>(null); private set
     var browse by mutableStateOf(true)
     var message by mutableStateOf("Conecte pelo Terminal para abrir arquivos do Fedora."); private set
+    var noticeIsError by mutableStateOf(false); private set
     val canSave get() = connected && !busy && document?.let { it.identity == identity && it.dirty && !it.uncertain && !it.readOnly } == true
 
     fun attach(value: SshConnection?, remoteIdentity: String = identity) {
@@ -53,8 +56,9 @@ internal class IdeModel {
         control?.let { token -> scope.launch(Dispatchers.IO) { token.cancel() } }
         control = null; busy = false
         connection = value; connected = value != null
-        if (remoteIdentity != identity) listing = null
+        if (remoteIdentity != identity) { listing = null; scroll.clear() }
         identity = remoteIdentity
+        noticeIsError = value == null && document?.dirty == true
         message = if (value == null) "SSH desconectado. Buffer preservado em memória; reconecte ao mesmo servidor para salvar."
             else if (document != null && document?.identity != identity) "Buffer de outra conexão: salve na conexão original ou descarte explicitamente."
             else "SFTP pronto. Abra uma pasta/projeto ou continue a edição."
@@ -63,7 +67,7 @@ internal class IdeModel {
         val current = connection ?: return
         if (busy) return
         val id = epoch
-        val token = TransferControl(); control = token; busy = true
+        val token = TransferControl(); control = token; busy = true; noticeIsError = false
         scope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
@@ -71,15 +75,18 @@ internal class IdeModel {
                 }
                 if (id == epoch) done(result)
             } catch (error: Exception) {
-                if (id == epoch) message = when (error) {
-                    is EditConflict -> "Conflito: o arquivo mudou no Fedora. Seu buffer foi mantido. Reabra para comparar; nada foi sobrescrito."
-                    is EditRejected -> error.explanation
-                    is EditUncertain -> {
-                        document?.apply { uncertain = true; backupPath = error.backupPath }
-                        "Gravação sem confirmação. Buffer mantido; confira o destino e o backup antes de reabrir."
+                if (id == epoch) {
+                    noticeIsError = true
+                    message = when (error) {
+                        is EditConflict -> "Conflito: o arquivo mudou no Fedora. Seu buffer foi mantido. Reabra para comparar; nada foi sobrescrito."
+                        is EditRejected -> error.explanation
+                        is EditUncertain -> {
+                            document?.apply { uncertain = true; backupPath = error.backupPath }
+                            "Gravação sem confirmação. Buffer mantido; confira o destino e o backup antes de reabrir."
+                        }
+                        is java.util.concurrent.CancellationException -> "Operação cancelada; buffer mantido."
+                        else -> "Falha SFTP ou permissão negada. Buffer mantido; confira a conexão e as permissões."
                     }
-                    is java.util.concurrent.CancellationException -> "Operação cancelada; buffer mantido."
-                    else -> "Falha SFTP ou permissão negada. Buffer mantido; confira a conexão e as permissões."
                 }
             } finally {
                 if (id == epoch) { control = null; busy = false; savingDocument = null }

@@ -166,3 +166,81 @@ ficam em commit separado na mesma branch. SSH continua com a dívida conhecida.
 3. **Navegador de projetos:** padronizar apresentação e interação com `FilesScreen.kt`: `FileGlyphs`, `MyCtGeometry.Control`, metadados legíveis, texto truncável, rolagem `LazyColumn` estável, chaves por item, salvar/restaurar posição por diretório (nome+índice+offset) ao entrar/voltar, e área operacional de altura fixa para evitar movimento vertical quando `busy`/mensagem/progresso mudam. Preservar capacidades de navegação `Home`/`Pai`/caminho absoluto/Arquivos e buffers sujos. Se extrair componente reutilizável, evitar regressão na aba Arquivos aceita; **não compartilhar instâncias de estados de listagem, apenas componentes reutilizáveis**.
 
 **Critérios de aceite da Fix:** código com Gboard aberto continua legível e ocupa a maior área viável; tecla auxiliar move/edita o texto local; CTRL/ALT não se tornam shortcuts SSH involuntários; salvar/undo/busca e troca de abas permanecem acessíveis; navegador IDE não pula/recentraliza ao tocar nem perde posição ao voltar; prova física no Moto com arquivo descartável e recompilação. Não repetir investigação SSH, não alterar transportes/serviços Fedora e não fazer merge do PR #26 antes de novo retorno físico.
+
+## E — MYCT-R4-Fix: ergonomia (17/10/2026)
+
+Partida limpa, fast-forward para `02ca37d`, preservando o relato físico parcial
+acima. **Aceite da Fix continua pendente no Moto; PR #26 permanece draft, sem
+merge.** Não reaberta a investigação de SSH.
+
+- Editor: faixa local de 48 dp com nome curto, dirty, Salvar e overflow. Projetos,
+  Terminal, Arquivos, Detalhes, undo/redo, busca/troca, fechar e recolher/mostrar
+  teclas ficam no menu. Mensagens informativas viram feedback breve; erros e
+  conflitos continuam visíveis e completos em Detalhes. Busca/caminho em diálogo,
+  sem deslocar o editor. Menu não toma foco; fechar diálogo devolve foco ao Sora.
+- Grade 2×7 R3: geometria, cores de pressão e um haptic nativo por toque
+  compartilhados por componente visual; estado/ações da IDE são independentes
+  do Terminal. Grade inferior só na edição, sempre acessível com/sem IME, usando
+  os insets já consumidos pelo shell (sem duplicar padding).
+- `IdeEditorView` chama **onKeyDown/onKeyUp do Sora**, nunca Activity/SSH: ESC
+  desfaz seleção, setas/Home/End/PageUp/PageDown navegam, TAB usa indentação nativa
+  inclusive seleção; `/` e `-` usam commitText + notificação nativa da IME.
+  CTRL+setas navega por palavra; CTRL+Home/End pelo documento. CTRL apresenta
+  atalhos locais A/C/X/V/Z/Y/W/D; ALT apresenta CTRL+ALT+ENTER (linha acima).
+  A paleta temporária sobrepõe o código sem mudar sua altura. **Atalhos de letras
+  são escolhidos nessa paleta; digitação normal no Gboard continua texto e cancela
+  o modificador.** Não se interceptou InputConnection/composição do Gboard.
+  Modificadores são consumidos antes da ação e limpos ao digitar, perder foco,
+  abrir menu, trocar de tela/documento, iniciar operação ou ir para background.
+  Os eventos ALT/CTRL nativos são liberados em finally; binding não suportado
+  não pode cair no PTY. Sem sequências de escape remotas.
+- Buffer Content e undo permanecem no modelo. Abrir menu/busca/teclado não
+  reatribui texto nem recria a AndroidView. Ao alternar Projetos/Terminal/Arquivos,
+  guarda viewport do Sora no documento e restaura após layout, com limites novos;
+  seleção/cursor ficam no Content original. Sem estado Compose por caractere.
+- Navegador: FileGlyphs, superfícies MyCtGeometry.Control, nome até duas linhas,
+  tipo/tamanho/data, caminho consultável, seta Pai, Home/Atualizar/Ir. Status de
+  40 dp + progresso reservado de 4 dp mantêm a região operacional constante;
+  lista antiga permanece durante carregamento, sem encolher/recentralizar.
+  Histórico próprio limitado a 64 pastas, usando valor de âncora nome/índice/offset
+  já aprovado em Arquivos; salva antes de navegar e inicializa a LazyColumn correta
+  antes de desenhar a pasta seguinte. FilesModel/FilesScreen não foram alterados.
+
+Referência inspecionada na versão fixada:
+[EditorKeyEventHandler](https://github.com/Rosemoe/sora-editor/blob/0.23.6/editor/src/main/java/io/github/rosemoe/sora/widget/EditorKeyEventHandler.java),
+[CodeEditor](https://github.com/Rosemoe/sora-editor/blob/0.23.6/editor/src/main/java/io/github/rosemoe/sora/widget/CodeEditor.java),
+[KeyMetaStates](https://github.com/Rosemoe/sora-editor/blob/0.23.6/editor/src/main/java/io/github/rosemoe/sora/text/method/KeyMetaStates.java).
+Sora 0.23.6, dependências e licenças preservados; nenhuma instalação. Transporte,
+TerminalView, motor RemoteEditor, Fedora, Core/banco, torrents, Cofre e drawer
+inalterados. Única extração compartilhada é o visual/haptic da grade R3, mantendo
+assinatura e callback do componente Terminal anterior.
+
+Testes novos proporcionais: códigos nativos/literais e grade, CTRL/ALT one-shot,
+atalhos suportados e falha sem latch, independência do Terminal, limites de viewport,
+histórico de pastas por nome/offset, fallback/clamp/evicção e isolamento, Content
+Sora real com seleção/versão/dirty/undo intactos após mudar estado visual. Os testes
+JVM não executam Canvas/Gboard/haptics; validação dos oito critérios físicos da Fix
+continua com o proprietário. Não há Moto em `adb devices -l` nem AVD nesta sessão.
+
+Validação da Fix: `MYCT_TEST_LOCAL_SFTP=1` + assembleDebug/testDebugUnitTest/lintDebug
+**offline PASS**, 173 testes (**172 aprovados, 1 handshake opt-in ignorado**),
+lint **0 erros/2 avisos preexistentes**, 21 arquivos upstream e quatro patches
+reversos aprovados, whitespace PASS. O build ainda avisa sobre duas condições
+redundantes inferidas por smart cast e metaspace, sem erros. Build final 2m16s,
+pico RSS 2173212 KiB (~2,07 GiB), zero swaps; configurações de recursos preservadas.
+Logs locais em `artifacts/myct-r4fix-validation/`.
+
+APK **0.6.6-r4-ide-fix/code 23**, `dev.myct`, 17011562 bytes.
+Apksigner confirmou certificado SHA-256
+`b788958be4c919889fc30813f13f1aceb5b6b69670514c82e16288f4b60b83b3`, igual à
+0.6.5/code 22. APK atualizável sem apagar dados:
+`artifacts/myct-r4-fix-0.6.6-debug.apk`; checksum em `artifacts/myct-r4-fix-SHA256SUMS.txt`.
+SHA-256 APK: `63a2f6622fc0e92b166262f5d9c84eb55b7052f5dbd0b1ab4eebb71b85273c11`.
+
+Publicação: fonte/commit enviados na branch do PR #26, que deve continuar draft.
+A API da CLI GitHub retornou HTTP 401, apesar de Git SSH e conector do PR
+funcionarem. Release candidata preparada com tag `myct-r4-fix-v0.6.6-rc1`; a
+publicação do binário depende de renovar `gh auth login -h github.com` pelo
+proprietário. Nenhum token/senha solicitado ao agente. Não confundir APK local
+validado com release já publicada. Retomar pela conclusão dessa publicação e
+pelos oito critérios físicos solicitados, sem reabrir SSH nem fazer merge.
