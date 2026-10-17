@@ -1,6 +1,6 @@
 # MYCT-R2B — telas internas, ergonomia e fluidez
 
-**Abertura:** 17/10/2026. **Atualização após teste físico:** proprietário aprovou visual e organização da R2B no Moto G06, destacando melhora perceptível especialmente em Arquivos; duas pendências de Fix foram relatadas (gesto drawer interferindo na rolagem e métricas acumuladas de torrents indisponíveis por CLI antiga). Aceite funcional exaustivo ainda não inferido. **Base visual aceita:** MYCT-R2A.1 0.6.1/code 18; branch `myct-r2b-screens` derivada de `myct-r2a-visual-shell` após o [aceite](MYCT-R2-IDENTIDADE-VISUAL-E-PLANEJAMENTO.md).
+**Abertura:** 17/10/2026. **Atualização após teste físico:** proprietário aprovou visual e organização da R2B no Moto G06, destacando melhora perceptível especialmente em Arquivos; duas pendências de Fix foram relatadas (gesto drawer interferindo na rolagem e métricas acumuladas de torrents indisponíveis por CLI antiga). **Correções entregues na candidata 0.6.3/code 20 abaixo; aceite físico da Fix pendente.** Aceite funcional exaustivo ainda não inferido. **Base visual aceita:** MYCT-R2A.1 0.6.1/code 18; branch `myct-r2b-screens` derivada de `myct-r2a-visual-shell` após o [aceite](MYCT-R2-IDENTIDADE-VISUAL-E-PLANEJAMENTO.md).
 
 ## Mandato
 
@@ -47,7 +47,7 @@ R-01 lag de digitação SSH permanece **dívida técnica suspensa**. Não estuda
 
 Inspecionados [RPC 4.1.3](https://github.com/transmission/transmission/blob/4.1.3/docs/rpc-spec.md#33-torrent-accessor-torrent_get) e [definições tr_stat](https://github.com/transmission/transmission/blob/4.1.3/libtransmission/transmission.h). Acrescentados somente `downloaded_ever`, `uploaded_ever` e `upload_ratio` à lista de campos solicitados por `ops/myct-torrent`. Contadores são bytes históricos por torrent, separados de `rate_download`/`rate_upload` e do tamanho atual. Ratio é o valor informado pelo Transmission (4.1: enviado / tamanho final), sem cálculo a partir das taxas ou dos acumulados; −1 = indisponível, −2 = infinito. Campos faltantes/inválidos continuam indisponíveis, nunca zero inventado.
 
-**O adaptador atualizado está apenas no repositório. Não foi instalado no Fedora.** A CLI anterior continua compatível com o APK e operações existentes; acumulados/ratio aparecem como Indisponível até instalação manual autorizada da revisão `ops/myct-torrent`. Git pull não atualiza `~/.local/bin/myct-torrent`. Nenhuma alteração de RPC endpoint, serviço, motor, seeding, diretório, conta ou configuração. Teste Python confirma consulta única `torrent_get` e encaminhamento dos campos sem mutação.
+**Na entrega inicial 0.6.2, o adaptador atualizado estava apenas no repositório, sem instalação no Fedora. A instalação autorizada foi executada na Fix abaixo.** A CLI anterior continua compatível com o APK e operações existentes; acumulados/ratio aparecem como Indisponível até instalação manual autorizada da revisão `ops/myct-torrent`. Git pull não atualiza `~/.local/bin/myct-torrent`. Nenhuma alteração de RPC endpoint, serviço, motor, seeding, diretório, conta ou configuração. Teste Python confirma consulta única `torrent_get` e encaminhamento dos campos sem mutação.
 
 ## Validação e retomada
 
@@ -75,7 +75,7 @@ Execução final em 1m58s, CPU acumulada ~580 s, RSS máximo do build ~1.832 MiB
 b3c0764a5322a48fd1e7f5feaf95fa31265239fcc9366cd8fa72e49b485991e6
 ```
 
-Continuar em `myct-r2b-screens`, PR draft com base `myct-r2a-visual-shell`; sem merge. Próximo passo é o proprietário avaliar esta candidata no Moto, registrar resultados reais e autorizar separadamente eventual instalação da CLI de consulta ampliada.
+Continuar em `myct-r2b-screens`, PR draft com base `myct-r2a-visual-shell`; sem merge. Esta candidata foi posteriormente avaliada pelo proprietário; retorno, autorização de instalação e execução da Fix estão registrados abaixo.
 
 
 ## Retorno físico do proprietário e Fix pós-R2B — 17/10/2026
@@ -91,4 +91,38 @@ Continuar em `myct-r2b-screens`, PR draft com base `myct-r2a-visual-shell`; sem 
 
 ### Autorização recebida — 17/10/2026
 
-O proprietário respondeu “Autorizo, Luna” à proposta das duas correções. Estado agora: **FIX-01 e FIX-02 autorizadas, implementação/instalação ainda não executadas nesta atualização documental**. Instruir Codex a limitar a correção Android ao gesto, atualizar somente a CLI versionada, executar os testes existentes, conferir retorno real e publicar APK candidato sem merge. Não reabrir a dívida de lag R-01. 
+O proprietário respondeu “Autorizo, Luna” à proposta das duas correções. Estado naquele registro: **FIX-01 e FIX-02 autorizadas, implementação/instalação ainda não executadas naquela atualização documental**. Instruir Codex a limitar a correção Android ao gesto, atualizar somente a CLI versionada, executar os testes existentes, conferir retorno real e publicar APK candidato sem merge. Não reabrir a dívida de lag R-01.
+
+
+## MYCT-R2B-Fix executada — 17/10/2026
+
+**FIX-01:** abertura gestual padrão do `ModalNavigationDrawer` desabilitada enquanto fechado. `DrawerOpeningGesture.kt` observa a cadeia de toque do conteúdo, sem overlay de interceptação. Exige início nos primeiros **24 dp da esquerda**, touch slop do aparelho e deslocamento à direita pelo menos **3×** o deslocamento vertical. O primeiro movimento vertical/diagonal além do slop rejeita a abertura até levantar o dedo; não há captura tardia ao mudar de direção. Movimentos consumidos pelos filhos, toque longo e múltiplos dedos também impedem a abertura. Down/tap não são consumidos; somente após intenção horizontal aceita o gesto é consumido e `DrawerState.open()` é lançado sem bloquear a UI.
+
+O passe Main deixa os filhos tratarem primeiro rolagem/seleção; o TerminalView conserva sua entrada até eventual abertura deliberada. Com drawer aberto, Material3 mantém arraste de fechamento, arbitragem com sua coluna rolável, scrim acessível/toque externo e Back/predictive Back pela `ModalDrawerSheet` existente. A ação acessível de abrir e o trecho de exclusão Android **24 × 160 dp** foram preservados, sem ampliar a exclusão do Voltar nem criar cabeçalho/hambúrguer. Nada foi alterado em foco, renderer, PTY/IME ou telas internas. **Esses comportamentos ainda exigem reensaio físico; a inspeção de fonte não prova fluidez no Moto.**
+
+**FIX-02 instalada realmente no Fedora 44:** fonte `ops/myct-torrent` validada sintaticamente e por oito testes Python; comparação AST confirmou diferença exclusivamente nos três campos de consulta. Executável anterior regular, do usuário atual, `0700`, preservado com bytes, permissão e mtime em:
+
+```text
+/home/sam/.local/bin/myct-torrent.bak-r2b-fix-20261017T044529Z
+```
+
+Substituição atômica somente de `~/.local/bin/myct-torrent`, permissão **0700**, com bytes/SHA-256 idênticos à fonte validada (`5c9a76ca8692382efcf35fc133e30c150bd7d912dcadc3b16e9bfceaca574dfe`). Consulta real **`list`, exit 0**, retornou **2 registros**, ambos com `downloaded_ever`, `uploaded_ever` e `upload_ratio` válidos. O parser de produção Android aceitou os dois registros e preservou exatamente os três valores de cada registro. Nenhuma regressão detectada nessa consulta; rollback não foi necessário e o backup permanece disponível. Resposta real temporária `0600` removida após conferência, sem nomes, hashes, magnets, credenciais ou caminhos privados nos relatórios. Nenhuma operação de mutação de torrent, reinício/reconfiguração de daemon, serviço ou diretório executada.
+
+**Validação:** build Android offline SUCCESS (1m55s), **136 testes JVM: 135 aprovados e 1 handshake opt-in ignorado**, incluindo seis novos testes de decisão direcional (borda, slop/tap, vertical/diagonal sem captura tardia, consumo dos filhos, toque longo/multitouch e decisão estável). **8 testes Python aprovados**, lint **0 erros/2 avisos preexistentes de versões**, upstream **21 arquivos/3 arquivos com alterações documentadas e 4 patches reversos íntegros**, `git diff --check` limpo. Nenhuma dependência instalada. Build: RSS máximo ~2.015 MiB, zero swaps; aviso de metaspace ao encerrar já observado na R2B, sem alterar limites. Logs e evidências agregadas em `artifacts/myct-r2b-fix-validation/`.
+
+**APK candidato:** [prévia 0.6.3](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-r2b-fix-v0.6.3-rc1), `artifacts/myct-r2b-fix-0.6.3-debug.apk`, **0.6.3-r2b-fix / code 20**, pacote `dev.myct`. Assinatura verificada e certificado idêntico ao APK 0.6.2/code 19; atualizar sem desinstalar. SHA-256:
+
+```text
+3a1ed031b7de8a540690744cf63d914a9536ab7d85056c51143542eb7ba1d76e
+```
+
+### Roteiro curto de aceite no Moto G06
+
+1. Rolar Arquivos verticalmente, inclusive começando perto da borda esquerda e em diagonal, sem abrir o menu.
+2. Rolar Saúde e Downloads sem abertura acidental nem perda de posição.
+3. Abrir com swipe horizontal deliberado da borda esquerda (experimentar o trecho central reservado contra Voltar).
+4. Rolar o próprio drawer; fechar por swipe inverso, toque externo e Back.
+5. Abrir Torrents e atualizar a lista.
+6. Conferir baixado acumulado, enviado acumulado e ratio reais, separados das taxas instantâneas.
+
+Conferir também foco/IME e seleção de texto no Terminal, ação de abrir/fechar via acessibilidade e navegação Voltar fora do trecho reservado. ADB sem dispositivo; **aceite físico da Fix pendente do proprietário**. Visual R2B permanece aprovado; nenhum novo diagnóstico de lag SSH ou reforma visual. Continuar no [PR #24 draft](https://github.com/Samuel-Francisco-AS/My-CT/pull/24), base `myct-r2a-visual-shell`, sem merge.

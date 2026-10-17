@@ -10,8 +10,8 @@ android {
         applicationId = "dev.myct"
         minSdk = 26
         targetSdk = 36
-        versionCode = 19
-        versionName = "0.6.2-r2b-screens"
+        versionCode = 20
+        versionName = "0.6.3-r2b-fix"
     }
     buildFeatures { compose = true }
     compileOptions {
