@@ -88,3 +88,8 @@ O lag intermitente do terminal permanece **dívida suspensa** após teste real d
 **Sequência decidida:** R4-Fix pendente de teste físico → aceite/merge R4 se aprovado → L1A (arquivos/IDE local) → L1B (PTY/shell Android local) → L1C (prova de compilação/execução C offline) → reavaliar MYCT-6/T5. Desenvolvimento remoto e serviços Fedora devem permanecer intactos. A extensão posterior para C++, Python, JS, Rust, Git, Make e pacotes Linux é **visão**, não escopo prometido da L1 inicial. Viabilidade de compiladores para Android targetSdk 36 exige prova técnica, não presunção de execução de binários de diretórios graváveis.
 
 A janela C/T5 do plano inaugural permanece válida como visão histórica, **mas sua execução foi adiada** por decisão posterior do proprietário. Não criar branch de implementação L1 nem iniciar MYCT-6 enquanto R4-Fix não for fisicamente aceita e fechada.
+
+
+## Checkpoint 17/10/2026 — R4 integrada, L1 é a próxima
+
+MYCT-R4/Fix **0.6.6/code 23** recebeu **PASS físico do proprietário** após edição e salvamento de C na IDE Sora, compilação GCC e execução no Fedora (`My-CT IDE funcionando! Pós-r4-fix`), com cabeçalho compacto e teclas auxiliares aprovadas. [PR #26](https://github.com/Samuel-Francisco-AS/My-CT/pull/26) integrado à main via merge commit `266e799a0fe3d5a4dd6d9a270095c3d2f3da6005`; [relatório formal](MYCT-R4-FECHAMENTO.md). A condição que antecedia o planejamento de [MYCT-L1](MYCT-L1-AMBIENTE-LOCAL.md) está satisfeita. **Próximo trabalho: MYCT-L1A em nova conversa**, depois L1B/L1C, ainda **antes de MYCT-6**. Sem branch de implementação L1 criada neste fechamento.
