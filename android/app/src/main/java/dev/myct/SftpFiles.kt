@@ -32,6 +32,10 @@ object RemotePath {
 enum class RemoteKind { DIRECTORY, FILE, LINK, OTHER }
 data class RemoteEntry(val name: String, val kind: RemoteKind, val size: Long, val modified: Long)
 data class RemoteListing(val path: String, val entries: List<RemoteEntry>, val limited: Boolean)
+
+/** A visual filter only: hidden entries remain accessible to SFTP/other operations. */
+internal fun visibleSftpEntries(entries: List<RemoteEntry>, showHidden: Boolean): List<RemoteEntry> =
+    if (showHidden) entries else entries.filterNot { it.name.startsWith('.') }
 class NameConflict : Exception()
 class IntegrityFailure : Exception()
 class SafePublishUnavailable : Exception()

@@ -336,6 +336,14 @@ public final class TerminalView extends View {
 
             @Override
             public boolean finishComposingText() {
+                long started = performanceStart();
+                try { return finishComposingTextInternal(); }
+                finally {
+                    if (started != 0) mClient.onInputTiming(0, started, System.nanoTime() - started, 0, 0);
+                }
+            }
+
+            private boolean finishComposingTextInternal() {
                 if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) mClient.logInfo(LOG_TAG, "IME: finishComposingText()");
                 super.finishComposingText();
 
@@ -346,6 +354,14 @@ public final class TerminalView extends View {
 
             @Override
             public boolean commitText(CharSequence text, int newCursorPosition) {
+                long started = performanceStart();
+                try { return commitTextInternal(text, newCursorPosition); }
+                finally {
+                    if (started != 0) mClient.onInputTiming(1, started, System.nanoTime() - started, 0, 0);
+                }
+            }
+
+            private boolean commitTextInternal(CharSequence text, int newCursorPosition) {
                 if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) {
                     mClient.logInfo(LOG_TAG, "IME: commitText(\"" + text + "\", " + newCursorPosition + ")");
                 }
@@ -361,6 +377,14 @@ public final class TerminalView extends View {
 
             @Override
             public boolean deleteSurroundingText(int leftLength, int rightLength) {
+                long started = performanceStart();
+                try { return deleteSurroundingTextInternal(leftLength, rightLength); }
+                finally {
+                    if (started != 0) mClient.onInputTiming(2, started, System.nanoTime() - started, leftLength, rightLength);
+                }
+            }
+
+            private boolean deleteSurroundingTextInternal(int leftLength, int rightLength) {
                 if (TERMINAL_VIEW_KEY_LOGGING_ENABLED) {
                     mClient.logInfo(LOG_TAG, "IME: deleteSurroundingText(" + leftLength + ", " + rightLength + ")");
                 }
@@ -373,56 +397,64 @@ public final class TerminalView extends View {
             void sendTextToTerminal(CharSequence text) {
                 stopTextSelectionMode();
                 final int textLengthInChars = text.length();
-                for (int i = 0; i < textLengthInChars; i++) {
-                    char firstChar = text.charAt(i);
-                    int codePoint;
-                    if (Character.isHighSurrogate(firstChar)) {
-                        if (++i < textLengthInChars) {
-                            codePoint = Character.toCodePoint(firstChar, text.charAt(i));
+                // My-CT: combine only text already committed in this synchronous callback.
+                final TerminalSession inputSession = mTermSession;
+                if (inputSession == null || textLengthInChars == 0) return;
+                if (textLengthInChars > 1) inputSession.beginInputEvent();
+                try {
+                    for (int i = 0; i < textLengthInChars; i++) {
+                        char firstChar = text.charAt(i);
+                        int codePoint;
+                        if (Character.isHighSurrogate(firstChar)) {
+                            if (++i < textLengthInChars) {
+                                codePoint = Character.toCodePoint(firstChar, text.charAt(i));
+                            } else {
+                                // At end of string, with no low surrogate following the high:
+                                codePoint = TerminalEmulator.UNICODE_REPLACEMENT_CHAR;
+                            }
                         } else {
-                            // At end of string, with no low surrogate following the high:
-                            codePoint = TerminalEmulator.UNICODE_REPLACEMENT_CHAR;
+                            codePoint = firstChar;
                         }
-                    } else {
-                        codePoint = firstChar;
+
+                        // Check onKeyDown() for details.
+                        if (mClient.readShiftKey())
+                            codePoint = Character.toUpperCase(codePoint);
+
+                        boolean ctrlHeld = false;
+                        if (codePoint <= 31 && codePoint != 27) {
+                            if (codePoint == '\n') {
+                                // The AOSP keyboard and descendants seems to send \n as text when the enter key is pressed,
+                                // instead of a key event like most other keyboard apps. A terminal expects \r for the enter
+                                // key (although when icrnl is enabled this doesn't make a difference - run 'stty -icrnl' to
+                                // check the behaviour).
+                                codePoint = '\r';
+                            }
+
+                            // E.g. penti keyboard for ctrl input.
+                            ctrlHeld = true;
+                            switch (codePoint) {
+                                case 31:
+                                    codePoint = '_';
+                                    break;
+                                case 30:
+                                    codePoint = '^';
+                                    break;
+                                case 29:
+                                    codePoint = ']';
+                                    break;
+                                case 28:
+                                    codePoint = '\\';
+                                    break;
+                                default:
+                                    codePoint += 96;
+                                    break;
+                            }
+                        }
+
+                        inputCodePoint(codePoint, ctrlHeld, false);
                     }
-
-                    // Check onKeyDown() for details.
-                    if (mClient.readShiftKey())
-                        codePoint = Character.toUpperCase(codePoint);
-
-                    boolean ctrlHeld = false;
-                    if (codePoint <= 31 && codePoint != 27) {
-                        if (codePoint == '\n') {
-                            // The AOSP keyboard and descendants seems to send \n as text when the enter key is pressed,
-                            // instead of a key event like most other keyboard apps. A terminal expects \r for the enter
-                            // key (although when icrnl is enabled this doesn't make a difference - run 'stty -icrnl' to
-                            // check the behaviour).
-                            codePoint = '\r';
-                        }
-
-                        // E.g. penti keyboard for ctrl input.
-                        ctrlHeld = true;
-                        switch (codePoint) {
-                            case 31:
-                                codePoint = '_';
-                                break;
-                            case 30:
-                                codePoint = '^';
-                                break;
-                            case 29:
-                                codePoint = ']';
-                                break;
-                            case 28:
-                                codePoint = '\\';
-                                break;
-                            default:
-                                codePoint += 96;
-                                break;
-                        }
-                    }
-
-                    inputCodePoint(codePoint, ctrlHeld, false);
+                } finally {
+                    if (textLengthInChars > 1) inputSession.endInputEvent();
                 }
             }
 
@@ -444,7 +476,27 @@ public final class TerminalView extends View {
         return mEmulator == null ? 1 : mEmulator.getScreen().getActiveRows() + mTopRow - mEmulator.mRows;
     }
 
+    private long mPendingScreenUpdateAt;
+    @Override
+    protected void onWindowVisibilityChanged(int visibility) {
+        super.onWindowVisibilityChanged(visibility);
+        mPendingScreenUpdateAt = 0; // Do not count time spent offscreen as foreground draw delay.
+    }
+
+    private long performanceStart() {
+        return mClient != null && mClient.shouldMeasurePerformance() ? System.nanoTime() : 0;
+    }
+
     public void onScreenUpdated() {
+        long started = performanceStart();
+        if (started != 0 && mPendingScreenUpdateAt == 0) mPendingScreenUpdateAt = started;
+        try { updateScreenInternal(); }
+        finally {
+            if (started != 0) mClient.onScreenUpdateTiming(started, System.nanoTime() - started);
+        }
+    }
+
+    private void updateScreenInternal() {
         if (mEmulator == null) return;
 
         int rowsInHistory = mEmulator.getScreen().getActiveTranscriptRows();
@@ -744,6 +796,16 @@ public final class TerminalView extends View {
      */
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        long started = performanceStart();
+        long age = started == 0 ? 0 : Math.max(0, SystemClock.uptimeMillis() - event.getEventTime()) * 1000000L;
+        try { return onKeyDownInternal(keyCode, event); }
+        finally {
+            if (started != 0) mClient.onKeyTiming(started, System.nanoTime() - started, age,
+                keyCode == KeyEvent.KEYCODE_DEL, event.getRepeatCount() > 0);
+        }
+    }
+
+    private boolean onKeyDownInternal(int keyCode, KeyEvent event) {
         if (TERMINAL_VIEW_KEY_LOGGING_ENABLED)
             mClient.logInfo(LOG_TAG, "onKeyDown(keyCode=" + keyCode + ", isSystem()=" + event.isSystem() + ", event=" + event + ")");
         if (mEmulator == null) return true;
@@ -962,8 +1024,10 @@ public final class TerminalView extends View {
         int newColumns = Math.max(4, (int) (viewWidth / mRenderer.mFontWidth));
         int newRows = Math.max(4, (viewHeight - mRenderer.mFontLineSpacingAndAscent) / mRenderer.mFontLineSpacing);
 
-        if (mEmulator == null || (newColumns != mEmulator.mColumns || newRows != mEmulator.mRows)) {
-            mTermSession.updateSize(newColumns, newRows, (int) mRenderer.getFontWidth(), mRenderer.getFontLineSpacing());
+        boolean gridChanged = mEmulator == null || newColumns != mEmulator.mColumns || newRows != mEmulator.mRows;
+        // My-CT session also deduplicates cell dimensions (font may change without a grid change).
+        mTermSession.updateSize(newColumns, newRows, (int) mRenderer.getFontWidth(), mRenderer.getFontLineSpacing());
+        if (gridChanged) {
             mEmulator = mTermSession.getEmulator();
             mClient.onEmulatorSet();
 
@@ -979,6 +1043,16 @@ public final class TerminalView extends View {
 
     @Override
     protected void onDraw(Canvas canvas) {
+        long started = performanceStart();
+        long updateAt = mPendingScreenUpdateAt;
+        mPendingScreenUpdateAt = 0;
+        try { drawTerminalInternal(canvas); }
+        finally {
+            if (started != 0) mClient.onDrawTiming(started, System.nanoTime() - started, updateAt);
+        }
+    }
+
+    private void drawTerminalInternal(Canvas canvas) {
         if (mEmulator == null) {
             canvas.drawColor(0XFF000000);
         } else {

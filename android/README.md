@@ -364,3 +364,26 @@ RPC do motor. Torrents/pastas antigos não são migrados. Atualizar APK sem
 desinstalar; mesma assinatura. Nomeação comprovada com 64 KiB no Fedora;
 **essa correção ainda precisa do aceite no Moto**. `.torrent` SAF continua adiado.
 [Relatório e atualização CLI/hook](../docs/MYCT-5C-BITTORRENT-REPORT.md).
+
+## MYCT-R1 — candidata de latência/arquivos
+
+APK `../artifacts/myct-r1-0.5.7-debug.apk`, **0.5.7-r1-terminal/code 14**,
+`dev.myct`, mesma assinatura debug conferida contra 0.5.6. Atualizar sem
+desinstalar/apagar dados. Otimiza codificação, commit síncrono IME e cópia na
+recepção; preserva preferência de entrada por caracteres. Build/JVM/lint offline
+aprovados, mas melhora perceptível e regressões IME/TUI/SFTP exigem Moto G06.
+[Relatório, artefato e roteiro físico](../docs/MYCT-R1-TERMINAL-FILES.md).
+
+MYCT-R1B: candidata **0.5.8-r1b-diagnostics/code 15**, atualizável sobre 0.5.7.
+O proprietário relatou ausência de melhora perceptível na 0.5.7. A nova versão
+acrescenta **Opções → Amostrar engasgos · 60 s** (opt-in); após reproduzir o
+sintoma, aguarde 60 s e abra **Medições locais**. Histogramas, frequências,
+profundidade e bins numéricos ajudam a distinguir fila/IME/draw; não medem RTT
+nem apresentação. Preserva política SSH, controles e SFTP. Detalhes e APK no
+[relatório MYCT-R1/R1B](../docs/MYCT-R1-TERMINAL-FILES.md).
+
+MYCT-R1C: **0.5.9-r1c-terminal/code 16**, candidata de implementação sobre
+0.5.8: workers dedicados, recepção assíncrona limitada e resize consolidado
+sem espera de resposta. Mesmo pacote/assinatura; atualizar sem desinstalar ou
+apagar dados. Testar digitação/Backspace, abrir/fechar teclado, nano/tmux e
+comparação Termux SSH. [APK e validação](../docs/MYCT-R1-TERMINAL-FILES.md).

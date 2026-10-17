@@ -1,15 +1,20 @@
 {
-  "reason": "MYCT-1R: explicit user clipboard separated from OSC; mouse paste confirmation",
+  "reason": "MYCT-1R: explicit user clipboard separated from OSC; mouse paste confirmation; MYCT-R1: synchronous IME commit scope (no timer), immediate controls; MYCT-R1B: opt-in numerical timing hooks (60 s); MYCT-R1C: preserve cell-size updates even when grid is unchanged",
   "files": [
     {
       "local": "src/main/java/com/termux/view/TerminalView.java",
       "upstreamSha256": "8395c02329a36bdf9608e941349da50002d3a1dd6245cc289393a6a65e1a761a",
-      "patchedSha256": "9fb9b7ba22563ca7749fdca586924b4349ac888e4293d7ec021028f0bb5d3726"
+      "patchedSha256": "310edf28b87b5020e9f8683bfd697d50f1549d473802296c09a2544021ddf093"
     },
     {
       "local": "src/main/java/com/termux/view/textselection/TextSelectionCursorController.java",
       "upstreamSha256": "006925df97af953197310ac8369c6a9591e0dfa76bf89bbb5ee7ff401e2d9188",
       "patchedSha256": "0f5f1a0499309b3afab85c29b4927269be9ec192ed32828f680a526fcd7182cd"
+    },
+    {
+      "local": "src/main/java/com/termux/view/TerminalViewClient.java",
+      "upstreamSha256": "8f8e647e734e7a888104511979f00084e2e5fc0a887ebbd56c601fd4c314a795",
+      "patchedSha256": "ec8a309bb751839cc0f1380bb3de8b50a2ca24ee737285897805e8335f91cddc"
     }
   ]
 }

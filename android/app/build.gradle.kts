@@ -10,8 +10,8 @@ android {
         applicationId = "dev.myct"
         minSdk = 26
         targetSdk = 36
-        versionCode = 13
-        versionName = "0.5.6-antivirus"
+        versionCode = 16
+        versionName = "0.5.9-r1c-terminal"
     }
     buildFeatures { compose = true }
     compileOptions {

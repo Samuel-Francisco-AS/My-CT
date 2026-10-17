@@ -7,9 +7,14 @@ import com.termux.terminal.TerminalSessionClient
 import com.termux.view.TerminalViewClient
 
 /** Never log terminal bytes, passwords, IME events, or remote exception messages. */
-open class SessionCallbacks : TerminalSessionClient {
+open class SessionCallbacks(private val diagnostics: (() -> TerminalDiagnostics)? = null) : TerminalSessionClient {
     var screenChanged: (() -> Unit)? = null
-    override fun onTextChanged(session: TerminalSession) { screenChanged?.invoke() }
+    override fun onTextChanged(session: TerminalSession) {
+        val metrics = diagnostics?.invoke()?.takeIf { it.isSampling }
+        val started = if (metrics != null) System.nanoTime() else 0L
+        try { screenChanged?.invoke() }
+        finally { metrics?.record(TerminalDiagnostics.Stage.TEXT, started, System.nanoTime() - started) }
+    }
     override fun onTitleChanged(session: TerminalSession) = Unit
     override fun onSessionFinished(session: TerminalSession) { screenChanged?.invoke() }
     override fun onCopyTextToClipboard(session: TerminalSession, text: String) = Unit
@@ -28,6 +33,24 @@ open class SessionCallbacks : TerminalSessionClient {
 }
 
 class ViewCallbacks(private val model: TerminalModel, private val showKeyboard: () -> Unit) : TerminalViewClient {
+    override fun shouldMeasurePerformance() = model.diagnostics.isSampling
+    override fun onInputTiming(kind: Int, startedAt: Long, duration: Long, left: Int, right: Int) {
+        when (kind) {
+            0 -> model.diagnostics.record(TerminalDiagnostics.Stage.COMPOSE, startedAt, duration)
+            1 -> model.diagnostics.record(TerminalDiagnostics.Stage.COMMIT, startedAt, duration)
+            2 -> model.diagnostics.deletion(startedAt, duration, left, right)
+        }
+    }
+    override fun onKeyTiming(startedAt: Long, duration: Long, age: Long, delete: Boolean, repeat: Boolean) {
+        model.diagnostics.key(startedAt, duration, age, delete, repeat)
+    }
+    override fun onScreenUpdateTiming(startedAt: Long, duration: Long) {
+        model.diagnostics.record(TerminalDiagnostics.Stage.UPDATE, startedAt, duration)
+    }
+    override fun onDrawTiming(startedAt: Long, duration: Long, updateAt: Long) {
+        model.diagnostics.record(TerminalDiagnostics.Stage.DRAW, startedAt, duration)
+        if (updateAt != 0L) model.diagnostics.record(TerminalDiagnostics.Stage.DRAW_WAIT, updateAt, startedAt - updateAt)
+    }
     override fun onScale(scale: Float) = 1f
     override fun onSingleTapUp(e: MotionEvent) { showKeyboard() }
     override fun shouldBackButtonBeMappedToEscape() = false

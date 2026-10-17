@@ -9,12 +9,26 @@ Somente os módulos `terminal-emulator` e `terminal-view`, cobertos pela exceç�
 Apache 2.0 do `LICENSE.termux.md`, são usados. Não há `termux-app`,
 `termux-shared`, JNI, NDK ou processo shell Android. MYCT-1R altera somente dois arquivos da view para separar os gestos manuais
 de clipboard dos callbacks OSC; o renderer/emulador ANSI permanece inalterado.
-`myct-1r-clipboard.patch` registra o diff; `local-patches.json` preserva o SHA
+`myct-1r-clipboard.patch` registra o diff original;
+MYCT-R1 acrescenta `myct-r1-ime.patch` sobre essa base para delimitar um único
+commit/finish da IME: agrupa somente texto já disponível, sem timer, com
+controles enviados imediatamente. Transformações de teclas, composição e
+preferência IME do upstream são preservadas; `local-patches.json` preserva o SHA
 original e o SHA atual. Validar offline: `python terminal/upstream/verify.py`
 a partir de android/. `src/main/java/com/termux/terminal/TerminalSession.java` é um
 adaptador My-CT independente que oferece à view a API mínima de sessão e
 encaminha bytes/resize ao SSH. Ele substitui o gerenciamento de subprocesso
 local do upstream, que não foi importado. `ByteQueue` também não foi importado.
+
+MYCT-R1B acrescenta `myct-r1b-timing.patch` sobre a base MYCT-R1, na view e
+na interface cliente, com hooks numéricos de IME/KeyEvent/atualização/draw.
+São inertes por padrão, ativados por amostra de 60 s no app; preservam os
+corpos originais de processamento. Verificador agora registra três arquivos
+upstream com patches explícitos.
+
+MYCT-R1C acrescenta `myct-r1c-layout.patch`: a view delega dimensões de célula
+à sessão mesmo sem mudança de grade; o adaptador deduplica. Workers e filas
+SSH ficam no app, sem importar subprocessos/JNI. Emulador/renderer preservados.
 
 Preservar as licenças e avisos ao redistribuir. O APK inclui os avisos de
 terceiros em assets e permite lê-los na tela de conexão. Para atualizar o

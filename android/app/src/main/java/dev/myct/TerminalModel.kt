@@ -1,6 +1,8 @@
 package dev.myct
 
 import android.app.Application
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.edit
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -9,7 +11,6 @@ import androidx.compose.runtime.setValue
 import com.termux.terminal.KeyHandler
 import com.termux.terminal.TerminalSession
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
 import java.nio.CharBuffer
 import java.nio.charset.StandardCharsets
 
@@ -28,7 +29,7 @@ class TerminalModel(application: Application) {
         private set
     var ctrl by mutableStateOf(false)
         private set
-    val callbacks = SessionCallbacks()
+    val callbacks = SessionCallbacks { diagnostics }
     private val prefs = application.getSharedPreferences("ssh-pins", 0)
     var host by mutableStateOf(prefs.getString("last-host", "") ?: "")
     var port by mutableStateOf(prefs.getString("last-port", "22") ?: "22")
@@ -37,7 +38,8 @@ class TerminalModel(application: Application) {
         private set
     var fontSizeSp by mutableIntStateOf(prefs.getInt("font-size-sp", 12).coerceIn(10, 20))
         private set
-    val diagnostics = TerminalDiagnostics()
+    var diagnostics = TerminalDiagnostics()
+        private set
     val files = FilesModel(application)
     val health = HealthModel()
     val vault = VaultModel()
@@ -61,11 +63,8 @@ class TerminalModel(application: Application) {
     private var generation = 0
     private var connection: SshConnection? = null
     private var job: Job? = null
-    private var pending: Channel<Action>? = null
-    private sealed interface Action {
-        data class Write(val bytes: ByteArray, val queuedAt: Long = System.nanoTime()) : Action
-        data class Resize(val cols: Int, val rows: Int, val width: Int, val height: Int) : Action
-    }
+    private var pending: TerminalActionQueue? = null
+    private var transport: TerminalIo? = null
     fun pinForHost(): String? = prefs.getString("pin:${host.trim()}:${port.toIntOrNull()}", null)
     fun forgetPin() {
         prefs.edit { remove("pin:${host.trim()}:${port.toIntOrNull()}") }
@@ -97,10 +96,12 @@ class TerminalModel(application: Application) {
             return
         }
         disconnect("Iniciando nova conexão.")
+        diagnostics = TerminalDiagnostics()
+        val metrics = diagnostics // A retiring connection cannot contaminate the next sample.
         val id = ++generation
         val current = SshConnection()
         connection = current
-        val queue = Channel<Action>(64)
+        val queue = TerminalActionQueue(metrics)
         pending = queue
         val pins = PinnedHostKeys(PinnedHostKeys.hostId(hostname, sshPort), expected)
         val buffer = StandardCharsets.UTF_8.encode(CharBuffer.wrap(password))
@@ -109,12 +110,12 @@ class TerminalModel(application: Application) {
         password.fill('\u0000')
         val screen = TerminalSession(object : TerminalSession.Transport {
             override fun send(data: ByteArray) {
-                if (id == generation && phase == Phase.CONNECTED && queue.trySend(Action.Write(data)).isFailure) {
+                if (id == generation && phase == Phase.CONNECTED && !queue.write(data)) {
                     disconnect("Entrada excedeu a fila; sessão encerrada para evitar travamento.")
                 }
             }
             override fun resize(columns: Int, rows: Int, widthPixels: Int, heightPixels: Int) {
-                if (id == generation && queue.trySend(Action.Resize(columns, rows, widthPixels, heightPixels)).isFailure) {
+                if (id == generation && !queue.resize(columns, rows, widthPixels, heightPixels)) {
                     disconnect("Não foi possível redimensionar; reconecte.")
                 }
             }
@@ -123,6 +124,7 @@ class TerminalModel(application: Application) {
         updatePhase(Phase.CONNECTING)
         message = "Verificando host e autenticando…"
         job = scope.launch {
+            var workers: TerminalIo? = null
             try {
                 withContext(Dispatchers.IO) { current.connect(hostname, sshPort, username, secret, pins, 80, 24) }
                 if (id != generation) return@launch
@@ -139,37 +141,21 @@ class TerminalModel(application: Application) {
                 message = "SSH conectado · host verificado · PTY real"
                 // Apply actual view dimensions even if they were measured before channel.connect().
                 screen.requestPtyResize()
-                coroutineScope {
-                    val writer = launch(Dispatchers.IO) {
-                        try {
-                            for (action in queue) when (action) {
-                                is Action.Write -> { diagnostics.wrote(action.queuedAt); current.output.write(action.bytes); current.output.flush() }
-                                is Action.Resize -> current.resize(action.cols, action.rows, action.width, action.height)
-                            }
-                        } catch (error: Exception) {
-                            // Unblock a concurrent blocking read immediately if writing fails.
-                            current.close()
-                            throw error
-                        }
-                    }
-                    try {
-                        withContext(Dispatchers.IO) {
-                            val bytes = ByteArray(8192)
-                            while (isActive) {
-                                val count = current.input.read(bytes)
-                                if (count < 0) break
-                                if (count > 0) {
-                                    val chunk = bytes.copyOf(count)
-                                    val queuedAt = System.nanoTime()
-                                    withContext(Dispatchers.Main) {
-                                        diagnostics.delivered(queuedAt)
-                                        if (id == generation) screen.append(chunk)
-                                    }
-                                }
-                            }
-                        }
-                    } finally { queue.close(); writer.cancel() }
-                }
+                val completed = CompletableDeferred<Unit>()
+                val handler = Handler(Looper.getMainLooper())
+                val incoming = TerminalOutputQueue(metrics,
+                    post = { task -> check(handler.post(task)) },
+                    append = { bytes, count -> if (id == generation) screen.append(bytes, count) },
+                    finished = { completed.complete(Unit) },
+                    failed = { error -> completed.completeExceptionally(error) })
+                workers = TerminalIo(queue, incoming,
+                    read = { bytes -> current.input.read(bytes) },
+                    write = { bytes, count -> current.output.write(bytes, 0, count); current.output.flush() },
+                    resize = { cols, rows, width, height -> current.resize(cols, rows, width, height) },
+                    failed = { error -> completed.completeExceptionally(error) })
+                transport = workers
+                workers.start()
+                completed.await() // Suspends main; reader never waits for main per read.
                 if (id == generation) { updatePhase(Phase.ENDED); message = "Sessão encerrada pelo servidor. Reconecte quando desejar." }
             } catch (_: CancellationException) {
                 // Explicit disconnect already supplies the UI state; stale attempts cannot overwrite it.
@@ -182,8 +168,10 @@ class TerminalModel(application: Application) {
                 }
             } finally {
                 secret.fill(0)
-                withContext(NonCancellable + Dispatchers.IO) { current.close() }
-                if (id == generation) { screen.finish(); connection = null; pending = null; ctrl = false; files.attach(null); health.attach(null); vault.attach(null); downloads.attach(null); torrents.attach(null); antivirusSignatures.attach(null) }
+                workers?.close(); queue.close()
+                // Close the socket before joining blocking workers, always off main.
+                withContext(NonCancellable + Dispatchers.IO) { current.close(); workers?.awaitStopped() }
+                if (id == generation) { transport = null; screen.finish(); connection = null; pending = null; ctrl = false; files.attach(null); health.attach(null); vault.attach(null); downloads.attach(null); torrents.attach(null); antivirusSignatures.attach(null) }
             }
         }
     }
@@ -195,6 +183,7 @@ class TerminalModel(application: Application) {
         generation++
         val old = connection
         connection = null
+        transport?.close(); transport = null
         pending?.close(); pending = null
         job?.cancel(); job = null
         terminal?.finish()

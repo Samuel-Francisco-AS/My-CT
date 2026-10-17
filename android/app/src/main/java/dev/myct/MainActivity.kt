@@ -205,10 +205,12 @@ private fun TerminalApp(model: TerminalModel) {
             model.terminal?.let { session ->
                 var view by remember(session) { mutableStateOf<TerminalView?>(null) }
                 val fontPx = with(LocalDensity.current) { model.fontSizeSp.sp.toPx().roundToInt() }
+                var appliedCharBasedInput by remember(view) { mutableStateOf(model.enforceCharBasedInput) }
                 LaunchedEffect(view, model.enforceCharBasedInput, settings) {
-                    if (!settings) view?.let { terminalView ->
+                    if (!settings && appliedCharBasedInput != model.enforceCharBasedInput) view?.let { terminalView ->
                         terminalView.requestFocus()
                         (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).restartInput(terminalView)
+                        appliedCharBasedInput = model.enforceCharBasedInput
                     }
                 }
                 val clipboardActions = rememberUpdatedState(object : TerminalSession.UserClipboard {
@@ -252,13 +254,8 @@ private fun TerminalApp(model: TerminalModel) {
                         view = this
                     }
                 }, modifier = Modifier.fillMaxWidth().weight(1f).onSizeChanged {
-                    view?.post {
-                        view?.let { terminalView ->
-                            terminalView.updateSize()
-                            terminalView.onScreenUpdated()
-                            model.diagnostics.viewport = "Área: ${terminalView.width}×${terminalView.height} px · PTY: ${session.emulator.mRows}×${session.emulator.mColumns} · fonte: ${model.fontSizeSp} sp / $fontPx px"
-                        }
-                    }
+                    // TerminalView.onSizeChanged already resizes the local emulator.
+                    model.diagnostics.viewport = "Área: ${it.width}×${it.height} px · PTY: ${session.emulator.mRows}×${session.emulator.mColumns} · fonte: ${model.fontSizeSp} sp / $fontPx px"
                 }, update = { terminalView ->
                     if (terminalView.currentSession !== session) terminalView.attachSession(session)
                     if (terminalView.tag != fontPx) {
@@ -314,6 +311,7 @@ private fun TerminalApp(model: TerminalModel) {
                     Row { Text("Proteger capturas", Modifier.weight(1f)); Switch(checked = model.protectScreenshots,
                         onCheckedChange = { if (it) model.setCaptureProtection(true) else captureWarning = true }) }
                     Text("O clipboard pertence ao Android e pode conter dados sensíveis.", style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { model.diagnostics.startSample(); settings = false }) { Text("Amostrar engasgos · 60 s") }
                     TextButton(onClick = { measurements = model.diagnostics.snapshot(); settings = false }) { Text("Medições locais") }
                     TextButton(onClick = { licenses = true; settings = false }) { Text("Licenças") }
                 }
@@ -343,7 +341,7 @@ private fun TerminalApp(model: TerminalModel) {
             }) { Text("Enviar") } }, dismissButton = { TextButton(onClick = { pendingPaste = null }) { Text("Cancelar") } })
     }
     measurements?.let { text -> AlertDialog(onDismissRequest = { measurements = null }, title = { Text("Diagnóstico sem conteúdo") },
-        text = { Text(text) }, confirmButton = { TextButton(onClick = { measurements = null }) { Text("Fechar") } }) }
+        text = { Text(text, Modifier.verticalScroll(rememberScrollState())) }, confirmButton = { TextButton(onClick = { measurements = null }) { Text("Fechar") } }) }
     if (forgetDialog) AlertDialog(onDismissRequest = { forgetDialog = false }, title = { Text("Refazer pareamento do host?") },
         text = { Text("Chave alterada pode indicar ataque. Remova o pin somente após confirmar a mudança diretamente no Fedora.") },
         confirmButton = { TextButton(onClick = { model.forgetPin(); fingerprint = ""; forgetDialog = false }) { Text("Remover pin") } },

@@ -65,6 +65,13 @@ public interface TerminalViewClient {
 
     void onEmulatorSet();
 
+    // My-CT: bounded, opt-in numerical diagnostics. No text or key codes cross these hooks.
+    default boolean shouldMeasurePerformance() { return false; }
+    default void onInputTiming(int kind, long startedAt, long duration, int left, int right) {}
+    default void onKeyTiming(long startedAt, long duration, long age, boolean delete, boolean repeat) {}
+    default void onScreenUpdateTiming(long startedAt, long duration) {}
+    default void onDrawTiming(long startedAt, long duration, long updateAt) {}
+
 
     void logError(String tag, String message);
 

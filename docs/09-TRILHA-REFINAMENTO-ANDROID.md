@@ -1,18 +1,18 @@
 # Trilha futura — refinamento do Android (não bloquear Core)
 
-**Abertura:** 15/10/2026. **Status:** backlog deliberadamente **adiado** por decisão do proprietário, após aceitação do fluxo básico Android/SSH/SFTP.  
+**Abertura:** 15/10/2026. **Atualização (16/10):** R-01/lag **suspenso como dívida** após teste físico negativo da 0.5.9; R-02/rolagem **melhorou e foi confirmado no Moto**; próxima trilha: **refinamento visual e ergonomia (UX-R03 + R-09)**.  
 [Issue de acompanhamento #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9) · [Fechamento do ciclo](08-FECHAMENTO-CICLO-ANDROID.md)
 
 ## Princípio
 
-**Não executar esta trilha automaticamente.** Quando o proprietário pedir refinamento, escolher uma queixa física e entregar correção mínima comprovada. Evitar meses de arquitetura, benchmark interminável, reescrever o emulador, criar frameworks de jobs ou redesenhar a aplicação sem necessidade. O próximo trabalho previsto após o fechamento é Core C++20/PostgreSQL, e esta trilha fica disponível para depois.
+**O proprietário autorizou continuar a trilha de refinamento, exceto o lag R-01.** Escolher uma frente visual/ergonômica por vez e entregar mudança útil no Moto G06. Não reiniciar diagnósticos/benchmarks de digitação sem autorização expressa. Evitar reescrever emulador, expandir infraestrutura ou redesenhar por redesenhar.
 
 ## Débitos abertos
 
 | ID | Prioridade orientativa | Sintoma/evidência | Meta proporcional e teste futuro |
 | --- | --- | --- | --- |
-| UX-R01 | Alta | **Lag** perceptível ao digitar/apagar no SSH do Moto G06, mesmo após MYCT-1R. `Entrada por caracteres=false` reduziu a sensação de atraso, mas não eliminou. Diagnóstico MYCT-1P concluiu causa não identificada. | Em execução futura autorizada, comparar um cenário real e instrumentar **somente o ponto suspeito**; otimização mínima, sem atribuir causa a rede/JSch/renderer sem prova. Manter switch true/false reversível. |
-| UX-R02 | Alta | **Scroll SFTP perdido**: ao abrir subpasta e retornar ao pai, lista salta para o topo; usuário precisa rolar tudo de novo. | Salvar/restaurar posição por diretório (índice + offset; preferir item identificável quando lista mudar). Verificar com pasta longa, navegação aninhada, refresh, rotação e nova conexão. Sem aumentar consumo de RAM sem necessidade. |
+| UX-R01 | **Dívida suspensa** | **Lag ainda perceptível na 0.5.9/code 16 (MYCT-R1C)**, especialmente Backspace; três candidatas de otimização/instrumentação não proporcionaram melhora notada na digitação. Abre/fecha do teclado melhorou. Termux via SSH segue mais fluido. | **Não retomar por iniciativa do agente, não criar R1D nem bloquear outras fases.** Preservar implementação estável, histórico e preferência IME. Retomar apenas se o proprietário solicitar expressamente. |
+| UX-R02 | **Melhoria confirmada** | Restauração de scroll por pasta implementada na MYCT-R1; o proprietário confirmou que voltou à posição sem o salto visual anterior. Filtro de dotfiles também implementado; seu aceite físico específico não foi relatado. | Preservar a melhoria; não reabrir a navegação por padrão. Validar o filtro apenas oportunamente durante o refinamento visual. |
 | UX-R03 | Média | **UI truncada, rígida, desconfortável**. Layout visual/organização de ações necessitam ergonomia para Moto G06. Não é só tamanho da fonte. | Simplificar cabeçalho/ações, espaçamentos/contraste, hierarquia, feedbacks e rolagem; validar no aparelho. Respeitar grade ANSI do terminal: não aplicar reflow arbitrário em `top/vim/nano`. Navegador de arquivos deve usar UI estruturada própria. |
 | VAL-R04 | Alta para validação futura | Serviço SFTP `dataSync` MYCT-2R implementado, mas **não ensaiado em background no Moto G06**. | Transferência não sensível média/grande com notificação e tela bloqueada, depois retorno/resultado; cancelar pela notificação; documentar Doze/limite Android 15+ (dataSync 6h/24h) e não prometer execução após force-stop. |
 | VAL-R05 | Média | **Conflitos/cancelamento/falhas** SFTP de ambas as direções não exaustivamente testados fisicamente; PDF e imagens passaram no fluxo feliz. | Com arquivos de teste, confirmar overwrite recusado, cancelamento sem falso sucesso e sem derrubar SSH, parcial SAF explícito, rede perdida; evitar lotar SSD. |
@@ -21,9 +21,16 @@
 
 | VAL-R08 | Validação futura | **MYCT-5B integrada com aceite parcial em 16/10/2026:** histórico/download real via Android, foco/IME e fim das piscadas dos botões aprovados no Moto G06. Não foram ensaiados fisicamente Ver em Arquivos abrindo diretório, cancelamento, reconexão de histórico na aba, clique durante polling ou progresso lento/maior. | Testar um caso por vez no Moto G06 quando o proprietário pedir; verificar pasta SFTP correta, `.part` após cancelamento, estado após reconexão sem replay e resposta dos cliques durante consulta. Não refazer MYCT-5A. Ver [fechamento 5B](MYCT-5B-ANDROID-DOWNLOADS-REPORT.md) e [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9). |
 
+## Decisão após o teste físico da 0.5.9 — 16/10/2026
+
+- **Lag R-01 suspenso:** a tentativa R1C (workers dedicados, recepção limitada, resize coalescido e window-change sem ACK) melhorou somente a abertura/fechamento do teclado, **não a digitação percebida** no Moto. Não declarar a R1 concluída quanto ao lag; não iniciar mais diagnósticos, correções ou versão R1D por iniciativa própria. Evidências e código permanecem no [relatório MYCT-R1](MYCT-R1-TERMINAL-FILES.md) e no [PR #22](https://github.com/Samuel-Francisco-AS/My-CT/pull/22).
+- **R-02 confirmado:** navegação SFTP conserva a posição e não volta visualmente ao topo antes de restaurar. Dotfiles toggle implementado, sem relato específico de teste físico.
+- **Nova ordem de refinamento, autorizada:** começar com **UX-R03 (layout, navegação, conforto/legibilidade das abas)**, incorporando **R-09 (diálogo de verificação/antivírus muito longo)** quando fizer sentido na mesma intervenção visual. Depois, de forma separada, avaliar R-07 (teclas auxiliares), VAL-R04 (SFTP em background), VAL-R05 e VAL-R08 (testes funcionais pendentes), conforme preferência do proprietário.
+- Não bloquear a integração das melhorias aceitas pela pendência do lag. Ainda é necessário decidir fechamento do PR #22; **não fazer merge automático** nem declarar todos os recursos aceitos.
+
 ## Notas para quem retomar
 
-- No código atual, `FilesScreen.kt` usa listagem Compose/LazyColumn. A mudança de pasta troca `listing`; investigar restauração de scroll e ciclo da `LazyListState` em vez de recriar listas ou forçar scroll ao topo sem motivo.
+- Na branch MYCT-R1, `FilesScreen.kt` já restaura `LazyListState` por diretório com âncora e filtro visual de dotfiles. O proprietário confirmou a melhoria de scroll sem salto. Evitar regressão no trabalho visual.
 - `TerminalCallbacks.kt` consulta `TerminalModel.enforceCharBasedInput`; padrão true, preferência `char-based-input`; experiência do proprietário foi melhor com false. Preservar controle, inclusive restartInput seguro.
 - A saída de `ls` no terminal forma coluna vertical quando nomes longos excedem a largura/grades disponíveis. Isso é semântica da TTY, não razão para converter toda saída em cartões responsivos. Visualizações estruturadas pertencem à aba Arquivos, não ao stream PTY.
 - Serviço de SSH `SshForegroundService.kt` (`specialUse`) e de arquivos `SftpTransferService.kt` (`dataSync`) são separados; validar que ajustes de ciclo de vida não derrubem SSH ao falhar SFTP.
