@@ -1,8 +1,8 @@
 # MYCT-R1 — terminal e navegação SFTP (candidata, não aceita)
 
-**Última retomada — MYCT-R1B:** 0.5.7 testada pelo proprietário sem melhora
-perceptível de digitação; SFTP/rolagem melhoraram. Candidata diagnóstica
-0.5.8/code 15 e roteiro ao final. Causa e aceite do terminal continuam abertos.
+**Última retomada — MYCT-R1C:** candidata de implementação 0.5.9/code 16:
+workers próprios, recepção assíncrona limitada e resize consolidado/sem ACK.
+Retorno físico da 0.5.8 e alterações ao final. Aceite de responsividade pendente.
 
 **Origem:** refinamento da [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9), itens R-01 e R-02. Iniciado em 16/10/2026. Não envolve novo serviço no Fedora, modificações SSHD, emulador ou schema.
 
@@ -232,3 +232,89 @@ git diff --check
   adaptador/FIFO/parser e agregação; não executam IME, Canvas ou SSH autenticado
   no aparelho. Nenhuma melhoria de responsividade foi demonstrada nesta execução.
 MYCT-R1 permanece aberta; PR #22 draft e main sem merge. Sem Moto no ADB nesta execução.
+
+## MYCT-R1C — implementação 0.5.9/code 16
+
+Partida limpa/sincronizada em `ff89f9d`. O proprietário confirmou na 0.5.8
+texto/escrita/append rápidos na maior parte do tempo, mas muitos resizes e
+resizes de centenas de ms durante mudanças de interface. Critérios antes da
+implementação: último resize sem backlog, texto ordenado/prioritário, recepção
+limitada assíncrona, emulador somente main, encerramento sem replay e build/JVM/
+lint/upstream aprovados. Responsividade final depende do Moto.
+
+- **Bloqueio concreto corrigido:** JSch 2.28.8 herda `connectTimeout>0` em
+  `Request.request`, fazendo `window-change` pedir resposta e passar pelo polling
+  de reply. O adaptador estreito `PtyWindowChange` usa o próprio `setPtySize`,
+  suspende esse timeout só durante o pedido serializado e restaura-o em finally.
+  O pacote passa a usar `want_reply=false`, conforme
+  [RFC 4254 §6.7](https://www.rfc-editor.org/rfc/rfc4254#section-6.7).
+  Teste com JSch real compara flag anterior=true/nova=false, dimensões e timeout
+  preservado, sem socket/autenticação. O helper depende da versão JSch fixada;
+  seus testes precisam acompanhar qualquer atualização dessa dependência.
+- **Saída para SSH:** worker próprio, sem pool IO compartilhado, texto FIFO com
+  limite de 128 KiB/4096 entradas. Drena até 4 KiB já disponíveis e faz write+
+  flush imediatamente; não espera juntar mais teclas. Excesso é recusado por
+  inteiro e encerra a sessão com aviso, sem truncamento silencioso ou bloquear UI.
+- **Resize fora da FIFO de texto:** um slot substituível, deduplicação por
+  colunas/linhas/pixels e texto sempre prioritário. Estabilização de 120 ms só
+  para resize; prazo de 400 ms por sequência, atendido quando o escritor fica
+  livre. Nenhum debounce em texto/DEL/Enter/controles. Um resize já em execução
+  continua serializado com escritas, sem espera de ACK; socket/flow control
+  ainda podem bloquear uma operação em curso.
+- **Recepção:** worker leitor próprio copia para ring de 64 KiB e volta a ler
+  sem aguardar cada append. Só fica suspenso quando o ring enche. Há uma única
+  entrega main pendente; cada turno consome até 8 KiB, notifica a view e cede a
+  main para outros eventos. Buffers têm proprietário definido, UTF-8/ANSI podem
+  atravessar blocos e todo emulador/seleção continua na main. EOF/erro de leitura drenam a cauda
+  antes de encerrar/reportar falha; disconnect aborta pendências e callbacks antigos viram no-op.
+- **Layout/IME:** removido o post redundante Compose→updateSize/onScreenUpdated;
+  onSizeChanged da view continua dono do resize local. Fontes atualizam também
+  dimensões de célula com a mesma grade. IME, composição, DEL, Unicode, Ctrl,
+  clipboard e renderer preservados; nenhum eco local. As métricas R1B existentes
+  só tiveram rótulos adaptados (blocos enviados e notificação→main), sem nova coleta.
+- **Ciclo de vida:** dois workers por conexão; filas fechadas e socket encerrado
+  antes de joins limitados fora da main. Erros retornam ao job/sessão existente;
+  geração e filas privadas impedem replay em nova conexão. FGS e demais abas
+  mantêm o mesmo proprietário de processo. SFTP/Downloads/Cofre/antivírus e
+  configurações Fedora não foram alterados.
+
+Referência: [TerminalSession Termux](https://github.com/termux/termux-app/blob/5b657c6adf4304e5198951ce815fe0205dcac29c/terminal-emulator/src/main/java/com/termux/terminal/TerminalSession.java)
+usa workers, ByteQueue limitada e Handler com append na main; aplicamos essas
+propriedades ao JSch, sem copiar subprocesso/JNI. Inspecionados também view,
+emulador, ByteQueue e [Request JSch](https://github.com/mwiede/jsch/blob/jsch-2.28.8/src/main/java/com/jcraft/jsch/Request.java).
+
+Validação final (Java 21/JBR, SDK 36 e Gradle 8.14.3 existentes):
+
+```sh
+JAVA_HOME=/opt/android-studio/jbr ANDROID_HOME=/home/sam/Android/Sdk \
+  android/gradlew -p android :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --offline --console=plain
+python3 android/terminal/upstream/verify.py
+git apply --reverse --check android/terminal/upstream/myct-r1c-layout.patch
+git diff --check
+```
+
+**Build SUCCESS; 118 testes, 117 aprovados e 1 ignorado** (handshake local
+opt-in); lint **0 erros**, dois avisos de versões e um hint preexistente.
+Upstream: 21 arquivos, três arquivos com patches documentados. Casos dirigidos:
+texto antes de resize pendente, resize substituído/deduplicado, controles durante
+estabilização, limite/rajadas/paste, ring cheio/wrap e buffers reutilizados,
+UTF-8/ANSI, propriedade main, EOF, erro de leitura com cauda, falha de escrita,
+close/reconexão e pacote JSch real sem ACK. Não são provas de SSH autenticado no Moto.
+Revisão de encerramento detectou risco de descartar cauda em erro de leitura;
+o teste mínimo confirmou entrega da cauda antes do callback de falha.
+
+Build final 1m41s, CPU acumulada ~473s, RSS máximo ~1945 MiB, zero swaps;
+aviso de metaspace ao finalizar, sem falha nem mudança dos limites. Duas threads
+por conexão e buffers limitados; consumo Android não medido nesta execução.
+Logs locais em `artifacts/myct-r1c-validation/`, sem conteúdo de terminal.
+
+[APK e checksum da candidata](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-r1c-v0.5.9-rc1):
+`artifacts/myct-r1c-0.5.9-debug.apk`, **0.5.9-r1c-terminal/code 16**, `dev.myct`.
+Apksigner confirmou certificado idêntico ao APK 0.5.8 local. SHA-256:
+`003a89ce2849c264fc1c05e3cc88a414501f91c2e4f11881876050259c1d8342`.
+
+ No Moto: atualizar
+sem apagar dados; comparar digitação e Backspace mantido, espaços/Enter,
+abrir/fechar IME, rotação/fonte, nano e tmux com Termux SSH no mesmo Fedora/rede.
+Conferir também seleção/clipboard e retorno SFTP. Começar com amostra desligada.
+Nenhum aceite físico desta versão; PR #22 permanece draft, sem merge.

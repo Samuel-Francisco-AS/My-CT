@@ -143,7 +143,7 @@ class SshConnection {
     }
 
     fun resize(cols: Int, rows: Int, width: Int, height: Int) {
-        shell?.takeIf { it.isConnected }?.setPtySize(cols, rows, width, height)
+        shell?.takeIf { it.isConnected }?.let { com.jcraft.jsch.PtyWindowChange.resize(it, cols, rows, width, height) }
     }
     fun openFiles(control: TransferControl): RemoteStore {
         control.check()

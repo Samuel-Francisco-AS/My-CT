@@ -6,8 +6,8 @@ import java.util.Locale
 class TerminalDiagnostics(private val clock: () -> Long = System::nanoTime) {
     enum class Stage(val label: String) {
         QUEUE("Fila write"), IDLE_QUEUE("Fila write sem ação anterior"),
-        FLUSH("SSH write+flush"), RESIZE_QUEUE("Fila resize"), RESIZE("SSH resize"),
-        MAIN("Entrega à main"), READER("Retorno main → leitor IO"), TEXT("onTextChanged + UI"), APPEND("Append + callbacks"),
+        FLUSH("SSH write+flush"), RESIZE_QUEUE("Resize: estabilização/espera"), RESIZE("SSH resize"),
+        MAIN("Entrega à main"), READER("Admissão saída/backpressure"), TEXT("onTextChanged + UI"), APPEND("Append + callbacks"),
         COMMIT("IME commit"), COMPOSE("IME finish"), DELETE("IME deleteSurroundingText"),
         KEY("onKeyDown"), DELETE_KEY("onKeyDown DEL"), KEY_AGE("KeyEvent idade na entrega"),
         UPDATE("onScreenUpdated"), DRAW("onDraw CPU"), DRAW_WAIT("Atualização → início draw")
@@ -112,7 +112,7 @@ class TerminalDiagnostics(private val clock: () -> Long = System::nanoTime) {
                 rows.joinToString("\n") + "\n" + counters +
                 "Segundos com pico ≥50 ms (tempo de conclusão, coincidência não prova causa):\n" +
                 slowSeconds.ifEmpty { listOf("Nenhum") }.joinToString("\n") +
-                "\nSem RTT/eco, GPU/apresentação ou tempo toque→IME. DEL pedidos e entregues podem cruzar os limites da amostra. Nenhum conteúdo registrado."
+                "\nWrites medem blocos de bytes já disponíveis, não teclas; entrega à main mede notificação→callback.\nSem RTT/eco, GPU/apresentação ou tempo toque→IME. DEL pedidos e entregues podem cruzar os limites da amostra. Nenhum conteúdo registrado."
         }
     }
     companion object {

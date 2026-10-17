@@ -1,6 +1,8 @@
 package dev.myct
 
 import android.app.Application
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.edit
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -62,6 +64,7 @@ class TerminalModel(application: Application) {
     private var connection: SshConnection? = null
     private var job: Job? = null
     private var pending: TerminalActionQueue? = null
+    private var transport: TerminalIo? = null
     fun pinForHost(): String? = prefs.getString("pin:${host.trim()}:${port.toIntOrNull()}", null)
     fun forgetPin() {
         prefs.edit { remove("pin:${host.trim()}:${port.toIntOrNull()}") }
@@ -121,6 +124,7 @@ class TerminalModel(application: Application) {
         updatePhase(Phase.CONNECTING)
         message = "Verificando host e autenticando…"
         job = scope.launch {
+            var workers: TerminalIo? = null
             try {
                 withContext(Dispatchers.IO) { current.connect(hostname, sshPort, username, secret, pins, 80, 24) }
                 if (id != generation) return@launch
@@ -137,43 +141,21 @@ class TerminalModel(application: Application) {
                 message = "SSH conectado · host verificado · PTY real"
                 // Apply actual view dimensions even if they were measured before channel.connect().
                 screen.requestPtyResize()
-                coroutineScope {
-                    val writer = launch(Dispatchers.IO) {
-                        try {
-                            queue.run(write = { bytes ->
-                                current.output.write(bytes)
-                                current.output.flush()
-                            }, resize = { cols, rows, width, height -> current.resize(cols, rows, width, height) })
-                        } catch (error: Exception) {
-                            // Unblock a concurrent blocking read immediately if writing fails.
-                            current.close()
-                            throw error
-                        }
-                    }
-                    try {
-                        withContext(Dispatchers.IO) {
-                            val bytes = ByteArray(8192)
-                            while (isActive) {
-                                val count = current.input.read(bytes)
-                                if (count < 0) break
-                                if (count > 0) {
-                                    val queuedAt = System.nanoTime()
-                                    val mainFinishedAt = withContext(Dispatchers.Main) {
-                                        metrics.record(TerminalDiagnostics.Stage.MAIN, queuedAt, System.nanoTime() - queuedAt)
-                                        if (id == generation) {
-                                            val started = System.nanoTime()
-                                            // withContext waits for append before this buffer is reused.
-                                            screen.append(bytes, count)
-                                            metrics.record(TerminalDiagnostics.Stage.APPEND, started, System.nanoTime() - started)
-                                        }
-                                        System.nanoTime()
-                                    }
-                                    metrics.record(TerminalDiagnostics.Stage.READER, mainFinishedAt, System.nanoTime() - mainFinishedAt)
-                                }
-                            }
-                        }
-                    } finally { queue.close(); writer.cancel() }
-                }
+                val completed = CompletableDeferred<Unit>()
+                val handler = Handler(Looper.getMainLooper())
+                val incoming = TerminalOutputQueue(metrics,
+                    post = { task -> check(handler.post(task)) },
+                    append = { bytes, count -> if (id == generation) screen.append(bytes, count) },
+                    finished = { completed.complete(Unit) },
+                    failed = { error -> completed.completeExceptionally(error) })
+                workers = TerminalIo(queue, incoming,
+                    read = { bytes -> current.input.read(bytes) },
+                    write = { bytes, count -> current.output.write(bytes, 0, count); current.output.flush() },
+                    resize = { cols, rows, width, height -> current.resize(cols, rows, width, height) },
+                    failed = { error -> completed.completeExceptionally(error) })
+                transport = workers
+                workers.start()
+                completed.await() // Suspends main; reader never waits for main per read.
                 if (id == generation) { updatePhase(Phase.ENDED); message = "Sessão encerrada pelo servidor. Reconecte quando desejar." }
             } catch (_: CancellationException) {
                 // Explicit disconnect already supplies the UI state; stale attempts cannot overwrite it.
@@ -186,8 +168,10 @@ class TerminalModel(application: Application) {
                 }
             } finally {
                 secret.fill(0)
-                withContext(NonCancellable + Dispatchers.IO) { current.close() }
-                if (id == generation) { screen.finish(); connection = null; pending = null; ctrl = false; files.attach(null); health.attach(null); vault.attach(null); downloads.attach(null); torrents.attach(null); antivirusSignatures.attach(null) }
+                workers?.close(); queue.close()
+                // Close the socket before joining blocking workers, always off main.
+                withContext(NonCancellable + Dispatchers.IO) { current.close(); workers?.awaitStopped() }
+                if (id == generation) { transport = null; screen.finish(); connection = null; pending = null; ctrl = false; files.attach(null); health.attach(null); vault.attach(null); downloads.attach(null); torrents.attach(null); antivirusSignatures.attach(null) }
             }
         }
     }
@@ -199,6 +183,7 @@ class TerminalModel(application: Application) {
         generation++
         val old = connection
         connection = null
+        transport?.close(); transport = null
         pending?.close(); pending = null
         job?.cancel(); job = null
         terminal?.finish()

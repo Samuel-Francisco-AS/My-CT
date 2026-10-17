@@ -285,3 +285,17 @@ consultas; UPDATE só por botão. Pedido aceito não é sucesso: consultar resul
 real, polling 2 s apenas em execução/seção visível, sem replay ao reabrir.
 Motor/timer Fedora intactos. APK 0.5.6/code 13 candidato, aceite Moto pendente.
 [Implementação, testes e limites](MYCT-5D-B2-REPORT.md).
+
+## 2026-10-16 — MYCT-R1C: workers SSH e resize consolidado
+
+Autorizada refatoração localizada após relato físico de resize excessivo/lento.
+Adotar workers dedicados e recepção limitada com entrega assíncrona à main,
+inspirados na sessão Termux v0.118.3, sem subprocessos/JNI. Texto ordenado tem
+prioridade; resize ocupa um único slot substituível, com estabilização só de
+layout. Escrita/resize continuam serializados no mesmo worker. Aceite automático:
+ordem de bytes, limites/backpressure, último resize, encerramento e reconexão;
+aceite de responsividade ainda exige Moto. Ver MYCT-R1-TERMINAL-FILES.md.
+O adaptador para JSch 2.28.8 evita que window-change herde espera de reply do
+connect(timeout); usa setPtySize com want_reply=false e restaura timeout em
+finally, apenas no canal interativo e no mesmo escritor. Teste de pacote real
+sem rede protege esse acoplamento à versão fixada. Não muda autenticação.

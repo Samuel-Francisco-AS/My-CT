@@ -381,3 +381,9 @@ sintoma, aguarde 60 s e abra **Medições locais**. Histogramas, frequências,
 profundidade e bins numéricos ajudam a distinguir fila/IME/draw; não medem RTT
 nem apresentação. Preserva política SSH, controles e SFTP. Detalhes e APK no
 [relatório MYCT-R1/R1B](../docs/MYCT-R1-TERMINAL-FILES.md).
+
+MYCT-R1C: **0.5.9-r1c-terminal/code 16**, candidata de implementação sobre
+0.5.8: workers dedicados, recepção assíncrona limitada e resize consolidado
+sem espera de resposta. Mesmo pacote/assinatura; atualizar sem desinstalar ou
+apagar dados. Testar digitação/Backspace, abrir/fechar teclado, nano/tmux e
+comparação Termux SSH. [APK e validação](../docs/MYCT-R1-TERMINAL-FILES.md).

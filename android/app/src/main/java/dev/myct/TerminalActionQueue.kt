@@ -1,52 +1,118 @@
 package dev.myct
 
-import kotlinx.coroutines.channels.Channel
+import java.util.ArrayDeque
 
-/** Existing single-writer FIFO; bookkeeping never holds a lock across SSH/resize work. */
-internal class TerminalActionQueue(private val diagnostics: TerminalDiagnostics) {
-    private sealed class Action(val queuedAt: Long, val idle: Boolean, val depth: Int) {
-        class Write(val bytes: ByteArray, at: Long, idle: Boolean, depth: Int) : Action(at, idle, depth)
-        class Resize(val cols: Int, val rows: Int, val width: Int, val height: Int,
-                     at: Long, idle: Boolean, depth: Int) : Action(at, idle, depth)
-    }
-    private val channel = Channel<Action>(64)
-    private val lock = Any()
-    private var pending = 0
+/** One dedicated owner writes SSH bytes and applies only the latest pending PTY size. */
+internal class TerminalActionQueue(
+    private val diagnostics: TerminalDiagnostics,
+    private val quietNanos: Long = 120_000_000,
+    private val maxResizeNanos: Long = 400_000_000,
+    private val maxBytes: Int = 128 * 1024,
+    private val maxWrites: Int = 4096
+) {
+    private data class Write(val bytes: ByteArray, val at: Long, val idle: Boolean, var offset: Int = 0)
+    private data class Size(val cols: Int, val rows: Int, val width: Int, val height: Int)
+    private val lock = Object()
+    private val writes = ArrayDeque<Write>()
+    private var bytesPending = 0
+    private var closed = false
     private var busy = false
-    private inline fun enqueue(create: (Long, Boolean, Int) -> Action): Boolean {
-        val action = synchronized(lock) {
-            val next = create(System.nanoTime(), !busy && pending == 0, pending + 1)
-            // Dequeue bookkeeping uses the same lock, even if trySend wakes the writer.
-            if (channel.trySend(next).isFailure) return false
-            pending++
-            next
+    private var pendingSize: Size? = null
+    private var inFlightSize: Size? = null
+    private var appliedSize: Size? = Size(80, 24, 0, 0) // Initial PTY in TerminalModel.connect.
+    private var resizeFirstAt = 0L
+    private var resizeLastAt = 0L
+
+    /** Takes ownership of bytes. Nonblocking main admission; failure closes rather than loses input. */
+    fun write(bytes: ByteArray): Boolean {
+        val at = System.nanoTime()
+        val depth: Int
+        synchronized(lock) {
+            if (closed) return false
+            if (bytes.isEmpty()) return true
+            if (bytes.size > maxBytes - bytesPending || writes.size >= maxWrites) return false
+            writes.addLast(Write(bytes, at, !busy && writes.isEmpty()))
+            bytesPending += bytes.size
+            depth = writes.size
+            lock.notifyAll() // Wakes even when writer is waiting for a resize deadline.
         }
-        // Observe backlog even before a stalled writer can dequeue it; no queue lock here.
-        diagnostics.admitted(action.queuedAt, action.depth)
+        diagnostics.admitted(at, depth)
         return true
     }
-    fun write(bytes: ByteArray) = enqueue { at, idle, depth -> Action.Write(bytes, at, idle, depth) }
-    fun resize(cols: Int, rows: Int, width: Int, height: Int) = enqueue { at, idle, depth ->
-        Action.Resize(cols, rows, width, height, at, idle, depth)
+    fun resize(cols: Int, rows: Int, width: Int, height: Int): Boolean = synchronized(lock) {
+        if (closed) return false
+        val size = Size(cols, rows, width, height)
+        if (size == pendingSize) return true // Repeats never restart the stabilization deadline.
+        if (size == (inFlightSize ?: appliedSize)) {
+            pendingSize = null
+        } else {
+            val now = System.nanoTime()
+            if (pendingSize == null) resizeFirstAt = now
+            resizeLastAt = now
+            pendingSize = size // Replace obsolete dimensions, never enqueue another action.
+        }
+        lock.notifyAll()
+        true
     }
-    fun close() { channel.close() }
-    suspend fun run(write: (ByteArray) -> Unit, resize: (Int, Int, Int, Int) -> Unit) {
-        for (action in channel) {
-            synchronized(lock) { pending--; busy = true }
-            val started = System.nanoTime()
-            val stage = if (action is Action.Write) TerminalDiagnostics.Stage.QUEUE else TerminalDiagnostics.Stage.RESIZE_QUEUE
-            diagnostics.record(stage, action.queuedAt, started - action.queuedAt)
-            if (action is Action.Write && action.idle)
-                diagnostics.record(TerminalDiagnostics.Stage.IDLE_QUEUE, action.queuedAt, started - action.queuedAt)
-            try {
-                when (action) {
-                    is Action.Write -> write(action.bytes)
-                    is Action.Resize -> resize(action.cols, action.rows, action.width, action.height)
+    fun close() = synchronized(lock) {
+        closed = true
+        writes.clear(); bytesPending = 0; pendingSize = null
+        lock.notifyAll()
+    }
+
+    /** Blocking loop belongs only to the dedicated writer, never main or a shared IO pool. */
+    fun run(write: (ByteArray, Int) -> Unit, resize: (Int, Int, Int, Int) -> Unit) {
+        val buffer = ByteArray(4096)
+        while (true) {
+            var count = 0
+            var queuedAt = 0L
+            var idle = false
+            var size: Size? = null
+            synchronized(lock) {
+                while (!closed) {
+                    if (writes.isNotEmpty()) {
+                        queuedAt = writes.first.at
+                        idle = writes.first.idle
+                        // Drain only bytes already available; no typing timer or wait for more.
+                        while (writes.isNotEmpty() && count < buffer.size) {
+                            val next = writes.first
+                            val length = minOf(buffer.size - count, next.bytes.size - next.offset)
+                            next.bytes.copyInto(buffer, count, next.offset, next.offset + length)
+                            next.offset += length; count += length; bytesPending -= length
+                            if (next.offset == next.bytes.size) writes.removeFirst()
+                        }
+                        break
+                    }
+                    val target = pendingSize
+                    if (target != null) {
+                        val deadline = minOf(resizeLastAt + quietNanos, resizeFirstAt + maxResizeNanos)
+                        val remaining = deadline - System.nanoTime()
+                        if (remaining <= 0) {
+                            size = target; queuedAt = resizeFirstAt
+                            inFlightSize = target; pendingSize = null
+                            break
+                        }
+                        lock.wait(remaining / 1_000_000, (remaining % 1_000_000).toInt())
+                    } else lock.wait()
                 }
+                if (closed) return
+                busy = true
+            }
+            val started = System.nanoTime()
+            diagnostics.record(if (size == null) TerminalDiagnostics.Stage.QUEUE else TerminalDiagnostics.Stage.RESIZE_QUEUE,
+                queuedAt, started - queuedAt)
+            if (idle) diagnostics.record(TerminalDiagnostics.Stage.IDLE_QUEUE, queuedAt, started - queuedAt)
+            try {
+                val target = size
+                if (target == null) write(buffer, count)
+                else resize(target.cols, target.rows, target.width, target.height)
             } finally {
-                diagnostics.record(if (action is Action.Write) TerminalDiagnostics.Stage.FLUSH else TerminalDiagnostics.Stage.RESIZE,
+                diagnostics.record(if (size == null) TerminalDiagnostics.Stage.FLUSH else TerminalDiagnostics.Stage.RESIZE,
                     started, System.nanoTime() - started)
-                synchronized(lock) { busy = false }
+                synchronized(lock) {
+                    busy = false
+                    if (size != null) { appliedSize = size; inFlightSize = null }
+                }
             }
         }
     }

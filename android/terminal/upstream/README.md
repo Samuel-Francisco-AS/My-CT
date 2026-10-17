@@ -26,6 +26,10 @@ São inertes por padrão, ativados por amostra de 60 s no app; preservam os
 corpos originais de processamento. Verificador agora registra três arquivos
 upstream com patches explícitos.
 
+MYCT-R1C acrescenta `myct-r1c-layout.patch`: a view delega dimensões de célula
+à sessão mesmo sem mudança de grade; o adaptador deduplica. Workers e filas
+SSH ficam no app, sem importar subprocessos/JNI. Emulador/renderer preservados.
+
 Preservar as licenças e avisos ao redistribuir. O APK inclui os avisos de
 terceiros em assets e permite lê-los na tela de conexão. Para atualizar o
 terminal, comparar segurança/API/licenças, fixar novo commit, regenerar o

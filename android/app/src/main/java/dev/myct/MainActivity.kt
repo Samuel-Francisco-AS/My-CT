@@ -254,13 +254,8 @@ private fun TerminalApp(model: TerminalModel) {
                         view = this
                     }
                 }, modifier = Modifier.fillMaxWidth().weight(1f).onSizeChanged {
-                    view?.post {
-                        view?.let { terminalView ->
-                            terminalView.updateSize()
-                            terminalView.onScreenUpdated()
-                            model.diagnostics.viewport = "Área: ${terminalView.width}×${terminalView.height} px · PTY: ${session.emulator.mRows}×${session.emulator.mColumns} · fonte: ${model.fontSizeSp} sp / $fontPx px"
-                        }
-                    }
+                    // TerminalView.onSizeChanged already resizes the local emulator.
+                    model.diagnostics.viewport = "Área: ${it.width}×${it.height} px · PTY: ${session.emulator.mRows}×${session.emulator.mColumns} · fonte: ${model.fontSizeSp} sp / $fontPx px"
                 }, update = { terminalView ->
                     if (terminalView.currentSession !== session) terminalView.attachSession(session)
                     if (terminalView.tag != fontPx) {

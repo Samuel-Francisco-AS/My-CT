@@ -1024,8 +1024,10 @@ public final class TerminalView extends View {
         int newColumns = Math.max(4, (int) (viewWidth / mRenderer.mFontWidth));
         int newRows = Math.max(4, (viewHeight - mRenderer.mFontLineSpacingAndAscent) / mRenderer.mFontLineSpacing);
 
-        if (mEmulator == null || (newColumns != mEmulator.mColumns || newRows != mEmulator.mRows)) {
-            mTermSession.updateSize(newColumns, newRows, (int) mRenderer.getFontWidth(), mRenderer.getFontLineSpacing());
+        boolean gridChanged = mEmulator == null || newColumns != mEmulator.mColumns || newRows != mEmulator.mRows;
+        // My-CT session also deduplicates cell dimensions (font may change without a grid change).
+        mTermSession.updateSize(newColumns, newRows, (int) mRenderer.getFontWidth(), mRenderer.getFontLineSpacing());
+        if (gridChanged) {
             mEmulator = mTermSession.getEmulator();
             mClient.onEmulatorSet();
 

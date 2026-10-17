@@ -1,10 +1,10 @@
 {
-  "reason": "MYCT-1R: explicit user clipboard separated from OSC; mouse paste confirmation; MYCT-R1: synchronous IME commit scope (no timer), immediate controls; MYCT-R1B: opt-in numerical timing hooks (60 s)",
+  "reason": "MYCT-1R: explicit user clipboard separated from OSC; mouse paste confirmation; MYCT-R1: synchronous IME commit scope (no timer), immediate controls; MYCT-R1B: opt-in numerical timing hooks (60 s); MYCT-R1C: preserve cell-size updates even when grid is unchanged",
   "files": [
     {
       "local": "src/main/java/com/termux/view/TerminalView.java",
       "upstreamSha256": "8395c02329a36bdf9608e941349da50002d3a1dd6245cc289393a6a65e1a761a",
-      "patchedSha256": "ae14eaf3e6d7e7b706f09305af3a5861cacb0bf3925c46489dbd0b69b9a3354a"
+      "patchedSha256": "310edf28b87b5020e9f8683bfd697d50f1549d473802296c09a2544021ddf093"
     },
     {
       "local": "src/main/java/com/termux/view/textselection/TextSelectionCursorController.java",
