@@ -126,3 +126,27 @@ Substituição atômica somente de `~/.local/bin/myct-torrent`, permissão **070
 6. Conferir baixado acumulado, enviado acumulado e ratio reais, separados das taxas instantâneas.
 
 Conferir também foco/IME e seleção de texto no Terminal, ação de abrir/fechar via acessibilidade e navegação Voltar fora do trecho reservado. ADB sem dispositivo; **aceite físico da Fix pendente do proprietário**. Visual R2B permanece aprovado; nenhum novo diagnóstico de lag SSH ou reforma visual. Continuar no [PR #24 draft](https://github.com/Samuel-Francisco-AS/My-CT/pull/24), base `myct-r2a-visual-shell`, sem merge.
+
+
+## Aceite físico e fechamento da trilha R2 — 17/10/2026
+
+**Decisão explícita do proprietário:** “As melhorias foram certas, pode dar o passe e fazer o fechamento.” Esse aceite é posterior à candidata **MYCT-R2B-Fix 0.6.3/code 20**. O proprietário já havia confirmado visualmente a R2B e a melhora perceptível da navegação Arquivos; agora confirma as duas correções finais como satisfatórias.
+
+### Entregas aprovadas
+- R2A/R2A.1: identidade Industrial Futurista preto/dourado, drawer oculto sem cabeçalho global, controle persistente e captura no drawer; aceites físicos visuais prévios preservados.
+- R2B: conteúdos internos reformulados, rolagem SFTP sem salto de restauração confirmada, cartões de Saúde, Cofre, HTTP/Torrents, opções e relatórios mais legíveis.
+- R2B-Fix: abertura lateral passou a exigir gesto horizontal deliberado na borda e parou de atrapalhar o scroll, segundo o aceite do proprietário.
+- O adaptador `~/.local/bin/myct-torrent` foi atualizado no Fedora com backup em `~/.local/bin/myct-torrent.bak-r2b-fix-20261017T044529Z`; consulta real do agente retornou valores acumulados e ratio de dois registros. O proprietário aprovou o resultado da Fix. O mecanismo Transmission e os arquivos torrent não foram alterados.
+- Provas automatizadas finais: 135 testes JVM aprovados, 1 ignorado, 8 testes Python aprovados, lint 0 erros (2 avisos preexistentes), verificação upstream e quatro patches íntegros.
+
+### Limites do aceite e backlog
+- **R-01 — lag de digitação/Backspace SSH:** não resolvido e **suspenso**; não diagnosticar ou reabrir sem pedido do proprietário.
+- **R-04 — transferência SFTP em segundo plano:** validação física pendente, não bug confirmado.
+- **R-05 — casos adversos SFTP/SAF:** cancelamento, conflitos de nomes, queda de rede, parcial; faltam testes físicos.
+- **R-06 — autenticação SSH por chave do usuário/Keystore:** melhoria futura opcional; senha atualmente necessária.
+- **R-07 — Home/End/PgUp/PgDn no terminal:** ainda não implementado; funcionalidade útil para tmux e navegação.
+- **R-08 — aceite adicional de Downloads HTTP:** cancelar/arquivo parcial, Ver em Arquivos, retorno após reconexão, polling e progresso de arquivo maior não integralmente comprovados no Moto.
+- **R-09 — apresentação do relatório AV:** implementação visual realizada na R2B; prova específica com relatório real e caminho longo não relatada. Não declarar aceite físico desse cenário.
+- Filtro mostrar/ocultar dotfiles e testes abrangentes de acessibilidade/notificação também não tiveram aceite físico individual explícito. Não bloquear a R2 com isso.
+
+**Git:** autorizado fechar a trilha e integrar **#22 → #23 → #24 na `main`**; realizar merge sequencial preservando código e histórico, sem alterações em serviços Fedora. Registrar SHAs reais e manter issue #9 aberta para as dívidas acima. Fechamento visual não equivale a versão de produção/publicação em loja.
