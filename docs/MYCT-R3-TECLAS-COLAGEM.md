@@ -83,6 +83,14 @@ APK local: `artifacts/myct-r3-0.6.4-debug.apk`, **14.074.882 bytes (13,42 MiB)**
 
 Build final medido por `/usr/bin/time -v`: **1 min 54,06 s**, CPU de usuário 508,38 s e sistema 7,08 s, pico RSS **1.771.804 KiB (~1,69 GiB)**, zero swap. Os limites Gradle existentes foram preservados. Logs/relatórios locais ignorados pelo Git: `artifacts/myct-r3-build-final.log`, `myct-r3-build-time.txt`, `myct-r3-targeted-tests.log`, `myct-r3-validation-notes.txt`, `myct-r3-validation.json`, `myct-r3-jvm-results/` e `myct-r3-lint-results-debug.{html,xml}`.
 
+### Publicação e continuidade
+
+Código e validação enviados em **`3b21629f699bb41463d4cbb864a18564a3bd1e8a`**, branch `myct-r3-extra-keys-paste`. **[PR #25 draft contra main](https://github.com/Samuel-Francisco-AS/My-CT/pull/25), aberto e sem merge.**
+
+**[Pré-release MYCT-R3 0.6.4/code 21](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-r3-v0.6.4-rc1)** publicada com [APK](https://github.com/Samuel-Francisco-AS/My-CT/releases/download/myct-r3-v0.6.4-rc1/myct-r3-0.6.4-debug.apk) e [SHA-256](https://github.com/Samuel-Francisco-AS/My-CT/releases/download/myct-r3-v0.6.4-rc1/myct-r3-0.6.4-debug.apk.sha256). O tamanho e o digest SHA-256 do asset informado pelo GitHub conferem com o APK local acima. Tag aponta para o commit da implementação; esta atualização de documentação não altera o APK.
+
+Retomada: permanecer nesta branch, instalar a candidata manualmente sobre 0.6.3, executar o gate abaixo no Moto e registrar somente os resultados observados. Não declarar aceite nem integrar o PR antes do retorno do proprietário.
+
 ### Gate físico — ainda pendente
 
 ADB não apresentou dispositivo conectado nesta execução. Não houve instalação no Moto, conexão SSH autenticada, medição de RAM/CPU Android ou aceite físico. O custo de build e o tamanho do APK não são medidas de consumo do app.
