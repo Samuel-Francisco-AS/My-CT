@@ -1,0 +1,19 @@
+WCPL Library sources
+====================
+
+This implementation is mostly derived from `wasi-libc`*, which allows to be licensed
+under MIT license (among other options) and algorithms in printed books.
+Math routines are ported from Sun's `fdlibm` library.
+All attributions in source code are preserved wherever possible.
+
+\* available at https://github.com/WebAssembly/wasi-libc
+
+Math library notice (from lib/src/math.c):
+Copyright (C) 2004 by Sun Microsystems, Inc. All rights reserved.
+Permission to use, copy, modify, and distribute this
+software is freely granted, provided that this notice
+is preserved.
+
+My-CT modification (17/10/2026): bundled stdin and stdout default to
+unbuffered I/O for the line-input console. See android/offline-c/prepare.py.
+Parser, compiler, linker and all other embedded library bytes unchanged.

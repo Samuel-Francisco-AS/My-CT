@@ -93,3 +93,13 @@ A janela C/T5 do plano inaugural permanece válida como visão histórica, **mas
 ## Checkpoint 17/10/2026 — R4 integrada, L1 é a próxima
 
 MYCT-R4/Fix **0.6.6/code 23** recebeu **PASS físico do proprietário** após edição e salvamento de C na IDE Sora, compilação GCC e execução no Fedora (`My-CT IDE funcionando! Pós-r4-fix`), com cabeçalho compacto e teclas auxiliares aprovadas. [PR #26](https://github.com/Samuel-Francisco-AS/My-CT/pull/26) integrado à main via merge commit `266e799a0fe3d5a4dd6d9a270095c3d2f3da6005`; [relatório formal](MYCT-R4-FECHAMENTO.md). A condição que antecedia o planejamento de [MYCT-L1](MYCT-L1-AMBIENTE-LOCAL.md) está satisfeita. **Próximo trabalho: MYCT-L1A em nova conversa**, depois L1B/L1C, ainda **antes de MYCT-6**. Sem branch de implementação L1 criada neste fechamento.
+
+
+## 17/10/2026 — ordem local revisada pelo proprietário
+
+Após L1C (compilação/execução C offline), executar **MYCT-L1D — Acesso direto ao
+armazenamento compartilhado Android**, antes do refinamento final. Planejar
+acesso IDE/Terminal Local a Downloads/DCIM/Pictures autorizados, avaliar APIs,
+SAF e MANAGE_EXTERNAL_STORAGE com consentimento explícito. Symlinks não conferem
+permissões. L1D não está implementada nem autoriza acesso amplo nesta L1C.
+[Planejamento local atualizado](MYCT-L1-AMBIENTE-LOCAL.md).

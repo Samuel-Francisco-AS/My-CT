@@ -35,6 +35,7 @@ internal class IdeModel(base: File,
                        val local: LocalIdeModel = LocalIdeModel(LocalWorkspace(base)),
                        val remote: RemoteIdeModel = RemoteIdeModel(),
                        preferred: IdeEnvironment = IdeEnvironment.LOCAL,
+                       val offlineC: OfflineCModel? = null,
                        private val rememberMode: (IdeEnvironment) -> Unit = {}) {
     // A new process has no authenticated SSH session: safe fallback even if last choice was Remote.
     var environment by mutableStateOf(restoredIdeEnvironment(preferred, remote.connected)); private set

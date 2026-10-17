@@ -1,6 +1,6 @@
 # MYCT-L1 — ambiente local independente (planejamento aprovado)
 
-**Decisão do proprietário:** 17/10/2026. **Estado:** direção e ordem aprovadas; **L1A com aceite físico parcial do proprietário; L1B candidata implementada, aceite Moto pendente; L1C não iniciada**. **Próxima fase:** depois de fechar e integrar a MYCT-R4/Fix, **antes da MYCT-6 (automações/T5)**. Não iniciar L1 durante o aceite físico pendente da R4.
+**Decisão do proprietário:** 17/10/2026. **Estado:** direção e ordem aprovadas; **L1A com aceite físico parcial do proprietário; L1B com confirmação física parcial; L1C candidata em validação, gate Moto pendente; L1D aprovada para depois**. **Próxima fase:** depois de fechar e integrar a MYCT-R4/Fix, **antes da MYCT-6 (automações/T5)**. Não iniciar L1 durante o aceite físico pendente da R4.
 
 ## Objetivo e decisão
 
@@ -74,3 +74,25 @@ independentes. Sessão local pertence ao processo Android; não acrescenta FGS.
 Início/fechamento explícitos, sem comandos por navegação. [Arquitetura, testes,
 APK e gate A–F pendente](MYCT-L1B-RELATORIO.md). L1C/toolchains não investigadas
 nesta fase, nenhum merge autorizado.
+
+
+## Atualização da missão L1C e nova L1D — 17/10/2026
+
+O proprietário confirmou no Moto G06/code 25: shell real, pwd/ls/echo/cd,
+workspace dos projetos, Ctrl+C e digitação local mais fluida. Demais regressões
+e interface da L1B seguem pendentes. A L1C acrescenta candidata WCPL → WASI +
+WAMR interpretado, console na IDE existente e worker fixo no APK; **nenhum
+resultado físico L1C foi confirmado**. [Relatório L1C](MYCT-L1C-RELATORIO.md).
+PRs #28/#29 abertos na entrada, L1C empilhada sobre L1B, sem merge automático.
+
+Ordem atual aprovada: **L1A → L1B → L1C → L1D → refinamento final**;
+automações MYCT-6 permanecem fora deste ciclo.
+
+### MYCT-L1D — acesso direto ao armazenamento compartilhado (futura)
+
+IDE e Terminal Local deverão navegar diretamente por diretórios compartilhados
+autorizados, como Downloads, DCIM e Pictures, sem importação obrigatória de
+cópias. Avaliar APIs Android, SAF e MANAGE_EXTERNAL_STORAGE, consentimento
+explícito e restrições da plataforma. Um symlink sozinho não concede acesso.
+Critérios e tecnologia precisam ser definidos na missão L1D; **não implementada
+na L1C**, que mantém a workspace privada e SAF por cópias.

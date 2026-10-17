@@ -71,6 +71,8 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
     val local = owner.environment == IdeEnvironment.LOCAL
     val doc = model.document
     val browsing = model.browse || doc == null
+    var compileSaveAsked by remember { mutableStateOf(false) }
+    val compiler = owner.offlineC
     var pendingOpen by remember { mutableStateOf<String?>(null) }
     var closeAsked by remember { mutableStateOf(false) }
     var details by remember { mutableStateOf(false) }
@@ -195,6 +197,15 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
                 }
             }
         }
+        if (local && compiler != null) {
+            if (!browsing && canCompileC(owner.environment, doc)) Row(Modifier.fillMaxWidth()) {
+                MyCtTextButton(onClick = {
+                    keys.clear()
+                    if (doc?.dirty == true) compileSaveAsked = true else compiler.start(owner.environment, doc)
+                }, enabled = !model.busy && !compiler.active) { Text("Compilar e executar") }
+                if (compiler.phase != CPhase.IDLE) MyCtTextButton(onClick = { compiler.consoleOpen = true }) { Text("Console") }
+            } else if (compiler.phase != CPhase.IDLE) MyCtTextButton(onClick = { compiler.consoleOpen = true }) { Text("Console C · ${compiler.phase.label}") }
+        }
         if (browsing) {
             Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(enabled = !model.busy && listing != null && !model.atRoot(listing.path),
@@ -290,6 +301,12 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
                 onKey = { key -> editor?.let { keys.press(key, it) } }, editor = true)
         }
     }
+    if (local && compiler != null) OfflineCConsole(compiler)
+    if (compileSaveAsked) AlertDialog(onDismissRequest = { compileSaveAsked = false },
+        title = { Text("Salvar antes de compilar") },
+        text = { Text("Há alterações no Sora. Salve o arquivo e toque novamente em Compilar e executar.") },
+        confirmButton = { MyCtTextButton(onClick = { compileSaveAsked = false; model.save() }, enabled = model.canSave) { Text("Salvar") } },
+        dismissButton = { MyCtTextButton(onClick = { compileSaveAsked = false }) { Text("Cancelar") } })
     if (pathDialog) AlertDialog(onDismissRequest = { pathDialog = false; restoreFocus() }, title = { Text(if (local) "Pasta em Projetos locais" else "Diretório no Fedora") },
         text = { OutlinedTextField(location, { location = it }, singleLine = true, label = { Text(if (local) "Caminho relativo · vazio para raiz" else "Caminho absoluto") }) },
         confirmButton = { MyCtTextButton(onClick = { pathDialog = false; directory(location.ifBlank { null }) }) { Text("Ir") } },
@@ -338,6 +355,12 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
                 "Resultado incerto: confira o arquivo em Projetos locais; copie o buffer pelo clipboard antes de descartar/reabrir. Não há backup local automático."
                 else "Resultado incerto: confira original/backup em Arquivos ou Terminal, preserve uma cópia do buffer e reabra antes de salvar novamente.")
             Text("Sora Editor 0.23.6 · LGPL-2.1-or-later. Fontes/licenças e instruções de reconstrução na release e no repositório My-CT.")
+            if (local) TextButton(onClick = {
+                notices = "C de console: uma fonte .c salva; WCPL 1.04 → WASI / WAMR 2.4.4 interpretado. Não é C++ nem GCC completo. Entrada por linha; execução até 60 s, memória WASM até 16 MiB. Headers de projeto/build systems não são incluídos.\n\n" +
+                    context.assets.list("licenses/offline-c").orEmpty().sorted().joinToString("\n\n") { name ->
+                        "$name\n" + context.assets.open("licenses/offline-c/$name").bufferedReader().use { it.readText() }
+                    }
+            }) { Text("Compilador C · limites e licenças") }
             TextButton(onClick = { notices = context.assets.open("ide/NOTICE.txt").bufferedReader().use { it.readText() } }) { Text("Licenças e fontes") }
         } } }, confirmButton = { TextButton(onClick = { details = false; restoreFocus() }) { Text("Fechar") } })
     notices?.let { text -> AlertDialog(onDismissRequest = { notices = null }, title = { Text("Licenças da IDE") },

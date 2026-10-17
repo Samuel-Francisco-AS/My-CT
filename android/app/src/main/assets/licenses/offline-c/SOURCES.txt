@@ -1,0 +1,10 @@
+WCPL 1.04 — MIT + libc/math notices
+https://github.com/false-schemers/wcpl
+commit 458a542ca81fa7a8fd8c8eed38a32dce8ed45135
+WAMR 2.4.4 — Apache-2.0 WITH LLVM-exception + WASI BSD-2-Clause/CC0
+https://github.com/bytecodealliance/wasm-micro-runtime
+commit 8c18e3f68b16c4bcaf05996b2636f6ed2b4cf629
+
+Source archives, SHA-256, offline rebuild and console libc adaptation:
+https://github.com/Samuel-Francisco-AS/My-CT/tree/myct-l1c-offline-c/android/offline-c
+No JIT/AOT, LLVM compiler, wasm3, Termux application or remote compiler used.

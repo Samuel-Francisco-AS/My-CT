@@ -1,0 +1,12 @@
+{
+  "wcpl-458a542.tar.gz": {
+    "url": "https://github.com/false-schemers/wcpl",
+    "commit": "458a542ca81fa7a8fd8c8eed38a32dce8ed45135",
+    "sha256": "1b4711968f16cf7aa5c77e23a8d61420cca3e5090885022824aded64752990f7"
+  },
+  "wamr-2.4.4.tar.gz": {
+    "url": "https://github.com/bytecodealliance/wasm-micro-runtime",
+    "commit": "8c18e3f68b16c4bcaf05996b2636f6ed2b4cf629",
+    "sha256": "389114a9bd291daf62595c8a06f4414ed6bb3aa208370b33575ca1850f1cd35f"
+  }
+}

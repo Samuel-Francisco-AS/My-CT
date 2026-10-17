@@ -1568,3 +1568,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+
+MYCT-L1C: WCPL 1.04 and WAMR 2.4.4; complete license texts, component notices, sources and the console libc adaptation are in assets/licenses/offline-c/. See android/offline-c/README.md in the source distribution.

@@ -251,3 +251,12 @@ Registrar versão Android/ABI, A–F PASS/FAIL e comportamento observado, sem se
 Medir RAM/bateria local oportunamente no Moto; números do host não estimam seu
 consumo. Falhas de Gboard, SELinux, sessões, resize ou sinais reabrem a candidata
 antes de conceder aceite. O PR permanece draft; issue #27 e L1C continuam abertas.
+
+
+## Retorno posterior do proprietário na missão L1C — 17/10/2026
+
+Confirmados no Moto G06/code 25: inicialização real de /system/bin/sh,
+pwd/ls/echo/cd, acesso aos projetos da IDE, Ctrl+C e melhor fluidez da digitação
+local. Este é **aceite físico parcial**; demais testes de interface, regressão,
+resize/rotação/clipboard e coexistência remota continuam pendentes. Não repetir
+automaticamente os comandos aceitos. L1C prossegue empilhada sobre esta branch.

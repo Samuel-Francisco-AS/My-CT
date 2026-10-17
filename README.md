@@ -119,3 +119,20 @@ Os PRs #13 e #14 foram mesclados à `main`. [Relatório final](docs/MYCT-4-FECHA
 ## Ponto de partida
 
 A CLI C++20 `myct-download` entrega HTTP/HTTPS via curl e execução transitória no systemd de usuário; build, uso e cancelamento no [relatório MYCT-5A](docs/MYCT-5A-DOWNLOADS-REPORT.md). Testes reais no Fedora passaram; **continuidade após desconexão SSH/fechamento do app e integridade de 262144 bytes foram comprovadas pelo proprietário**. A aba Downloads 0.5.2 está integrada ao Android com aceite físico parcial, conforme [relatório MYCT-5B](docs/MYCT-5B-ANDROID-DOWNLOADS-REPORT.md). BitTorrent/magnet foi integrado e aceito na MYCT-5C, inclusive nomes legíveis confirmados no Moto G06; rotinas automatizadas da MYCT-6 seguem pendentes. O refinamento Android (lag, navegação, scroll SFTP e transferência em segundo plano) é uma trilha separada, adiada na [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9); não iniciar por conta própria. Priorizar um fluxo útil por vez e preservar serviços, dados e credenciais existentes.
+
+
+## MYCT-L1C — candidata de C offline, gate Moto pendente
+
+A mesma IDE Local Sora oferece **Compilar e executar** em arquivos `.c` salvos.
+WCPL 1.04 embarcado compila a fonte real para `.wasm`; WAMR 2.4.4 interpreta com
+console de entrada/saída, diagnósticos, código de retorno e interrupção. Todos os
+componentes estão no APK; sem compilador remoto, Termux, root ou download durante
+o uso. O programa é WASI interpretado, separado do shell Android L1B.
+
+Candidata **0.6.9-l1c-offline-c/code 26**, atualização de `dev.myct` com assinatura
+existente sobre 0.6.8, sem desinstalar/limpar dados. [APK e checklist A–F](docs/MYCT-L1C-RELATORIO.md)
+· [Toolchain/licenças/reconstrução offline](android/offline-c/README.md).
+**Compilação/execução no Moto ainda não comprovadas**; testes Fedora/NDK/JVM não
+substituem o aceite físico. PR draft empilhado sobre L1B enquanto #28/#29 abertos.
+L1D (armazenamento compartilhado direto) foi aprovada para depois da L1C, antes
+do refinamento final; somente planejamento nesta entrega.

@@ -11,8 +11,8 @@ android {
         applicationId = "dev.myct"
         minSdk = 26
         targetSdk = 36
-        versionCode = 25
-        versionName = "0.6.8-l1b-local-terminal"
+        versionCode = 26
+        versionName = "0.6.9-l1c-offline-c"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -23,7 +23,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    packaging { resources.excludes += setOf("META-INF/versions/**", "META-INF/DEPENDENCIES") }
+    sourceSets.getByName("main").jniLibs.srcDir(layout.buildDirectory.dir("generated/offlineC/jniLibs"))
+    packaging { jniLibs.useLegacyPackaging = true; resources.excludes += setOf("META-INF/versions/**", "META-INF/DEPENDENCIES") }
 }
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 dependencies {
@@ -42,3 +43,14 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("junit:junit:4.13.2")
 }
+
+// Workers are PIE executables installed by PackageManager, named lib*.so only
+// for APK native-code packaging. Generated C programs remain interpreted WASM.
+val buildOfflineC by tasks.registering(Exec::class) {
+    inputs.dir(rootProject.file("offline-c"))
+    outputs.dir(layout.buildDirectory.dir("generated/offlineC/jniLibs"))
+    val sdk = android.sdkDirectory
+    commandLine("python3", rootProject.file("offline-c/build.py"), "--sdk", sdk,
+        "--output", layout.buildDirectory.dir("generated/offlineC/jniLibs").get().asFile)
+}
+tasks.named("preBuild").configure { dependsOn(buildOfflineC) }

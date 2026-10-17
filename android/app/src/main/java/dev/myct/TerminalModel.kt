@@ -52,6 +52,9 @@ class TerminalModel(application: Application) {
         private set
     val files = FilesModel(application)
     internal val ide = IdeModel(java.io.File(application.filesDir, "ide-local"),
+        offlineC = OfflineCModel(LocalWorkspace(java.io.File(application.filesDir, "ide-local")),
+            java.io.File(application.filesDir, "ide-local/compilacoes"),
+            java.io.File(application.applicationInfo.nativeLibraryDir, "libmyct-c-worker.so")),
         preferred = runCatching { IdeEnvironment.valueOf(prefs.getString("ide-environment", "LOCAL") ?: "LOCAL") }.getOrDefault(IdeEnvironment.LOCAL)) { mode ->
         prefs.edit { putString("ide-environment", mode.name) }
     }

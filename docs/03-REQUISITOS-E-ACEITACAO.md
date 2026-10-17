@@ -130,3 +130,18 @@ sessão independente do SSH implementados na code 25. LOC-02/04/05 exigem gate
 físico A–F (modo avião, Gboard/rotação/clipboard, retorno IDE e isolamento com
 SSH real). Testes JVM e PTY no host não aprovam Android. LOC-03 e escolha de
 toolchain não iniciados. [Relatório e checklist](MYCT-L1B-RELATORIO.md).
+
+
+## Checkpoint MYCT-L1C — candidata, gate físico pendente
+
+LOC-03: WCPL embarcado compila C para WASI real e WAMR interpreta no console da
+IDE Local, com stdin/erros/retorno/interrupção. LOC-04/05: buffers/SSH preservados,
+sem exec de artefatos graváveis, JIT ou redução do targetSdk. Prova de compilação
+e execução em host e build NDK não aprovam Android: **todos os testes físicos
+L1C estão PENDENTES** até confirmação do proprietário. [Relatório](MYCT-L1C-RELATORIO.md).
+L1B teve confirmação física parcial de shell/pwd/ls/echo/cd/workspace/Ctrl+C e
+fluidez; os demais gates continuam pendentes.
+
+L1D aprovada para depois da L1C: acesso direto ao armazenamento compartilhado
+autorizado; avaliar APIs/SAF/MANAGE_EXTERNAL_STORAGE na própria fase, sem
+implementação ou concessão de permissões nesta missão.

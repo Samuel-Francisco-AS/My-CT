@@ -25,9 +25,10 @@
 | ADR-013 | Princípio UX | DECIDIDO | **Fluidez**: feedback imediato, preservação de estado/posição, transições suaves e curtas, ausência de saltos, piscadas ou efeitos pesados; acessibilidade e ergonomia acima de ornamento |
 | ADR-014 | Recorte MYCT-R2 | DECIDIDO | R2A implementa tema global e drawer/shell, sem alterar lógicas de telas. R2B refaz visual das telas, diálogos e oferece ajuda opcional por ícone `i`, com avisos críticos sempre visíveis quando necessários. R-01/lag permanece dívida suspensa |
 | ADR-015 | Ambiente local independente | DECIDIDO | MYCT-L1 deve funcionar offline no Moto G06 sem Fedora, SSH e sem o aplicativo Termux instalado; pode reutilizar código Termux embutido e licenciado |
-| ADR-016 | Ordenação das fases | DECIDIDO | Após aceite/merge da MYCT-R4/Fix, executar L1A → L1B → L1C antes da MYCT-6/T5 de automações; nenhuma implementação antecipada |
+| ADR-016 | Ordenação das fases | DECIDIDO | Após aceite/merge da MYCT-R4/Fix, executar L1A → L1B → L1C → L1D antes do refinamento final e MYCT-6/T5 de automações; nenhuma implementação antecipada |
 | ADR-017 | Critério da primeira L1 | DECIDIDO | IDE e arquivos locais, terminal Android/PTY local e prova física de editar, compilar e executar C **offline** no Moto; C++/linguagens adicionais e Linux completo são posteriores |
-| ADR-018 | Tecnologia compilação local | ABERTO | Prova curta compara compilação C para WebAssembly/WASI e alternativa nativa Android segura; sem garantia de compatibilidade com Linux, sem burlar restrições targetSdk 36 |
+| ADR-018 | Tecnologia compilação local | CANDIDATA; GATE MOTO PENDENTE | WCPL 1.04 embarcado gera WASI real, WAMR 2.4.4 interpreta; worker fixo instalado com APK; sem ELF de usuário/JIT/W^X, targetSdk 36 preservado |
+| ADR-019 | Armazenamento compartilhado local | PLANEJAMENTO APROVADO | MYCT-L1D após L1C e antes do refinamento final: avaliar APIs Android, SAF e MANAGE_EXTERNAL_STORAGE com autorização explícita; sem implementação na L1C |
 
 ## Propostas técnicas (não congelar sem prova)
 | ID | Tema | Proposta | Como decidir |
@@ -361,3 +362,24 @@ após morte do app. Cwd/HOME usam a raiz L1A, sem chroot: shell tem o UID e as
 permissões do app. [Rationale, APIs, validação e gate Moto pendente](MYCT-L1B-RELATORIO.md).
 ADR-018/toolchain C fica para L1C, sem estudo nesta missão. Nenhum merge
 realizado, Fedora/FGS SSH intactos, R-01 continua suspensa.
+
+
+## 17/10/2026 — MYCT-L1C e aprovação da L1D (ADR-018/019)
+
+Spike Fedora compilou fonte C real pelo WCPL e executou WASI pelo WAMR
+interpretado, incluindo scanf/printf/função/laço/retorno. Nativo arm64 gerado pelo
+usuário não tem caminho demonstrado de execução que respeite as restrições da
+missão; rejeitado neste ciclo. Escolhida candidata mínima: WCPL 1.04 com headers,
+libc/linker internos + WAMR 2.4.4 clássico, em worker nativo fixo distribuído e
+instalado com APK. Processos separados permitem matar loops/stdin bloqueado e
+isolar falhas sem gerar memória executável. Console da mesma IDE; sem conectar
+WASM artificialmente ao shell. Adaptação stdio não bufferizada documentada.
+Custo, fontes/licenças, provas e gate obrigatório pendente no [relatório L1C](MYCT-L1C-RELATORIO.md).
+
+O proprietário aprovou **MYCT-L1D — Acesso direto ao armazenamento compartilhado
+Android**, imediatamente após L1C e antes do refinamento final. Avaliar APIs de
+armazenamento, SAF e permissão especial MANAGE_EXTERNAL_STORAGE; acesso direto
+à IDE/Terminal Local em diretórios autorizados (Downloads, DCIM, Pictures), sem
+exigir cópias. Exige autorização explícita para permissões aplicáveis e respeito
+às restrições da plataforma. Symlinks não concedem permissões. **Somente
+planejamento nesta missão; nenhuma permissão/acesso amplo implementado.**

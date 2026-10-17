@@ -456,3 +456,42 @@ caches. [Relatório, pré-release, checksum e checklist A–F](../docs/MYCT-L1B-
 **Aceite L1B no Moto pendente**. O proprietário confirmou criação/edição/salvamento/
 persistência/renomeação da L1A; SAF, isolamento completo e regressão remota
 L1A continuam pendentes individualmente.
+
+
+## MYCT-L1C — compilar e executar C offline (candidata code 26)
+
+Atualize sobre **0.6.8/code 25** sem desinstalar nem limpar dados. Pacote `dev.myct`
+e assinatura de desenvolvimento preservados. No drawer → IDE → Local, abra um
+`.c`, edite e **Salve**. Toque **Compilar e executar**. Se houver alterações
+não salvas, o app pede salvamento; depois toque na ação novamente. Não há
+compilação automática nem envio ao Fedora.
+
+O console mostra compilação, erros com linha/coluna, saída/erro do programa e
+código de retorno. Quando scanf pedir dados, digite uma linha e toque **Enviar ↵**;
+**Fim da entrada** envia EOF. **Interromper** mata o processo mesmo em loop ou
+espera por entrada. **Voltar à IDE** fecha o console, mantendo o trabalho durante
+a vida do processo; **Console** o reabre. Uma operação de cada vez, até 30 s para
+compilar e 60 s para executar (inclui espera por entrada). Sem garantia em
+background. Fonte salva preservada; memória WASM até 16 MiB e saída até 65.536
+caracteres. Excesso/falha aparece no console e permite nova tentativa.
+
+Compilador **WCPL 1.04**, libc/headers/linker embarcados e runtime **WAMR 2.4.4
+interpretado**. Gera `.wasm`, não ELF: o programa roda no runtime dentro do
+Android e não em `/system/bin/sh`. O Terminal Local L1B continua independente.
+C de console em subconjunto documentado, uma fonte por compilação e headers
+embutidos; sem C++/GCC completo, headers de projeto ou build systems.
+**IDE → Detalhes → Compilador C · limites e licenças** informa fontes/notices.
+
+APK `../artifacts/myct-l1c-0.6.9-debug.apk`, ABIs arm64-v8a/armeabi-v7a/x86_64.
+Não há download de componentes durante o uso. Para reconstruir offline, Python 3,
+JDK 21, SDK 36, NDK 28.2.13676358, CMake 3.22.1 e caches Gradle provisionados;
+fontes nativas versionadas e verificadas por SHA-256 no repositório.
+[Toolchain, licenças e testes reais](offline-c/README.md) ·
+[APK, SHA-256 e gate físico pendente](../docs/MYCT-L1C-RELATORIO.md).
+Os testes instrumentados foram preparados para Android; compilar o APK de teste
+não equivale a executá-los. A confirmação parcial L1B do proprietário cobre
+shell/pwd/ls/echo/cd/workspace/Ctrl+C/fluidez; demais regressões continuam pendentes.
+
+L1D aprovada somente para a fase seguinte: avaliar armazenamento compartilhado
+(Android APIs/SAF/MANAGE_EXTERNAL_STORAGE) com autorização explícita; nenhuma
+nova permissão de armazenamento foi pedida nesta L1C.
