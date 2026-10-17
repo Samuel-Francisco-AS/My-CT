@@ -53,10 +53,14 @@ A partir da L1 comprovada: C++, Python, JavaScript, Git, Make, shells adicionais
 4. A UX offline deve estar disponível ao abrir o app mesmo com a rede indisponível, sem forçar fluxo de conexão SSH. Mantidas proteções de captura e dados sensíveis.
 5. Trabalhar em commits/entregas pequenas com uma prova real por etapa, sem gastar o tempo em uma arquitetura comercial generalista; tratar problemas do Android pela tecnologia nativa suportada, não por atalhos frágeis.
 
+## Gate de entrada liberado após MYCT-R4 — 17/10/2026
+
+**R4-Fix 0.6.6/code 23 recebeu PASS físico e foi integrada à main:** [PR #26](https://github.com/Samuel-Francisco-AS/My-CT/pull/26), merge commit `266e799a0fe3d5a4dd6d9a270095c3d2f3da6005`. [Fechamento R4](MYCT-R4-FECHAMENTO.md). A condição de entrada para L1 está **satisfeita**. O proprietário decidiu iniciar L1 **em uma nova conversa**, após sincronizar main e limpar branch R4. A implementação **ainda não começou**, não existe branch de execução L1 e nenhum gate LOC foi testado. MYCT-6 permanece posterior.
+
 ## Dependência e ordem oficial
 
-1. **Agora:** MYCT-R4/Fix 0.6.6/code 23 — PR #26 `myct-r4-terminal-ide` ainda draft/sem merge; aguarda teste físico do proprietário no Moto G06.
-2. **Depois do aceite e merge da R4:** iniciar **MYCT-L1A → L1B → L1C**, testando no Moto e registrando limitações. A L1 foi planejada na `main` sem iniciar implementação ou branch de código antes do aceite R4.
+1. **Concluído:** MYCT-R4/Fix 0.6.6/code 23 — aceita fisicamente e integrada à `main`, merge #26 `266e799`. Essa pré-condição foi satisfeita; limpeza da branch depende de sincronização local.
+2. **Próxima conversa:** iniciar **MYCT-L1A → L1B → L1C**, testando no Moto e registrando limitações. A L1 foi planejada na `main` sem iniciar implementação ou branch de código antes do aceite R4.
 3. **Depois:** retomar discussão de **MYCT-6/T5 Automações**, conforme requisitos originais de trabalhos predefinidos, execução headless e histórico; nada de automações nesta fase local.
 
 **Critério de conclusão da primeira L1:** programa C editado, salvo, compilado e executado **offline no Moto G06**, sem Termux instalado, sem Fedora e sem servidor; editor/terminal remoto anteriores continuam operacionais quando o Fedora está disponível. **Gate não comprovado = fase não aprovada.**
