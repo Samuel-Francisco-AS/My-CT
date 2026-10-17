@@ -96,3 +96,18 @@ Este checkpoint complementa a tabela de requisitos inicial, **sem reescrever seu
 - **DASH-01 (CPU/RAM/disco/uptime real no Android): comprovado no Moto**, por túnel da conexão SSH verificada; sem polling nem API exposta à rede.
 - **INF-01 permanece parcial:** `./myct-core` exige início manual; persistência pós-logout/reboot, gerenciamento e reinício automático ainda **não implementados**. Novo recorte systemd requer autorização.
 - Evidências em [MYCT-3C-DASHBOARD-REPORT.md](MYCT-3C-DASHBOARD-REPORT.md). Dívidas de lag, SFTP scroll e background continuam [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9).
+
+
+## E. MYCT-L1 — requisitos aprovados, ainda não implementados (17/10/2026)
+
+Esta fase foi priorizada **entre MYCT-R4 e MYCT-6/T5**. Os itens abaixo são critérios futuros, não conquistas atuais:
+
+| ID | Prioridade | Requisito | Evidência mínima para aceite no Moto G06 |
+| --- | --- | --- | --- |
+| LOC-01 | P1 | IDE Sora + arquivos privados/SAF funcionais sem SSH, Fedora, internet ou aplicativo Termux instalado | Modo avião: criar, editar, salvar e reabrir `teste.c` local; conexão remota anterior não sofreu regressão |
+| LOC-02 | P1 | Terminal Android local com PTY real, isolado do SSH | Modo avião: `pwd`, `echo`, `ls`, shell interativo, saída/entrada, resize e Ctrl+C, dentro da sandbox |
+| LOC-03 | P1 | Compilar e executar C de console localmente sem Termux | Modo avião: `teste.c` compilado, executado com saída verificável e erros mostrados no próprio Moto; tecnologia escolhida após spike real |
+| LOC-04 | P1 | Alternância Local/Remoto sem perda acidental de buffer | App não exige login SSH no modo Local; salvar local não escreve via SFTP; dirty buffer protegido; remoto continua funcionando |
+| LOC-05 | P1 | Compatibilidade com regras Android modernas | Sem root ou execução arbitrária de binários em diretório gravável, sem baixar targetSdk; licenças e distribuição de toolchain registradas |
+
+**Fora do gate L1:** Linux/POSIX completo, pacotes arbitrários, Cargo/Rust, Python/JavaScript, C++ completo, ambiente root, IDE LSP/debugger. Futuras expansões opcionais. Detalhes: [MYCT-L1](MYCT-L1-AMBIENTE-LOCAL.md). 
