@@ -1,0 +1,19 @@
+<resources>
+    <!-- MYCT-R2: fonte única da paleta para Compose e a janela Android. -->
+    <color name="myct_background">#070908</color>
+    <color name="myct_surface">#131613</color>
+    <color name="myct_surface_elevated">#1C1E19</color>
+    <color name="myct_outline">#383327</color>
+    <color name="myct_gold">#F0B83E</color>
+    <color name="myct_gold_secondary">#D6A44C</color>
+    <color name="myct_bronze">#A97831</color>
+    <color name="myct_on_gold">#201707</color>
+    <color name="myct_gold_container">#332714</color>
+    <color name="myct_text">#F1EDE4</color>
+    <color name="myct_text_secondary">#B9B2A5</color>
+    <color name="myct_error">#E38F83</color>
+    <color name="myct_error_container">#432622</color>
+    <color name="myct_warning">#E4B35A</color>
+    <color name="myct_success">#79C2A0</color>
+    <color name="myct_success_container">#19362C</color>
+</resources>

@@ -16,6 +16,7 @@ import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -33,7 +34,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -79,10 +79,13 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        )
         applyCaptureProtection(model.protectScreenshots)
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
+            MyCtTheme {
                 // Surface supplies the correct onBackground content color to plain Text components.
                 Surface(color = MaterialTheme.colorScheme.background) { TerminalApp(model) }
             }
@@ -108,7 +111,7 @@ private fun TerminalApp(model: TerminalModel) {
     var captureWarning by remember { mutableStateOf(false) }
     var measurements by remember { mutableStateOf<String?>(null) }
     var pendingPaste by remember { mutableStateOf<PendingPaste?>(null) }
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable { mutableStateOf(AppSection.Terminal) }
     val active = model.phase == TerminalModel.Phase.CONNECTING || model.phase == TerminalModel.Phase.CONNECTED
     val connected = model.phase == TerminalModel.Phase.CONNECTED
     val pin = model.pinForHost()
@@ -134,8 +137,10 @@ private fun TerminalApp(model: TerminalModel) {
         } catch (_: Exception) { feedback("Não foi possível ler o clipboard nesta tela.") }
     }
     // Always block screenshots on the vault tab, regardless of the general preference.
-    LaunchedEffect(model.protectScreenshots, selectedTab) {
-        activity.applyCaptureProtection(model.protectScreenshots || selectedTab == 3)
+    val captureProtected = captureProtectionRequired(model.protectScreenshots, selectedTab)
+    DisposableEffect(activity, captureProtected) {
+        activity.applyCaptureProtection(captureProtected)
+        onDispose { }
     }
     DisposableEffect(activity) {
         val observer = LifecycleEventObserver { _, event ->
@@ -146,140 +151,142 @@ private fun TerminalApp(model: TerminalModel) {
     }
     // A single union consumes overlap once; AndroidView receives the actual remaining area.
     val insets = WindowInsets.systemBars.union(WindowInsets.displayCutout).union(WindowInsets.ime)
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).windowInsetsPadding(insets)) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(if (model.backgroundEnabled) "My-CT · SSH ativo" else if (connected) "My-CT · SSH" else if (active) "SSH · conectando…" else "My-CT", modifier = Modifier.weight(1f).padding(top = 12.dp),
-                maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
-            if (!model.protectScreenshots) Text("Captura livre", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 16.dp))
-            TextButton(onClick = { settings = true }) { Text("Opções") }
-            if (active) TextButton(onClick = { model.disconnect() }) { Text(if (connected) "Encerrar" else "Cancelar") }
-        }
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-            listOf("Terminal", "Arquivos", "Saúde", "Cofre", "Downloads").forEachIndexed { index, label ->
-                TextButton(onClick = {
-                    pendingPaste = null
-                    if (index != 0) (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
-                        .hideSoftInputFromWindow(activity.window.decorView.windowToken, 0)
-                    selectedTab = index
-                }) { Text(if (selectedTab == index) "● $label" else label) }
+    AppShell(
+        section = selectedTab, phase = model.phase, host = model.host, user = model.user, port = model.port,
+        backgroundEnabled = model.backgroundEnabled, protectScreenshots = model.protectScreenshots,
+        onSelect = { destination ->
+            if (selectedTab != destination) {
+                pendingPaste = null
+                if (destination != AppSection.Terminal) (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
+                    .hideSoftInputFromWindow(activity.window.decorView.windowToken, 0)
+                selectedTab = destination
             }
-        }
-        if (selectedTab == 4) DownloadsScreen(model.downloads, model.torrents, model.files.busy, { path ->
-            if (!model.files.busy && connected) { model.files.load(path); selectedTab = 1 }
-        }, Modifier.weight(1f))
-        else if (selectedTab == 3) VaultScreen(model.vault, Modifier.weight(1f))
-        else if (selectedTab == 2) HealthScreen(model.health, Modifier.weight(1f))
-        else if (!active) {
-            if (model.files.recoveryNotice.isNotEmpty()) Text(model.files.recoveryNotice,
-                modifier = Modifier.padding(horizontal = 12.dp), style = MaterialTheme.typography.bodySmall)
-            Text(model.message, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                color = if (model.phase == TerminalModel.Phase.ERROR) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground)
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(model.host, { model.host = it; fingerprint = "" }, label = { Text("Endereço do Fedora") },
-                    singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(model.port, { model.port = it; fingerprint = "" }, label = { Text("Porta") },
-                        singleLine = true, modifier = Modifier.weight(0.35f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                    OutlinedTextField(model.user, { model.user = it }, label = { Text("Usuário Linux") },
-                        singleLine = true, modifier = Modifier.weight(0.65f), keyboardOptions = KeyboardOptions(autoCorrectEnabled = false))
-                }
-                OutlinedTextField(password, { password = it }, label = { Text("Senha (somente nesta conexão)") },
-                    visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    singleLine = true, modifier = Modifier.fillMaxWidth())
-                if (pin == null) {
-                    Text("Confira o fingerprint Ed25519 diretamente no Fedora por canal confiável.", style = MaterialTheme.typography.bodySmall)
-                    OutlinedTextField(fingerprint, { fingerprint = it.trim() }, label = { Text("Fingerprint SHA256 confiável") },
-                        singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(autoCorrectEnabled = false))
-                    Text("ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256", style = MaterialTheme.typography.bodySmall)
-                } else {
-                    Text("Host fixado: $pin", style = MaterialTheme.typography.bodySmall)
-                    TextButton(onClick = { forgetDialog = true }) { Text("Refazer pareamento…") }
-                }
-                Button(onClick = { val secret = password.toCharArray(); password = ""; model.connect(secret, fingerprint) },
-                    modifier = Modifier.fillMaxWidth()) { Text(if (model.terminal == null) "Conectar" else "Reconectar") }
-                Text("Use rede privada. Senha não é salva. Perda do processo exige nova autenticação; trabalho remoto pode ser preservado pelo tmux.", style = MaterialTheme.typography.bodySmall)
-            }
-        } else {
-            if (connected && selectedTab == 1) FilesScreen(model.files, Modifier.weight(1f))
-            else {
-            model.terminal?.let { session ->
-                var view by remember(session) { mutableStateOf<TerminalView?>(null) }
-                val fontPx = with(LocalDensity.current) { model.fontSizeSp.sp.toPx().roundToInt() }
-                var appliedCharBasedInput by remember(view) { mutableStateOf(model.enforceCharBasedInput) }
-                LaunchedEffect(view, model.enforceCharBasedInput, settings) {
-                    if (!settings && appliedCharBasedInput != model.enforceCharBasedInput) view?.let { terminalView ->
-                        terminalView.requestFocus()
-                        (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).restartInput(terminalView)
-                        appliedCharBasedInput = model.enforceCharBasedInput
-                    }
-                }
-                val clipboardActions = rememberUpdatedState(object : TerminalSession.UserClipboard {
-                    override fun copy(text: String) { copyToSystemClipboard(text) }
-                    override fun requestPaste() { requestSystemPaste() }
-                })
-                DisposableEffect(session, view, activity) {
-                    val current = view
-                    val redraw: () -> Unit = { current?.onScreenUpdated(); Unit }
-                    val manualClipboard = object : TerminalSession.UserClipboard {
-                        override fun copy(text: String) { clipboardActions.value.copy(text) }
-                        override fun requestPaste() { clipboardActions.value.requestPaste() }
-                    }
-                    fun attach() {
-                        model.callbacks.screenChanged = redraw
-                        session.setUserClipboard(manualClipboard)
-                        current?.onScreenUpdated()
-                    }
-                    fun detach() {
-                        if (model.callbacks.screenChanged === redraw) model.callbacks.screenChanged = null
-                        session.clearUserClipboard(manualClipboard)
-                    }
-                    val observer = LifecycleEventObserver { _, event ->
-                        when (event) { Lifecycle.Event.ON_START -> attach(); Lifecycle.Event.ON_STOP -> detach(); else -> Unit }
-                    }
-                    activity.lifecycle.addObserver(observer)
-                    if (activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) attach()
-                    onDispose { activity.lifecycle.removeObserver(observer); detach() }
-                }
-                AndroidView(factory = { context ->
-                    TerminalView(context, null).apply {
-                        setTextSize(fontPx)
-                        tag = fontPx
-                        setTerminalViewClient(ViewCallbacks(model) {
-                            requestFocus()
-                            (context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
-                        })
-                        isFocusableInTouchMode = true
-                        attachSession(session)
-                        requestFocus()
-                        view = this
-                    }
-                }, modifier = Modifier.fillMaxWidth().weight(1f).onSizeChanged {
-                    // TerminalView.onSizeChanged already resizes the local emulator.
-                    model.diagnostics.viewport = "Área: ${it.width}×${it.height} px · PTY: ${session.emulator.mRows}×${session.emulator.mColumns} · fonte: ${model.fontSizeSp} sp / $fontPx px"
-                }, update = { terminalView ->
-                    if (terminalView.currentSession !== session) terminalView.attachSession(session)
-                    if (terminalView.tag != fontPx) {
-                        terminalView.setTextSize(fontPx); terminalView.tag = fontPx; terminalView.onScreenUpdated()
-                        model.diagnostics.viewport = "Área: ${terminalView.width}×${terminalView.height} px · PTY: ${session.emulator.mRows}×${session.emulator.mColumns} · fonte: ${model.fontSizeSp} sp / $fontPx px"
-                    }
-                })
-                Row(Modifier.fillMaxWidth().height(48.dp).horizontalScroll(rememberScrollState())) {
-                    TextButton(onClick = { model.toggleCtrl(); view?.requestFocus() }) { Text(if (model.ctrl) "Ctrl ●" else "Ctrl") }
-                    TextButton(onClick = { model.sendCtrlC(); view?.requestFocus() }) { Text("Ctrl-C") }
-                    listOf("Esc" to KeyEvent.KEYCODE_ESCAPE, "Tab" to KeyEvent.KEYCODE_TAB,
-                        "←" to KeyEvent.KEYCODE_DPAD_LEFT, "↑" to KeyEvent.KEYCODE_DPAD_UP,
-                        "↓" to KeyEvent.KEYCODE_DPAD_DOWN, "→" to KeyEvent.KEYCODE_DPAD_RIGHT).forEach { (label, key) ->
-                        TextButton(onClick = { model.sendKey(key); view?.requestFocus() }) { Text(label) }
-                    }
-                    TextButton(onClick = { requestSystemPaste() }, enabled = connected) { Text("Colar…") }
-                    TextButton(onClick = {
-                        view?.let { terminalView ->
-                            terminalView.requestFocus()
-                            (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT)
+        },
+        onOptions = { settings = true },
+        onCaptureChange = { if (it) model.setCaptureProtection(true) else captureWarning = true },
+        onDisconnect = { model.disconnect() },
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).windowInsetsPadding(insets)
+    ) {
+        AppSectionContent(selectedTab) {
+            Column(Modifier.fillMaxSize()) {
+                if (selectedTab == AppSection.Downloads) DownloadsScreen(model.downloads, model.torrents, model.files.busy, { path ->
+                    if (!model.files.busy && connected) { model.files.load(path); selectedTab = AppSection.Files }
+                }, Modifier.weight(1f))
+                else if (selectedTab == AppSection.Vault) VaultScreen(model.vault, Modifier.weight(1f))
+                else if (selectedTab == AppSection.Health) HealthScreen(model.health, Modifier.weight(1f))
+                else if (!active) {
+                    if (model.files.recoveryNotice.isNotEmpty()) Text(model.files.recoveryNotice,
+                        modifier = Modifier.padding(horizontal = 12.dp), style = MaterialTheme.typography.bodySmall)
+                    Text(model.message, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        color = if (model.phase == TerminalModel.Phase.ERROR) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground)
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(model.host, { model.host = it; fingerprint = "" }, label = { Text("Endereço do Fedora") },
+                            singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(model.port, { model.port = it; fingerprint = "" }, label = { Text("Porta") },
+                                singleLine = true, modifier = Modifier.weight(0.35f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                            OutlinedTextField(model.user, { model.user = it }, label = { Text("Usuário Linux") },
+                                singleLine = true, modifier = Modifier.weight(0.65f), keyboardOptions = KeyboardOptions(autoCorrectEnabled = false))
                         }
-                    }) { Text("Teclado") }
+                        OutlinedTextField(password, { password = it }, label = { Text("Senha (somente nesta conexão)") },
+                            visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            singleLine = true, modifier = Modifier.fillMaxWidth())
+                        if (pin == null) {
+                            Text("Confira o fingerprint Ed25519 diretamente no Fedora por canal confiável.", style = MaterialTheme.typography.bodySmall)
+                            OutlinedTextField(fingerprint, { fingerprint = it.trim() }, label = { Text("Fingerprint SHA256 confiável") },
+                                singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(autoCorrectEnabled = false))
+                            Text("ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256", style = MaterialTheme.typography.bodySmall)
+                        } else {
+                            Text("Host fixado: $pin", style = MaterialTheme.typography.bodySmall)
+                            TextButton(onClick = { forgetDialog = true }) { Text("Refazer pareamento…") }
+                        }
+                        Button(onClick = { val secret = password.toCharArray(); password = ""; model.connect(secret, fingerprint) },
+                            modifier = Modifier.fillMaxWidth()) { Text(if (model.terminal == null) "Conectar" else "Reconectar") }
+                        Text("Use rede privada. Senha não é salva. Perda do processo exige nova autenticação; trabalho remoto pode ser preservado pelo tmux.", style = MaterialTheme.typography.bodySmall)
+                    }
+                } else {
+                    if (connected && selectedTab == AppSection.Files) FilesScreen(model.files, Modifier.weight(1f))
+                    else {
+                    model.terminal?.let { session ->
+                        var view by remember(session) { mutableStateOf<TerminalView?>(null) }
+                        val fontPx = with(LocalDensity.current) { model.fontSizeSp.sp.toPx().roundToInt() }
+                        var appliedCharBasedInput by remember(view) { mutableStateOf(model.enforceCharBasedInput) }
+                        LaunchedEffect(view, model.enforceCharBasedInput, settings) {
+                            if (!settings && appliedCharBasedInput != model.enforceCharBasedInput) view?.let { terminalView ->
+                                terminalView.requestFocus()
+                                (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).restartInput(terminalView)
+                                appliedCharBasedInput = model.enforceCharBasedInput
+                            }
+                        }
+                        val clipboardActions = rememberUpdatedState(object : TerminalSession.UserClipboard {
+                            override fun copy(text: String) { copyToSystemClipboard(text) }
+                            override fun requestPaste() { requestSystemPaste() }
+                        })
+                        DisposableEffect(session, view, activity) {
+                            val current = view
+                            val redraw: () -> Unit = { current?.onScreenUpdated(); Unit }
+                            val manualClipboard = object : TerminalSession.UserClipboard {
+                                override fun copy(text: String) { clipboardActions.value.copy(text) }
+                                override fun requestPaste() { clipboardActions.value.requestPaste() }
+                            }
+                            fun attach() {
+                                model.callbacks.screenChanged = redraw
+                                session.setUserClipboard(manualClipboard)
+                                current?.onScreenUpdated()
+                            }
+                            fun detach() {
+                                if (model.callbacks.screenChanged === redraw) model.callbacks.screenChanged = null
+                                session.clearUserClipboard(manualClipboard)
+                            }
+                            val observer = LifecycleEventObserver { _, event ->
+                                when (event) { Lifecycle.Event.ON_START -> attach(); Lifecycle.Event.ON_STOP -> detach(); else -> Unit }
+                            }
+                            activity.lifecycle.addObserver(observer)
+                            if (activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) attach()
+                            onDispose { activity.lifecycle.removeObserver(observer); detach() }
+                        }
+                        AndroidView(factory = { context ->
+                            TerminalView(context, null).apply {
+                                setTextSize(fontPx)
+                                tag = fontPx
+                                setTerminalViewClient(ViewCallbacks(model) {
+                                    requestFocus()
+                                    (context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
+                                })
+                                isFocusableInTouchMode = true
+                                attachSession(session)
+                                requestFocus()
+                                view = this
+                            }
+                        }, modifier = Modifier.fillMaxWidth().weight(1f).onSizeChanged {
+                            // TerminalView.onSizeChanged already resizes the local emulator.
+                            model.diagnostics.viewport = "Área: ${it.width}×${it.height} px · PTY: ${session.emulator.mRows}×${session.emulator.mColumns} · fonte: ${model.fontSizeSp} sp / $fontPx px"
+                        }, update = { terminalView ->
+                            if (terminalView.currentSession !== session) terminalView.attachSession(session)
+                            if (terminalView.tag != fontPx) {
+                                terminalView.setTextSize(fontPx); terminalView.tag = fontPx; terminalView.onScreenUpdated()
+                                model.diagnostics.viewport = "Área: ${terminalView.width}×${terminalView.height} px · PTY: ${session.emulator.mRows}×${session.emulator.mColumns} · fonte: ${model.fontSizeSp} sp / $fontPx px"
+                            }
+                        })
+                        Row(Modifier.fillMaxWidth().height(48.dp).horizontalScroll(rememberScrollState())) {
+                            TextButton(onClick = { model.toggleCtrl(); view?.requestFocus() }) { Text(if (model.ctrl) "Ctrl ●" else "Ctrl") }
+                            TextButton(onClick = { model.sendCtrlC(); view?.requestFocus() }) { Text("Ctrl-C") }
+                            listOf("Esc" to KeyEvent.KEYCODE_ESCAPE, "Tab" to KeyEvent.KEYCODE_TAB,
+                                "←" to KeyEvent.KEYCODE_DPAD_LEFT, "↑" to KeyEvent.KEYCODE_DPAD_UP,
+                                "↓" to KeyEvent.KEYCODE_DPAD_DOWN, "→" to KeyEvent.KEYCODE_DPAD_RIGHT).forEach { (label, key) ->
+                                TextButton(onClick = { model.sendKey(key); view?.requestFocus() }) { Text(label) }
+                            }
+                            TextButton(onClick = { requestSystemPaste() }, enabled = connected) { Text("Colar…") }
+                            TextButton(onClick = {
+                                view?.let { terminalView ->
+                                    terminalView.requestFocus()
+                                    (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT)
+                                }
+                            }) { Text("Teclado") }
+                        }
+                    }
+                    }
                 }
-            }
             }
         }
     }

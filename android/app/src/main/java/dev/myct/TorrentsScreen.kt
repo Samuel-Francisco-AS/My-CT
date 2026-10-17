@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -18,7 +19,7 @@ import kotlinx.coroutines.isActive
 @Composable
 internal fun DownloadsScreen(http: DownloadsModel, torrents: TorrentsModel, filesBusy: Boolean,
                              openFiles: (String) -> Unit, modifier: Modifier = Modifier) {
-    var section by remember { mutableStateOf(0) }
+    var section by rememberSaveable { mutableIntStateOf(0) }
     Column(modifier) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             FilterChip(section == 0, { section = 0 }, label = { Text("HTTP/HTTPS") })
