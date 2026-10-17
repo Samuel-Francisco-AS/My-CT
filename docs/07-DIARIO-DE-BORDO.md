@@ -225,3 +225,14 @@ condicional. APK 0.5.6/code 13 com assinatura compatível com 0.5.5. Testes JVM:
 existentes. Nenhum deploy/alteração de motor ou timer; active/enabled e hashes
 preservados. Publicação candidata para revisão, sem aceite físico/merge.
 [Roteiro Moto e limites](MYCT-5D-B2-REPORT.md).
+
+## 17/10/2026 — MYCT-L1A: candidata da IDE local offline
+
+Missão completa autorizada na branch `myct-l1a-ide-local`, partindo de main
+`41a0a0b`, sem alterações locais preexistentes. Implementada workspace privada
+Android, Sora reutilizado, seleção Local/Remoto sem login obrigatório, buffers
+independentes, criação/renomeação, salvamento explícito com conflito/temporário,
+e SAF por cópias identificadas. Nenhuma mudança de serviço/Fedora, dependência
+ou toolchain; L1B/L1C e R-01 continuam fora. Critérios registrados antes de
+codificar e evidências em [MYCT-L1A-RELATORIO.md](MYCT-L1A-RELATORIO.md).
+**Candidata para revisão e teste; LOC-01/LOC-04 ainda sem aceite físico.**

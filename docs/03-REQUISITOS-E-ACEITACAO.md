@@ -98,9 +98,9 @@ Este checkpoint complementa a tabela de requisitos inicial, **sem reescrever seu
 - Evidências em [MYCT-3C-DASHBOARD-REPORT.md](MYCT-3C-DASHBOARD-REPORT.md). Dívidas de lag, SFTP scroll e background continuam [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9).
 
 
-## E. MYCT-L1 — requisitos aprovados, ainda não implementados (17/10/2026)
+## E. MYCT-L1 — requisitos aprovados, L1A candidata (17/10/2026)
 
-Esta fase foi priorizada **entre MYCT-R4 e MYCT-6/T5**. Os itens abaixo são critérios futuros, não conquistas atuais:
+Esta fase foi priorizada **entre MYCT-R4 e MYCT-6/T5**. Os itens abaixo exigem prova física; a L1A implementa LOC-01/LOC-04 e os aspectos de armazenamento/targetSdk de LOC-05, **ainda sem aceite no Moto**:
 
 | ID | Prioridade | Requisito | Evidência mínima para aceite no Moto G06 |
 | --- | --- | --- | --- |
@@ -111,3 +111,11 @@ Esta fase foi priorizada **entre MYCT-R4 e MYCT-6/T5**. Os itens abaixo são cri
 | LOC-05 | P1 | Compatibilidade com regras Android modernas | Sem root ou execução arbitrária de binários em diretório gravável, sem baixar targetSdk; licenças e distribuição de toolchain registradas |
 
 **Fora do gate L1:** Linux/POSIX completo, pacotes arbitrários, Cargo/Rust, Python/JavaScript, C++ completo, ambiente root, IDE LSP/debugger. Futuras expansões opcionais. Detalhes: [MYCT-L1](MYCT-L1-AMBIENTE-LOCAL.md). 
+
+## Checkpoint MYCT-L1A — implementação para revisão
+
+LOC-01 e LOC-04: workspace privada/SAF, Sora offline, estados independentes e
+salvamento explícito implementados, com testes de filesystem e isolamento.
+LOC-05 aplicável: targetSdk 36 preservado, sem root/permissão ampla/executáveis
+novos. LOC-02/03 e decisão de compilação fora da missão. **Nenhum desses itens
+está aprovado fisicamente pela L1A.** [Relatório, APK e checklist](MYCT-L1A-RELATORIO.md).

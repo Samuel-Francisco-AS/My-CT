@@ -388,7 +388,7 @@ sem espera de resposta. Mesmo pacote/assinatura; atualizar sem desinstalar ou
 apagar dados. Testar digitação/Backspace, abrir/fechar teclado, nano/tmux e
 comparação Termux SSH. [APK e validação](../docs/MYCT-R1-TERMINAL-FILES.md).
 
-## MYCT-R4 — IDE remota (0.6.5/code 22, candidata)
+## MYCT-R4 — IDE remota (R4-Fix 0.6.6/code 23 aceita)
 
 Conecte pelo Terminal e abra **drawer → IDE**. Navegue até um projeto/arquivo
 UTF-8, edite com Sora (linhas, destaque, indentação, undo/redo e busca/troca) e
@@ -399,4 +399,34 @@ fechar o processo Android. Conflitos recusam a gravação; backups e resultado
 incerto aparecem em **Detalhes**. Limite inicial 1 MiB, um arquivo por vez.
 [Operação, recuperação e limites](../docs/MYCT-R4-TERMINAL-IDE.md) ·
 [Licenças/fontes/reconstrução](IDE-LICENSES.md).
-Aceite/fluidez e navegação no Moto G06 permanecem pendentes.
+R4-Fix aceita no Moto G06 e integrada pelo PR #26; o aceite não cobre automaticamente a nova L1A.
+
+## MYCT-L1A — candidata 0.6.7/code 24, IDE local offline
+
+Abra o drawer → IDE, mesmo sem conectar ao Fedora. Na faixa compacta, escolha
+**Local · Moto G06**. Projetos locais usa armazenamento privado permanente, sem
+root ou permissão ampla. No menu ⋮: **Nova pasta / projeto**, **Novo arquivo**,
+**Importar cópia · SAF**. Toque em pasta/arquivo para abrir; o ⋮ do item renomeia.
+Pai/Projetos/Atualizar/Ir mantêm navegação e posição por diretório.
+
+Edite no Sora e toque **Salvar**. Um arquivo por ambiente; troca Local/Remoto ou
+IDE/Terminal preserva conteúdo/undo enquanto o processo existir. O app pergunta
+antes de descartar arquivo sujo. Salvos sobrevivem ao encerramento do app; não
+há recuperação de buffers não salvos após morte do processo. A nova inicialização
+sem sessão SSH usa Local como fallback, mesmo se o último ambiente era Remoto.
+
+SAF importa cópia em **Importados/**, com identificação permanente na workspace,
+sem alterar o original externo. Depois de salvar, **Exportar cópia salva · SAF**
+cria outro documento no destino escolhido. Cancelamento não grava; permissão
+revogada/erro/releitura indisponível são informados. Uma falha do provedor pode
+deixar cópia externa parcial, a conferir manualmente. Exporte projetos antes de
+desinstalar/limpar dados: Android apaga a workspace privada nessas operações.
+
+**Remoto · Fedora** mantém SSH/SFTP e a transação de salvamento R4. **Terminal ·
+Fedora** abre apenas o terminal SSH existente, sem injetar comandos. L1A não
+inclui terminal local, compilador, runtime ou dependência do aplicativo Termux.
+
+APK: `../artifacts/myct-l1a-0.6.7-debug.apk`; atualizar a instalação existente
+sem desinstalar. Não instalar automaticamente por agente. [Relatório, checksum,
+pré-release e seis testes físicos](../docs/MYCT-L1A-RELATORIO.md). **Aceite Moto
+G06 pendente; build/testes JVM não aprovam LOC-01/LOC-04 fisicamente.**
