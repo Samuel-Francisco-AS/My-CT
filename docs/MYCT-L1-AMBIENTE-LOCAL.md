@@ -2,7 +2,9 @@
 
 > **DECISÃO VIGENTE — 17/10/2026, substitui as seções de compilação C anteriores.** O proprietário **cancelou integralmente a MYCT-L1C** (WCPL/WAMR/compilação dentro do APK), após as RCs code 26/27 falharem no Moto G06. [PR #30](https://github.com/Samuel-Francisco-AS/My-CT/pull/30) encerrado sem merge, somente histórico. **Próxima entrega: MYCT-L1D**, edição direta em uma pasta compartilhada do Android, autorizada por SAF persistente, para **salvar no Sora e compilar no Termux instalado à parte**, sem exportar cópia a cada edição. O alvo é `Documents/MyCT` ou subdiretório permitido equivalente; SAF dá acesso por URI à IDE, não a um caminho POSIX ao shell interno do My-CT. Não inserir compilador/runtime no APK. L1D parte da HEAD da L1B `e1deac6`, via branch `myct-l1d-shared-storage`, sem nenhum commit L1C. Release candidata L1D precisa usar **versionCode > 27** para atualizar instalações RC2 sem desinstalar. Detalhes e critérios vigentes na [issue #27](https://github.com/Samuel-Francisco-AS/My-CT/issues/27). Os planos históricos abaixo foram superados no que disserem respeito à L1C.
 
-**Decisão do proprietário:** 17/10/2026. **Estado:** direção e ordem aprovadas; **L1A com aceite físico parcial do proprietário; L1B candidata implementada, aceite Moto pendente; L1C não iniciada**. **Próxima fase:** depois de fechar e integrar a MYCT-R4/Fix, **antes da MYCT-6 (automações/T5)**. Não iniciar L1 durante o aceite físico pendente da R4.
+**Estado vigente:** L1C cancelada; L1D candidata implementada, aguardando gate Moto G06/Termux. Ver [relatório L1D](MYCT-L1D-RELATORIO.md).
+
+**Registro histórico, superado pela decisão acima:** 17/10/2026. **Estado histórico:** direção e ordem aprovadas; **L1A com aceite físico parcial do proprietário; L1B candidata implementada, aceite Moto pendente; L1C não iniciada**. **Próxima fase:** depois de fechar e integrar a MYCT-R4/Fix, **antes da MYCT-6 (automações/T5)**. Não iniciar L1 durante o aceite físico pendente da R4.
 
 ## Objetivo e decisão
 

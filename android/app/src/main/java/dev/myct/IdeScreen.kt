@@ -1,5 +1,6 @@
 package dev.myct
 
+import android.app.Activity
 import android.graphics.Typeface
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -57,18 +58,34 @@ internal fun IdeScreen(model: IdeModel, terminal: () -> Unit, files: (String) ->
         model.local.exportDocument(uri?.let { { context.contentResolver.openOutputStream(it, "w") } },
             verify = { uri?.let { context.contentResolver.openInputStream(it) } })
     }
+    val treePicker = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val data = result.data
+        model.shared?.chooseTree(if (result.resultCode == Activity.RESULT_OK) data?.data?.toString() else null, data?.flags ?: 0)
+    }
+    val selectTree: () -> Unit = {
+        try { treePicker.launch(sharedTreeIntent(model.shared?.tree)) } catch (_: Exception) { model.shared?.pickerFailed() }
+    }
+    model.shared?.pendingTree?.let { pending ->
+        AlertDialog(onDismissRequest = { model.shared.cancelTreeChange() }, title = { Text("Descartar alterações compartilhadas?") },
+            text = { Text("Trocar a pasta substituirá o documento aberto. Cancele para salvar ou copiar o buffer antes de continuar.") },
+            confirmButton = { MyCtTextButton(onClick = { model.shared.chooseTree(pending.uri, pending.flags, discard = true) }) { Text("Descartar e trocar") } },
+            dismissButton = { MyCtTextButton(onClick = { model.shared.cancelTreeChange() }) { Text("Cancelar") } })
+    }
     val states = rememberSaveableStateHolder()
-    states.SaveableStateProvider(model.environment.name) {
+    states.SaveableStateProvider(model.environment.name + model.storage.name) {
         IdeSessionScreen(model, model.session, terminal, files,
             importDocument = { try { importer.launch(arrayOf("*/*")) } catch (_: Exception) { model.local.pickerFailed() } },
-            exportDocument = { try { model.local.prepareExport()?.let(exporter::launch) } catch (_: Exception) { model.local.pickerFailed() } }, modifier)
+            exportDocument = { try { model.local.prepareExport()?.let(exporter::launch) } catch (_: Exception) { model.local.pickerFailed() } },
+            selectTree = selectTree, modifier = modifier)
     }
 }
 
 @Composable
 private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () -> Unit, files: (String) -> Unit,
-                             importDocument: () -> Unit, exportDocument: () -> Unit, modifier: Modifier) {
+                             importDocument: () -> Unit, exportDocument: () -> Unit, selectTree: () -> Unit, modifier: Modifier) {
     val local = owner.environment == IdeEnvironment.LOCAL
+    val shared = model as? SharedIdeModel
+    var storageMenu by remember { mutableStateOf(false) }
     val doc = model.document
     val browsing = model.browse || doc == null
     var pendingOpen by remember { mutableStateOf<String?>(null) }
@@ -112,10 +129,11 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
     }
     fun restoreFocus() { editor?.post { if (editor?.isReleased == false) editor?.requestFocus() } }
     fun action(block: () -> Unit) { menu = false; keys.clear(); block() }
-    fun open(path: String) { if (doc?.dirty == true) pendingOpen = path else model.open(path) }
+    fun open(path: String) { if (doc?.dirty == true || doc?.uncertain == true) pendingOpen = path else model.open(path) }
 
     val listing = model.listing
     val entries = listing?.entries.orEmpty()
+    val rows = remember(model, listing, shared?.listingRevision) { model.rows(listing) }
     // Construct the correct position before the new folder can draw, as in FilesScreen.
     val listState = key(listing?.path) {
         val saved = listing?.let { model.scroll.position(it.path) }
@@ -148,10 +166,11 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
                 }
             }
             Column(Modifier.weight(1f)) {
-                Text(if (browsing) "IDE · Projetos" else "${if (doc?.dirty == true) "● " else ""}${doc?.path?.substringAfterLast('/').orEmpty()}",
+                Text(if (browsing) "IDE · Projetos" else "${if (doc?.dirty == true) "● " else ""}${doc?.path?.let(model::fileName).orEmpty()}",
                 modifier = Modifier.padding(horizontal = 4.dp), maxLines = 1, overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.titleSmall)
-                if (local && !browsing) Text(if (owner.local.imported) "Cópia SAF · workspace" else "Workspace privada",
+                if (!browsing) Text(if (!local) "Remoto · Fedora" else if (shared != null) "Compartilhado · documento original"
+                    else if (owner.local.imported) "Cópia SAF · privada" else "Workspace privada",
                 maxLines = 1, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             MyCtButton(onClick = model::save, enabled = model.canSave) { Text("Salvar${if (doc?.dirty == true) " *" else ""}") }
@@ -165,13 +184,22 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
                         onClick = { action { saveScroll(); listing?.path?.let(files) } })
                     if (local) {
                         HorizontalDivider()
-                        DropdownMenuItem(text = { Text("Nova pasta / projeto…") }, enabled = !model.busy,
+                        IdeStorage.entries.forEach { storage -> DropdownMenuItem(
+                            text = { Text("${if (owner.storage == storage) "✓ " else ""}${storage.label}") },
+                            enabled = !model.busy, onClick = { action { saveScroll(); owner.selectStorage(storage) } }) }
+                        if (shared != null) {
+                            DropdownMenuItem(text = { Text("Selecionar pasta compartilhada…") }, enabled = !model.busy,
+                                onClick = { action(selectTree) })
+                            DropdownMenuItem(text = { Text("Reabrir documento salvo") }, enabled = !model.busy && doc != null,
+                                onClick = { action { doc?.path?.let(::open) } })
+                        }
+                        DropdownMenuItem(text = { Text("Nova pasta / projeto…") }, enabled = !model.busy && (shared == null || shared.canCreate),
                             onClick = { action { nameAction = "folder"; itemName = "" } })
-                        DropdownMenuItem(text = { Text("Novo arquivo…") }, enabled = !model.busy,
+                        DropdownMenuItem(text = { Text("Novo arquivo…") }, enabled = !model.busy && (shared == null || shared.canCreate),
                             onClick = { action { nameAction = "file"; itemName = "" } })
-                        DropdownMenuItem(text = { Text("Importar cópia · SAF…") }, enabled = !model.busy,
+                        if (shared == null) DropdownMenuItem(text = { Text("Importar cópia · SAF…") }, enabled = !model.busy,
                             onClick = { action { saveScroll(); importDocument() } })
-                        DropdownMenuItem(text = { Text("Exportar cópia salva · SAF…") },
+                        if (shared == null) DropdownMenuItem(text = { Text("Exportar cópia salva · SAF…") },
                             enabled = !model.busy && doc != null && !doc.dirty && !doc.uncertain,
                             onClick = { action(exportDocument) })
                     }
@@ -188,13 +216,26 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
                             onClick = { action { closeAsked = true } })
                     }
                     HorizontalDivider()
-                    DropdownMenuItem(text = { Text("Ir para caminho…") }, enabled = model.connected && !model.busy,
+                    if (shared == null) DropdownMenuItem(text = { Text("Ir para caminho…") }, enabled = model.connected && !model.busy,
                         onClick = { action { pathDialog = true } })
                     if (model.busy && !local) DropdownMenuItem(text = { Text("Cancelar operação") }, onClick = { action(model::cancel) })
                     DropdownMenuItem(text = { Text("Detalhes") }, onClick = { action { details = true } })
                 }
             }
         }
+        if (local && browsing) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
+                MyCtTextButton(onClick = { storageMenu = true }, enabled = !model.busy) { Text("${owner.storage.label} ▾") }
+                DropdownMenu(storageMenu, onDismissRequest = { storageMenu = false }) {
+                    IdeStorage.entries.forEach { value -> DropdownMenuItem(text = { Text(value.label) }, onClick = {
+                        saveScroll(); storageMenu = false; owner.selectStorage(value)
+                    }) }
+                }
+            }
+            if (shared != null) MyCtTextButton(onClick = selectTree, enabled = !model.busy) { Text("Selecionar pasta…") }
+        }
+        if (shared?.permissionNeeded == true) TextButton(onClick = selectTree, enabled = !model.busy,
+            modifier = Modifier.fillMaxWidth()) { Text("Autorizar pasta pelo Android") }
         if (browsing) {
             Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(enabled = !model.busy && listing != null && !model.atRoot(listing.path),
@@ -204,9 +245,9 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
                 DetailValue("Caminho", listing?.path?.let(model::displayPath) ?: if (local) "Projetos locais/" else "Diretório inicial", maxLines = 1, showLabel = false, modifier = Modifier.weight(1f))
             }
             Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
-                MyCtTextButton(onClick = { directory() }, enabled = model.connected && !model.busy) { Text(if (local) "Projetos" else "Home") }
+                MyCtTextButton(onClick = { directory(if (shared != null) "" else null) }, enabled = model.connected && !model.busy) { Text(if (shared != null) "Raiz" else if (local) "Projetos" else "Home") }
                 MyCtTextButton(onClick = { directory(listing?.path) }, enabled = model.connected && !model.busy) { Text("Atualizar") }
-                MyCtTextButton(onClick = { pathDialog = true }, enabled = model.connected && !model.busy) { Text("Ir…") }
+                if (shared == null) MyCtTextButton(onClick = { pathDialog = true }, enabled = model.connected && !model.busy) { Text("Ir…") }
                 Text("${entries.size}", style = MaterialTheme.typography.labelSmall)
             }
             // Keep the old list and its viewport unchanged while listing/opening is in flight.
@@ -228,14 +269,11 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
         Box(Modifier.fillMaxWidth().weight(1f)) {
             if (browsing) {
                 LazyColumn(Modifier.fillMaxSize(), state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    items(entries, key = { it.name }) { entry ->
+                    items(rows, key = { it.reference }) { (entry, path) ->
                         Surface(shape = MyCtGeometry.Control, color = MaterialTheme.colorScheme.surface,
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                             Row(Modifier.fillMaxWidth().clickable(enabled = model.connected && !model.busy && entry.kind in setOf(RemoteKind.FILE, RemoteKind.DIRECTORY)) {
-                                listing?.path?.let { parent ->
-                                    val path = model.child(parent, entry.name)
-                                    if (entry.kind == RemoteKind.DIRECTORY) directory(path) else { saveScroll(); open(path) }
-                                }
+                                if (entry.kind == RemoteKind.DIRECTORY) directory(path) else { saveScroll(); open(path) }
                             }.heightIn(min = 64.dp).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Icon(FileGlyphs.forKind(entry.kind), contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(24.dp))
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -243,8 +281,8 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
                                     Text("${when (entry.kind) { RemoteKind.DIRECTORY -> "Pasta"; RemoteKind.FILE -> "Arquivo · ${formatFileSize(entry.size)}"; RemoteKind.LINK -> "Link simbólico · sem edição"; RemoteKind.OTHER -> "Tipo especial · sem edição" }} · ${dateFormat.format(Date(entry.modified * 1000))}",
                                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                if (local) IconButton(enabled = !model.busy, onClick = {
-                                    saveScroll(); renamePath = listing?.path?.let { model.child(it, entry.name) }
+                                if (local) IconButton(enabled = !model.busy && (shared == null || shared.canRename(path)), onClick = {
+                                    saveScroll(); renamePath = path
                                     itemName = entry.name; nameAction = "rename"
                                 }, modifier = Modifier.semantics { contentDescription = "Renomear ${entry.name}" }) { Text("⋮") }
                             }
@@ -257,7 +295,7 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
                         typefaceText = Typeface.MONOSPACE
                         setTextSize(14f); tabWidth = 4; isLineNumberEnabled = true
                         colorScheme = TextMateColorScheme.create(io.github.rosemoe.sora.langs.textmate.registry.ThemeRegistry.getInstance())
-                        setEditorLanguage(codeScope(doc.path)?.let { TextMateLanguage.create(it, false) } ?: EmptyLanguage())
+                        setEditorLanguage(codeScope(model.fileName(doc.path))?.let { TextMateLanguage.create(it, false) } ?: EmptyLanguage())
                         setText(doc.content, true, null)
                         val original = doc.snapshot.bytes.toString(Charsets.UTF_8)
                         lineSeparator = when { original.contains("\r\n") -> LineSeparator.CRLF; original.contains('\r') -> LineSeparator.CR; else -> LineSeparator.LF }
@@ -300,8 +338,8 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
         confirmButton = { MyCtTextButton(enabled = itemName.isNotBlank() && !model.busy, onClick = {
             saveScroll()
             when (nameAction) {
-                "rename" -> renamePath?.let { owner.local.rename(it, itemName) }
-                else -> owner.local.create(itemName, nameAction == "folder")
+                "rename" -> renamePath?.let { if (shared != null) shared.rename(it, itemName) else owner.local.rename(it, itemName) }
+                else -> if (shared != null) shared.create(itemName, nameAction == "folder") else owner.local.create(itemName, nameAction == "folder")
             }
             nameAction = null
         }) { Text(if (nameAction == "rename") "Renomear" else "Criar") } },
@@ -319,7 +357,7 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
         } }, confirmButton = { MyCtTextButton(onClick = { find = false; restoreFocus() }) { Text("Voltar ao código") } })
     if (pendingOpen != null || closeAsked) AlertDialog(onDismissRequest = { pendingOpen = null; closeAsked = false },
         title = { Text("${if (doc?.dirty == true) "Descartar alterações?" else "Fechar arquivo?"}") },
-        text = { Text("${doc?.path.orEmpty()}\n${if (doc?.dirty == true) "O buffer ainda não foi salvo. Cancele e toque em Salvar no ambiente de origem." else "O arquivo salvo será preservado."}") },
+        text = { Text("${doc?.path?.let(model::displayPath).orEmpty()}\n${if (doc?.dirty == true) "O buffer ainda não foi salvo. Cancele e toque em Salvar no ambiente de origem." else "O arquivo salvo será preservado."}") },
         confirmButton = { TextButton(onClick = {
             val next = pendingOpen; pendingOpen = null; closeAsked = false
             if (next != null) model.open(next) else model.closeDocument()
@@ -328,14 +366,15 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
     if (details) AlertDialog(onDismissRequest = { details = false; restoreFocus() }, title = { Text("${owner.environment.label} · UTF-8") },
         text = { SelectionContainer { Column(Modifier.verticalScroll(rememberScrollState())) {
             DetailValue("Arquivo", model.displayPath(doc?.path ?: listing?.path.orEmpty()))
-            if (local) Text(if (owner.local.imported) "Cópia importada via SAF. Salvar altera apenas a workspace; exportar cria outra cópia." else "Workspace privada do My-CT. Desinstalar/limpar dados apaga os projetos; exporte cópias pelo SAF.")
+            if (shared != null) Text("Documento original na pasta autorizada. Salvar escreve pela URI SAF e relê o resultado. O provedor pode truncar antes de falhar: não há garantia de troca atômica ou backup. Não edite simultaneamente em outro app. Para Termux, escolha Documents/MyCT no armazenamento interno, não um provedor de nuvem. O shell local My-CT não recebe um caminho POSIX por esta autorização.")
+            else if (local) Text(if (owner.local.imported) "Cópia importada via SAF. Salvar altera apenas a workspace; exportar cria outra cópia." else "Workspace privada do My-CT. Desinstalar/limpar dados apaga os projetos; exporte cópias pelo SAF.")
             Text(model.message)
             Text("CTRL: atalhos locais na faixa temporária; CTRL + setas move por palavra e CTRL + HOME/END vai ao início/fim do documento. ALT oferece CTRL+ALT+ENTER (linha acima). Modificadores são consumidos pela próxima tecla da barra/atalho e cancelados ao editar pelo Gboard, abrir menu ou sair da tela. Sem alterar a composição do teclado Android.")
-            Text("Selecione o código para copiar/colar. Indentação: 4 espaços. Busca literal diferencia maiúsculas. Sem autosave. Limite: 1 MiB / 30 mil linhas. Um arquivo aberto por ambiente.")
+            Text("Selecione o código para copiar/colar. Indentação: 4 espaços. Busca literal diferencia maiúsculas. Sem autosave. Limite: 1 MiB / 30 mil linhas. Um arquivo aberto por origem (privada, compartilhada e remota).")
             Text("Alternar seções ou desconectar mantém o buffer e undo em memória. Fechar o processo Android perde o buffer; salve antes de sair. Não edite o mesmo arquivo simultaneamente em outro programa.")
             doc?.backupPath?.let { Text("Caminho de recuperação (se criado): $it") }
             if (doc?.uncertain == true) Text(if (local)
-                "Resultado incerto: confira o arquivo em Projetos locais; copie o buffer pelo clipboard antes de descartar/reabrir. Não há backup local automático."
+                "Resultado incerto: confira o arquivo na pasta de origem; copie o buffer pelo clipboard antes de descartar/reabrir. Não há backup local automático."
                 else "Resultado incerto: confira original/backup em Arquivos ou Terminal, preserve uma cópia do buffer e reabra antes de salvar novamente.")
             Text("Sora Editor 0.23.6 · LGPL-2.1-or-later. Fontes/licenças e instruções de reconstrução na release e no repositório My-CT.")
             TextButton(onClick = { notices = context.assets.open("ide/NOTICE.txt").bufferedReader().use { it.readText() } }) { Text("Licenças e fontes") }

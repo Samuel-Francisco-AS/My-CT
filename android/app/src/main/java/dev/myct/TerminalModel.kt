@@ -52,6 +52,9 @@ class TerminalModel(application: Application) {
         private set
     val files = FilesModel(application)
     internal val ide = IdeModel(java.io.File(application.filesDir, "ide-local"),
+        shared = SharedIdeModel(SharedWorkspace(AndroidSharedDocuments(application.contentResolver), AndroidSharedTreeMemory(application))),
+        preferredStorage = runCatching { IdeStorage.valueOf(prefs.getString("ide-storage", "PRIVATE") ?: "PRIVATE") }.getOrDefault(IdeStorage.PRIVATE),
+        rememberStorage = { value -> prefs.edit { putString("ide-storage", value.name) } },
         preferred = runCatching { IdeEnvironment.valueOf(prefs.getString("ide-environment", "LOCAL") ?: "LOCAL") }.getOrDefault(IdeEnvironment.LOCAL)) { mode ->
         prefs.edit { putString("ide-environment", mode.name) }
     }
