@@ -1,8 +1,6 @@
-# MYCT-R1 — terminal e navegação SFTP (candidata, não aceita)
+# MYCT-R1 — retorno SFTP melhorou; latência SSH suspensa como dívida técnica
 
-**Última retomada — MYCT-R1C:** candidata de implementação 0.5.9/code 16:
-workers próprios, recepção assíncrona limitada e resize consolidado/sem ACK.
-Retorno físico da 0.5.8 e alterações ao final. Aceite de responsividade pendente.
+**Decisão física final desta rodada — 16/10/2026:** a MYCT-R1C **0.5.9/code 16** melhorou **a abertura e o fechamento do teclado**, mas **não resolveu o lag intermitente de digitação/Backspace** no Moto G06. O Termux SSH ao mesmo Fedora permanece mais fluido. **R-01 está suspenso como dívida por decisão expressa do proprietário; não iniciar novas correções ou diagnósticos sem autorização.** A navegação SFTP R-02, inclusive restauração sem salto visual, melhorou e foi confirmada no Moto. PR #22 permanece draft, sem merge.
 
 **Origem:** refinamento da [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9), itens R-01 e R-02. Iniciado em 16/10/2026. Não envolve novo serviço no Fedora, modificações SSHD, emulador ou schema.
 
@@ -318,3 +316,14 @@ sem apagar dados; comparar digitação e Backspace mantido, espaços/Enter,
 abrir/fechar IME, rotação/fonte, nano e tmux com Termux SSH no mesmo Fedora/rede.
 Conferir também seleção/clipboard e retorno SFTP. Começar com amostra desligada.
 Nenhum aceite físico desta versão; PR #22 permanece draft, sem merge.
+
+
+## Encerramento da tentativa de performance e continuidade — relato do proprietário (16/10/2026)
+
+- **R-01 / terminal — DÍVIDA TÉCNICA SUSPENSA:** a MYCT-R1C 0.5.9/code 16 **não resolveu** os engasgos de digitação e Backspace. Melhorou **parcialmente** abrir/fechar o teclado, sem conforto equivalente ao Termux SSH no mesmo Fedora. Os testes automatizados das candidatas 0.5.7, 0.5.8 e 0.5.9 não substituem o retorno físico. Não declarar a fluidez aceita ou o bug corrigido.
+- **R-02 / Arquivos — MELHORIA FÍSICA CONFIRMADA:** retorno à pasta preserva a posição e deixa de exibir salto ao topo antes da restauração. O botão mostrar/ocultar dotfiles foi implementado, sem relato físico específico de aceite do botão.
+- **Decisão explícita do proprietário:** parar tentativas de correção do lag agora, sem R1D, novos benchmarks, amostras de 60 s, eco preditivo ou migração OpenSSH por iniciativa do agente. Não bloquear as próximas etapas pelo lag. Manter as melhorias aceitas e reabrir esse assunto somente se o proprietário solicitar.
+- **Próximas fases:** UX-R03 (ergonomia/interface visual) e R-09 (apresentação de verificação/antivírus em telas pequenas), depois R-07/VAL-R04/VAL-R05/VAL-R08 conforme escolha do proprietário. Consultar [trilha](09-TRILHA-REFINAMENTO-ANDROID.md) e [issue #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9).
+- **Integração:** PR #22 permanece draft, sem merge nesta atualização documental; a pendência R-01 não deve ser tratada como gate para integrar funcionalidades já aceitas. Não realizar merge automaticamente sem decisão/revisão do proprietário.
+
+Os resultados anteriores de testes e as implementações permanecem registrados historicamente, mas a observação física posterior tem precedência sobre expectativas de ganho.
