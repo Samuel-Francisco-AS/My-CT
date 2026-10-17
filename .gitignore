@@ -4,6 +4,7 @@ android/.gradle/
 android/**/build/
 android/local.properties
 android/.kotlin/
+android/**/.cxx/
 artifacts/
 *.jks
 *.keystore

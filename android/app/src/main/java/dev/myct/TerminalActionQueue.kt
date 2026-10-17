@@ -2,7 +2,7 @@ package dev.myct
 
 import java.util.ArrayDeque
 
-/** One dedicated owner writes SSH bytes and applies only the latest pending PTY size. */
+/** One dedicated owner writes transport bytes and applies only the latest pending PTY size. */
 internal class TerminalActionQueue(
     private val diagnostics: TerminalDiagnostics,
     private val quietNanos: Long = 120_000_000,

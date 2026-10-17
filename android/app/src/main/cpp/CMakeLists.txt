@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(myct_pty LANGUAGES CXX)
+add_library(myct-pty SHARED local_pty.cpp pty_jni.cpp)
+target_compile_features(myct-pty PRIVATE cxx_std_20)
+target_compile_options(myct-pty PRIVATE -Wall -Wextra -Werror -fvisibility=hidden)
+target_link_options(myct-pty PRIVATE -Wl,-z,max-page-size=16384)

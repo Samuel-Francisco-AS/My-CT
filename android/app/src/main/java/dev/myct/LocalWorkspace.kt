@@ -17,6 +17,8 @@ internal class LocalWriteUncertain : Exception()
 internal class LocalWorkspace(private val base: File) {
     private val root = File(base, "projetos").toPath()
     private val origins = File(base, "importados.properties").toPath()
+    /** Same checked root as IDE creation, initialized only on explicit shell start. */
+    fun terminalDirectory(): File = resolve("").toFile()
     fun name(value: String): String {
         if (value.isBlank() || value in setOf(".", "..") || value.any { it == '/' || it == '\\' || it.code < 32 || it.code == 127 } ||
             value.toByteArray(Charsets.UTF_8).size > 240 || value.startsWith(".myct-"))
