@@ -79,6 +79,9 @@ internal fun AppShell(
     ModalNavigationDrawer(
         modifier = modifier,
         drawerState = drawer,
+        // Closed: only the directional edge observer may open. Open: Material3 retains
+        // drag-to-close, scrim click/semantics and arbitration with its vertical scroller.
+        gesturesEnabled = drawer.isOpen,
         drawerContent = {
             // The state-aware overload supplies Back/predictive Back; outer insets are consumed once.
             ModalDrawerSheet(
@@ -171,15 +174,14 @@ internal fun AppShell(
             }
         }
     ) {
-        Box(Modifier.fillMaxSize().semantics {
+        Box(Modifier.fillMaxSize().drawerEdgeOpening(drawer, scope).semantics {
             customActions = listOf(CustomAccessibilityAction("Abrir menu de navegação") { openMenu(); true })
         }) {
             content()
             if (drawer.isClosed) {
-                // Reserve only a small segment against Android Back. Material3 handles all drags;
-                // no pointer interceptor steals taps/selection from the underlying TerminalView.
+                // Reserve only a small segment against Android Back; no pointer input overlay.
                 // This semantic action also opens navigation through TalkBack/Voice/Switch Access.
-                Box(Modifier.align(Alignment.CenterStart).width(24.dp).height(160.dp)
+                Box(Modifier.align(Alignment.CenterStart).width(DrawerOpeningEdgeWidth).height(160.dp)
                     .systemGestureExclusion()
                     .semantics {
                         contentDescription = "Menu de navegação My-CT"

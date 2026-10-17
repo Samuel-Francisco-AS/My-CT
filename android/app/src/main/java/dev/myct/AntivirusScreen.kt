@@ -26,38 +26,37 @@ private fun AntivirusInfo(info: AvInfo) {
 
 @Composable
 internal fun AntivirusScanSection(model: AntivirusScanModel, enabled: Boolean) {
-    HorizontalDivider(Modifier.padding(vertical = 8.dp))
-    Text("Antivírus", style = MaterialTheme.typography.titleMedium)
-    Text("Análise local sob demanda no Fedora. SHA-256 verifica integridade; não executa o antivírus.", style = MaterialTheme.typography.bodySmall)
+    MyCtPanelRule()
+    ScreenHeading("Antivírus", "Análise local sob demanda no Fedora, sem modificar o arquivo. SHA-256 verifica integridade e não executa antivírus. Limites de tempo, memória e expansão podem tornar a análise incompleta. Até 2 GB decimais.")
     val result = model.result
-    if (result == null && !model.busy) Text("Não analisado")
+    if (result == null && !model.busy) StatusNotice("Não analisado · SHA-256 não é uma análise antivírus")
     if (model.busy) {
         LinearProgressIndicator(Modifier.fillMaxWidth())
-        Text(model.message, style = MaterialTheme.typography.bodySmall)
+        StatusNotice(model.message)
         MyCtTextButton(onClick = { model.cancel() }) { Text("Cancelar análise") }
     } else {
         result?.let {
-            Text(it.state.label, style = MaterialTheme.typography.titleMedium,
-                color = if (it.state == AvState.DETECTED || it.state == AvState.ERROR || it.state == AvState.INCOMPLETE)
-                    MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
-            if (it.state == AvState.CLEAN) Text("O ClamAV não encontrou ameaças com as assinaturas utilizadas. Isso não comprova segurança.",
-                style = MaterialTheme.typography.bodySmall)
-            if (it.state == AvState.DETECTED) Text("Resultado informativo. Nenhuma ação foi realizada sobre o arquivo.")
-            it.detections.forEach { detection -> Text("Detecção: $detection", color = MaterialTheme.colorScheme.error) }
-            it.info?.let { info -> AntivirusInfo(info) }
-            it.durationMs?.let { ms -> Text("Duração: ${ms / 1000.0} s", style = MaterialTheme.typography.bodySmall) }
-            var details by remember(result) { mutableStateOf(false) }
-            if (it.rssKib != null) {
-                MyCtTextButton(onClick = { details = !details }) { Text(if (details) "Ocultar detalhes" else "Detalhes de consumo") }
-                if (details) Text("Pico RSS: ${formatFileSize(it.rssKib * 1024)}", style = MaterialTheme.typography.bodySmall)
+            val failed = it.state != AvState.CLEAN
+            Text("${it.state.name} · ${it.state.label}", style = MaterialTheme.typography.titleMedium,
+                color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary)
+            when (it.state) {
+                AvState.CLEAN -> StatusNotice("Nenhuma ameaça encontrada com as assinaturas utilizadas. Isso não comprova segurança.")
+                AvState.DETECTED -> StatusNotice("Detecção informativa. Nenhuma ação foi realizada sobre o arquivo.", true)
+                else -> StatusNotice("Não há confirmação de análise completa.", true)
+            }
+            it.detections.forEach { detection -> StatusNotice("Detecção: $detection", true) }
+            if (it.info?.stale == true || it.info?.available == false) StatusNotice("Assinaturas desatualizadas ou indisponíveis", true)
+            it.durationMs?.let { ms -> DataLine("Duração", "${ms / 1000.0} s") }
+            ExpandDetails("Assinaturas e consumo") {
+                it.info?.let { info -> AntivirusInfo(info) }
+                it.rssKib?.let { rss -> DataLine("Pico RSS", formatFileSize(rss * 1024)) }
             }
         }
-        if (model.message.isNotBlank()) Text(model.message, style = MaterialTheme.typography.bodySmall)
-        if (model.tooLarge) Text(AV_LIMIT_NOTICE, color = MaterialTheme.colorScheme.error)
+        StatusNotice(model.message, result?.state in setOf(AvState.ERROR, AvState.INCOMPLETE, AvState.UNAVAILABLE))
+        if (model.tooLarge) StatusNotice(AV_LIMIT_NOTICE, true)
+        StatusNotice("Análise não destrutiva; limites podem impedir a conclusão.")
         MyCtTextButton(onClick = { model.scan() }, enabled = model.canScan && enabled) { Text("Verificar antivírus") }
     }
-    Text("Até 2 GB decimais; limites de tempo, memória e expansão podem tornar a análise incompleta. O arquivo permanece intocado.",
-        style = MaterialTheme.typography.bodySmall)
 }
 
 @Composable
@@ -73,21 +72,23 @@ internal fun AntivirusSignaturesSection(model: AntivirusSignaturesModel) {
         onDispose { activity.lifecycle.removeObserver(observer); model.hide() }
     }
     LaunchedEffect(visible, model.connected) { if (visible && model.connected) model.show() else model.hide() }
-    HorizontalDivider(Modifier.padding(vertical = 8.dp))
-    Text("Antivírus e assinaturas", style = MaterialTheme.typography.titleMedium)
-    model.info?.let { info ->
-        Text(if (info.available) "ClamAV disponível" else "ClamAV indisponível")
-        AntivirusInfo(info)
-        Text("Última atualização bem-sucedida: ${avDate(info.lastSuccess)}", style = MaterialTheme.typography.bodySmall)
+    ScreenHeading("Antivírus e assinaturas", "A atualização continua no Fedora ao fechar Opções. Agenda existente: 36 horas. Uma base atualizada não comprova que um arquivo é seguro.")
+    ScreenPanel {
+        model.info?.let { info ->
+            Text(if (info.available) "ClamAV disponível" else "ClamAV indisponível", style = MaterialTheme.typography.titleMedium)
+            AntivirusInfo(info)
+            StatusNotice("Última atualização: ${avDate(info.lastSuccess)}")
+        }
+        model.update?.let {
+            StatusNotice(if (it.running && it.phase == "WAITING") "WAITING · aguardando análise" else
+                if (it.running) "RUNNING · atualização em andamento" else "Resultado: ${it.result}")
+        }
+        if (model.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+        StatusNotice(model.message)
+        if (model.unconfirmed) StatusNotice("Dados anteriores · estado atual não confirmado", true)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MyCtTextButton(onClick = { model.requestUpdate() }, enabled = model.connected && !model.busy) { Text("Atualizar assinaturas") }
+            MyCtTextButton(onClick = { model.refresh() }, enabled = model.connected && !model.busy) { Text("Consultar estado") }
+        }
     }
-    model.update?.let {
-        Text(if (it.running && it.phase == "WAITING") "WAITING · aguardando análise" else
-            if (it.running) "RUNNING · atualização em andamento" else "Resultado: ${it.result}", style = MaterialTheme.typography.bodySmall)
-    }
-    if (model.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-    Text(model.message, style = MaterialTheme.typography.bodySmall)
-    if (model.unconfirmed) Text("Dados anteriores não confirmam o estado atual.", style = MaterialTheme.typography.bodySmall)
-    MyCtTextButton(onClick = { model.requestUpdate() }, enabled = model.connected && !model.busy) { Text("Atualizar assinaturas") }
-    MyCtTextButton(onClick = { model.refresh() }, enabled = model.connected && !model.busy) { Text("Consultar estado") }
-    Text("A atualização continua no Fedora ao fechar Opções. A agenda existente é de 36 horas.", style = MaterialTheme.typography.bodySmall)
 }

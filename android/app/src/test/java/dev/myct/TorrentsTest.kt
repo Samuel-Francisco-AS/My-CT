@@ -76,4 +76,38 @@ class TorrentsTest {
         }
         assertThrows(IllegalStateException::class.java) { executeTorrent(TorrentAction.List, { error("SSH disconnected") }) }
     }
+    @Test fun accumulatorsArePerTorrentAndSeparateFromRatesAndProgress() {
+        val json = org.json.JSONObject(record(4))
+        json.getJSONArray("torrents").getJSONObject(0).apply {
+            put("downloaded_ever", 5_000_000_000L); put("uploaded_ever", 7_000_000_000L); put("upload_ratio", 4.25)
+        }
+        val row = parseTorrents(json.toString()).single()
+        assertEquals(5_000_000_000L, row.downloadedEver)
+        assertEquals(7_000_000_000L, row.uploadedEver)
+        assertEquals(4.25, row.ratio!!, 0.00001)
+        assertEquals(25L, row.bytes); assertEquals(12L, row.down); assertEquals(3L, row.up)
+    }
+    @Test fun olderCliAndInvalidOptionalCountersRemainUnavailable() {
+        val legacy = parseTorrents(record(4)).single()
+        assertNull(legacy.downloadedEver); assertNull(legacy.uploadedEver); assertNull(legacy.ratio)
+        val json = org.json.JSONObject(record(4))
+        json.getJSONArray("torrents").getJSONObject(0).apply {
+            put("downloaded_ever", -1); put("uploaded_ever", "100"); put("upload_ratio", -3)
+        }
+        val row = parseTorrents(json.toString()).single()
+        assertNull(row.downloadedEver); assertNull(row.uploadedEver); assertNull(row.ratio)
+        assertNotEquals("0", torrentRatioLabel(row.ratio))
+    }
+    @Test fun transmissionRatioSentinelsAreNotInventedFiniteValues() {
+        for (value in listOf(-1.0, -2.0, 0.0, 2.5)) {
+            val json = org.json.JSONObject(record(6))
+            json.getJSONArray("torrents").getJSONObject(0).put("upload_ratio", value)
+            assertEquals(value, parseTorrents(json.toString()).single().ratio!!, 0.0)
+        }
+        assertEquals("∞", torrentRatioLabel(-2.0))
+        assertEquals("Indisponível", torrentRatioLabel(-1.0))
+        assertEquals("Indisponível", torrentRatioLabel(null))
+        assertEquals("Indisponível", torrentRatioLabel(Double.NaN))
+    }
+
 }

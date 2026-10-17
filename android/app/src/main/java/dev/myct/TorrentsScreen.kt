@@ -2,6 +2,8 @@ package dev.myct
 
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
@@ -50,52 +52,64 @@ internal fun TorrentsScreen(model: TorrentsModel, filesBusy: Boolean, openFiles:
             delay(4000)
         }
     }
-    LazyColumn(modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        item {
-            Text("Torrents · Fedora", style = MaterialTheme.typography.titleMedium)
-            Text("Continua no Fedora ao fechar o app. Concluído pode continuar compartilhando (seeding); use Pausar para parar. Limites do motor são preservados.", style = MaterialTheme.typography.bodySmall)
-            Text("Novos torrents: pasta por hash durante o download; título real ao concluir. Pastas anteriores são mantidas.", style = MaterialTheme.typography.bodySmall)
-            OutlinedTextField(magnet, { if (it.length <= 8192) magnet = it }, label = { Text("Magnet legal e confiável") },
-                singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = model.formEnabled,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MyCtButton(onClick = { model.add(magnet) }, enabled = model.actionsEnabled && magnet.isNotBlank()) { Text("Adicionar torrent") }
-                MyCtTextButton(onClick = { model.refresh() }, enabled = model.actionsEnabled) { Text("Atualizar") }
+    LazyColumn(modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
+        item(key = "form") {
+            ScreenPanel {
+                ScreenHeading("Novo torrent", "Magnet confiável. O motor continua no Fedora ao fechar o app. Concluídos podem continuar compartilhando (seeding); use Pausar para parar. Pasta por hash durante download, título real ao concluir; legados preservados. Acumulados são por torrent e podem exceder o tamanho atual. Ratio é o upload_ratio informado pelo Transmission (4.1: enviado / tamanho final), não uma divisão das taxas. Dados extras ausentes exigem o adaptador R2B, cuja instalação é manual e separada do Git.")
+                OutlinedTextField(magnet, { if (it.length <= 8192) magnet = it }, label = { Text("Magnet legal e confiável") },
+                    singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = model.formEnabled,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false))
+                StatusNotice("Concluídos podem continuar compartilhando. Use Pausar para parar.")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MyCtButton(onClick = { model.add(magnet) }, enabled = model.actionsEnabled && magnet.isNotBlank()) { Text("Adicionar torrent") }
+                    MyCtTextButton(onClick = { model.refresh() }, enabled = model.actionsEnabled) { Text("Atualizar") }
+                }
+                Box(Modifier.fillMaxWidth().height(4.dp)) {
+                    if (model.showOperationProgress) LinearProgressIndicator(Modifier.fillMaxWidth())
+                }
+                StatusNotice(model.message)
+                if (model.stale) StatusNotice("Dados anteriores · estado atual não confirmado", true)
             }
-            Box(Modifier.fillMaxWidth().height(4.dp)) {
-                if (model.showOperationProgress) LinearProgressIndicator(Modifier.fillMaxWidth())
-            }
-            Text(model.message, style = MaterialTheme.typography.bodySmall)
-            if (model.stale) Text("Dados anteriores; estado atual não confirmado.", color = MaterialTheme.colorScheme.error)
         }
+        if (model.items.isEmpty()) item(key = "empty") { ScreenPanel { StatusNotice("Nenhum torrent para exibir.") } }
         items(model.items, key = { it.hash }) { item ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(item.name, style = MaterialTheme.typography.titleSmall)
-                    Text("ID ${item.id} · ${item.state.label}")
-                    if (item.progress == null) {
-                        Text("Aguardando metadados; tamanho/progresso indisponíveis.")
-                        if (!item.paused) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    } else {
-                        Text("${(item.progress * 100).toInt()} % · ${item.bytes?.let { formatFileSize(it) } ?: "?"} / ${item.total?.let { formatFileSize(it) } ?: "?"}")
-                        LinearProgressIndicator(progress = { item.progress }, modifier = Modifier.fillMaxWidth())
-                    }
-                    Text("↓ ${item.down?.let { formatFileSize(it) + "/s" } ?: "?"} · ↑ ${item.up?.let { formatFileSize(it) + "/s" } ?: "?"} · peers ${item.peers ?: "?"}")
-                    Text(item.directory, style = MaterialTheme.typography.bodySmall)
-                    if (item.error.isNotBlank()) Text(item.error, color = MaterialTheme.colorScheme.error)
-                    Row {
-                        MyCtTextButton(onClick = { model.control(if (item.paused) "resume" else "pause", item.hash) },
-                            enabled = model.actionsEnabled && !model.stale) { Text(if (item.paused) "Retomar" else "Pausar") }
-                        MyCtTextButton(onClick = { remove = item }, enabled = model.actionsEnabled && !model.stale) { Text("Remover…") }
-                    }
+            ScreenPanel {
+                DetailValue("Torrent", item.name)
+                if (model.stale || !model.connected) StatusNotice("Dados anteriores · estado atual não confirmado", true)
+                Text(item.state.label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                if (item.progress == null) {
+                    StatusNotice("Aguardando metadados · tamanho e progresso indisponíveis")
+                    if (!item.paused && model.connected && !model.stale) LinearProgressIndicator(Modifier.fillMaxWidth())
+                } else {
+                    LinearProgressIndicator(progress = { item.progress }, modifier = Modifier.fillMaxWidth())
+                    Text("${(item.progress * 100).toInt()} % · ${item.bytes?.let(::formatFileSize) ?: "?"} / ${item.total?.let(::formatFileSize) ?: "?"}")
+                }
+                DataLine(if (model.stale || !model.connected) "↓ Última taxa" else "↓ Agora", item.down?.let { formatFileSize(it) + "/s" } ?: "Indisponível")
+                DataLine(if (model.stale || !model.connected) "↑ Última taxa" else "↑ Agora", item.up?.let { formatFileSize(it) + "/s" } ?: "Indisponível")
+                DataLine("Peers", item.peers?.toString() ?: "Indisponível")
+                HorizontalDivider()
+                DataLine("Baixado acumulado", item.downloadedEver?.let(::formatFileSize) ?: "Indisponível")
+                DataLine("Enviado acumulado", item.uploadedEver?.let(::formatFileSize) ?: "Indisponível")
+                DataLine("Ratio (Transmission)", torrentRatioLabel(item.ratio))
+                StatusNotice(item.error, true)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MyCtTextButton(onClick = { model.control(if (item.paused) "resume" else "pause", item.hash) },
+                        enabled = model.actionsEnabled && !model.stale) { Text(if (item.paused) "Retomar" else "Pausar") }
+                    MyCtTextButton(onClick = { remove = item }, enabled = model.actionsEnabled && !model.stale) { Text("Remover…") }
                     MyCtTextButton(onClick = { openFiles(item.directory) }, enabled = model.connected && !filesBusy) { Text("Ver em Arquivos") }
+                }
+                if (filesBusy) StatusNotice("Aguarde a operação SFTP para abrir a pasta.")
+                ExpandDetails {
+                    DetailValue("Diretório", item.directory)
+                    DetailValue("Hash", item.hash, maxLines = 1)
+                    DataLine("ID", item.id.toString())
                 }
             }
         }
     }
     remove?.let { item ->
         AlertDialog(onDismissRequest = { remove = null }, title = { Text("Remover torrent da lista?") },
-            text = { Text("${item.name}: para a transferência e o compartilhamento. Arquivos completos e parciais serão preservados no Fedora.") },
+            text = { Column(Modifier.verticalScroll(rememberScrollState())) { DetailValue("Torrent", item.name); Text("Para a transferência e o compartilhamento. Arquivos completos e parciais serão preservados no Fedora.") } },
             confirmButton = { MyCtTextButton(onClick = { remove = null; model.control("remove", item.hash) }, enabled = model.actionsEnabled) { Text("Remover e preservar dados") } },
             dismissButton = { MyCtTextButton(onClick = { remove = null }) { Text("Voltar") } })
     }
