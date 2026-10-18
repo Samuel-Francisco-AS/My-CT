@@ -1,12 +1,12 @@
 # MYCT-R5-F2 — revisão visual R1
 
-**Candidata R1; aprovação visual no Moto G06 pendente.** O proprietário testou a
+**R1 aprovada visualmente no Moto G06 pelo proprietário em 18/10/2026; integração à main autorizada.** O proprietário testou a
 F2/code 31: houve melhora discreta, mas o acabamento não atingiu a expectativa.
 Esta é uma revisão da F2 no mesmo PR, não uma fase nova.
 
 - Branch/worktree preservados: `myct-r5-f2-navigation`,
   `/home/sam/Projetos/My-CT-r5-f2`, base original `origin/main` `2dec947`.
-- [PR #35 draft](https://github.com/Samuel-Francisco-AS/My-CT/pull/35), sem merge.
+- [PR #35](https://github.com/Samuel-Francisco-AS/My-CT/pull/35): aceite visual recebido e merge autorizado em 18/10/2026.
   PR #34 e seu checkout continuam intactos; backend/serviços/dados não alterados.
 - Nova candidata **0.7.3-r5-f2-r1 / code 32**, pacote `dev.myct`.
   Branches remotas e releases consultadas: maior code encontrado 31.
@@ -168,7 +168,7 @@ a substituição do processo pode encerrar shells locais e buffers em memória.
 SSH pode exigir reconexão conforme o modo persistente existente. Isso é diferente
 de navegar entre telas, que deve preservar sessões e buffers.
 
-## Aceite Moto G06 — pendente
+## Roteiro de verificação no Moto G06 (referência)
 
 1. Abrir o app: conferir entrada do cabeçalho, título, cartões e indicador Fedora;
    nada deve esperar uma splash artificial. Rolar e repetir Início → IDE → Terminal
@@ -194,5 +194,30 @@ de navegar entre telas, que deve preservar sessões e buffers.
 9. Repetir com animações removidas e escala 0,5×/1×; conferir ausência de tela
    permanentemente transparente, recortes, travamentos ou navegação atrasada.
 
-Retomar pelo mesmo worktree/PR, sem merge, aguardando o retorno visual do
-proprietário. Não declarar aprovação física a partir de build/testes JVM.
+## Aceite e fechamento — 18/10/2026
+
+O proprietário instalou a R1/code 32 no **Moto G06** e informou no chat:
+**"deu certo viu, as melhorias ficaram boas"**, autorizando o fechamento da
+micro-etapa. Considerar **aprovados o acabamento visual e a experiência
+percebida de transição**, conforme o retorno recebido. A F2/code 31 havia sido
+rejeitada por refinamento visual insuficiente; a R1 corrigiu o ponto.
+
+**Escopo do aceite:** o feedback é confirmação física da qualidade visual,
+não um laudo de execução de cada cenário do roteiro. Não foram relatados
+resultados individuais de IME, capturas do Cofre durante animações, preservação
+de cada buffer, transferências em curso, taxas de frames ou consumo de GPU.
+Permanecem testes de regressão úteis quando esses fluxos voltarem a ser
+trabalhados. As validações automatizadas documentadas acima continuam válidas,
+mas não devem ser apresentadas como testes executados no Moto.
+
+Com esse aceite, fica **autorizada a integração do PR #35 à main**. Registrar
+a confirmação do merge no PR e no histórico Git; a presente nota registra a
+decisão e a base de evidências anterior ao merge. **Não integrar nem apagar
+a branch `fix/torrent-dns-trackers` / PR #34**, que tem aceitação independente.
+
+Na máquina do proprietário, sincronizar a main por fast-forward antes de
+remover o worktree específico `~/Projetos/My-CT-r5-f2`; conferir trabalho
+local não salvo e preservar `artifacts/` caso haja APKs/logs desejados.
+Só então limpar a branch F2 local/remota. O worktree principal continua na
+branch de correção BitTorrent enquanto a respectiva etapa estiver aberta.
+
