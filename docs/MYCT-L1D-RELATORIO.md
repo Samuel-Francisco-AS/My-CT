@@ -252,3 +252,10 @@ a rodada final completa passou (223 PASS/1 ignorado), sem apagar esse histórico
 O caso de refresh com novo ID e mesmos nome/tamanho/data também tem teste. A
 lista compartilhada publica nova referência e revisão para a composição não
 reutilizar URI antiga por igualdade apenas dos metadados de apresentação.
+
+
+## Fechamento físico posterior — proprietário, 17/10/2026
+
+**Gate principal aprovado no Moto G06 com escopo limitado:** Android `Documents/My-CT/Project-C/teste.c` criado/editado/salvo no Sora via SAF, localizado pelo Termux, compilado por GCC e executado com saída `My-CT e Termux funcionando juntos!`. A execução direta de `./teste` na pasta compartilhada falhou com `Permission denied`; funcionou ao gerar binário no HOME do Termux com `gcc teste.c -o "$HOME/teste" && "$HOME/teste"`. Isso é restrição de execução da área compartilhada, não falha da IDE ou da compilação. O proprietário autorizou **fechamento do MVP e merge**, sem novos recursos de compilação interna.
+
+**Testes ainda pendentes de aceite físico individual:** segunda edição/recompilação do mesmo documento, revogação e conflito SAF, persistência de grant após reiniciar, rotação/clipboard do terminal, regressão SSH/SFTP. Não declarar PASS desses cenários. [Relatório consolidado](MYCT-L1-FECHAMENTO.md). PR #31 integrado à main por merge `e4d0a57ae130963a2ff087c5641f8bc709b98036`. Próxima atividade: pequena rodada de UX.
