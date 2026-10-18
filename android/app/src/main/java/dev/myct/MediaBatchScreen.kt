@@ -91,11 +91,11 @@ internal fun MediaBatchScreen(model: MediaModel, modifier: Modifier = Modifier) 
     val jumpScope = rememberCoroutineScope()
     // Every expanded video is its own LazyColumn row (not a giant folder card).
     val folderRows = sourceFolders.sumOf { (key, files) ->
-        1 + if (expandedFolders[folderKey(key.first, key.second)] == true) files.size else 0
+        1 + (if (expandedFolders[folderKey(key.first, key.second)] == true) files.size else 0)
     }
     val episodesAnchor = 2 + folderRows
     val episodesRows = if (kind != "movie" && selected.isNotEmpty())
-        1 + if (editEpisodes) selected.size else 0 else 0
+        1 + (if (editEpisodes) selected.size else 0) else 0
     val previewAnchor = episodesAnchor + episodesRows
     fun jumpTo(index: Int) {
         jumpScope.launch { lazyState.animateScrollToItem(index) }
