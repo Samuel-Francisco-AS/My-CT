@@ -314,8 +314,46 @@ internal fun MediaBatchScreen(model: MediaModel, modifier: Modifier = Modifier) 
         }
 
     }
+        Surface(tonalElevation = 2.dp) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (model.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("${selected.size} selecionados", style = MaterialTheme.typography.labelMedium)
+                    if (plan != null) Text("${plan.ready} prontos · ${plan.collisions} conflitos",
+                        style = MaterialTheme.typography.labelMedium)
+                }
+                if (model.stale)
+                    Text("Resultado não confirmado. Consulte novamente antes de repetir.",
+                        style = MaterialTheme.typography.bodySmall)
+                else if (selected.any {
+                    Regex("1xbet|promo|trailer|sample", RegexOption.IGNORE_CASE).containsMatchIn(it.name)
+                }) Text("Atenção: a seleção contém possíveis vídeos extras.",
+                    style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    if (plan != null && plan.collisions == 0 && plan.ready > 0) {
+                        MyCtButton(onClick = { confirmation = true },
+                            enabled = model.actionsEnabled) {
+                            Text("Criar ${plan.ready} hardlinks…")
+                        }
+                        MyCtTextButton(onClick = { spec?.let(model::planManual) },
+                            enabled = spec != null && model.actionsEnabled) {
+                            Text("Rever prévia")
+                        }
+                    } else {
+                        MyCtButton(onClick = { spec?.let(model::planManual) },
+                            enabled = spec != null && model.actionsEnabled) {
+                            Text("Pré-visualizar destinos")
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-    if (confirmation && plan != null && spec != null) AlertDialog(
+    if (confirmation && plan != null && plan.collisions == 0 && plan.ready > 0 &&
+        spec != null) AlertDialog(
         onDismissRequest = { confirmation = false },
         title = { Text("Importar lote para a biblioteca?") },
         text = { Text("Criar ${plan.ready} hardlinks em ${if (kind == "movie") "Filmes" else if (kind == "anime") "Animes" else "Séries"}? " +
