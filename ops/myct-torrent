@@ -13,7 +13,7 @@ import socket
 import sys
 import time
 import unicodedata
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit
 
 ENDPOINT_PORT = 19091
 LIMIT = 262144
@@ -43,14 +43,27 @@ def magnet(value):
         raise Failure('Use magnet com xt, dn e trackers tr; fontes web xs/as/ws não são aceitas.')
     if not re.fullmatch(r'urn:btih:(?:[0-9a-fA-F]{40}|[A-Z2-7a-z]{32})', query['xt'][0]):
         raise Failure('Magnet precisa de infohash BitTorrent v1 válido.')
+    unresolved = set()
     for tracker in query.get('tr', []):
         url = urlsplit(tracker)
         if url.scheme not in {'http', 'https', 'udp'} or not url.hostname or url.username or url.password:
             raise Failure('Tracker inválido.')
-        addresses = socket.getaddrinfo(url.hostname, url.port or 80, type=socket.SOCK_DGRAM)
+        try:
+            addresses = socket.getaddrinfo(url.hostname, url.port or 80, type=socket.SOCK_DGRAM)
+        except socket.gaierror:
+            # A dead DNS entry must not prevent other trackers or DHT from working.
+            # Do not pass unverified hostnames to the daemon.
+            unresolved.add(tracker)
+            continue
+        except OSError as error:
+            raise Failure('Falha de rede ao validar tracker.') from error
         if not addresses or any(not ipaddress.ip_address(row[4][0]).is_global for row in addresses):
             raise Failure('Tracker precisa de endereço público.')
-    return value
+    if not unresolved:
+        return value
+    pairs = parse_qsl(uri.query, keep_blank_values=True, strict_parsing=True)
+    kept = [(key, val) for key, val in pairs if key != 'tr' or val not in unresolved]
+    return uri._replace(query=urlencode(kept)).geturl()
 
 class Rpc:
     def call(self, method, params):
