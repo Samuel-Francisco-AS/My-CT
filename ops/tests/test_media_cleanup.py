@@ -132,6 +132,21 @@ class CleanupTests(unittest.TestCase):
         self.assertEqual([], rpc.calls)
         self.assertTrue(original.exists())
 
+    def test_unlinked_extra_video_blocks_storage_deletion(self):
+        path, original, dest = self.add(1)
+        (self.source_root / 'promo.mp4').write_bytes(b'advert')
+        request = cleanup.unpack(token('storage', [path]))
+        p = cleanup.preview(request, self.inventory())
+        self.assertFalse(p['can_apply'])
+        self.assertEqual(1, p['torrents'][0]['videos_outside_library'])
+        self.assertTrue(any('vídeos originais' in line for line in p['blocked']))
+        rpc = FakeRpc()
+        with self.assertRaises(cleanup.core.MediaError):
+            cleanup.apply(request, p['fingerprint'], self.rows, rpc)
+        self.assertEqual([], rpc.calls)
+        self.assertTrue(original.exists())
+        self.assertTrue(dest.exists())
+
     def test_unrelated_links_outside_media_block_reclaim(self):
         path, original, dest = self.add(1)
         other = self.home / 'untracked.mkv'
