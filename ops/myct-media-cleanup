@@ -139,6 +139,14 @@ def preview(request, inventory):
                 blockers.append('Torrent ' + key[:12] + ' não está concluído/íntegro.')
             files = inventory['sources'].get(key, [])
             represented = {f['source_id'] for f in all_uses}
+            selected_inodes = {(f['dev'], f['ino']) for f in selected}
+            for original in files:
+                st = original['source'].stat()
+                related = sum((f['dev'], f['ino']) == (st.st_dev, st.st_ino)
+                              for f in all_uses)
+                if (st.st_dev, st.st_ino) in selected_inodes and st.st_nlink > related + 1:
+                    blockers.append('Torrent ' + key[:12] + ': existem outros hardlinks fora da biblioteca. ' +
+                                    'Não é possível garantir a liberação de espaço.')
             unlinked_video = [f['name'] for f in files if f['id'] not in represented]
             affected.append({'hash': key, 'name': torrent.get('name', ''),
                              'videos_outside_library': len(unlinked_video),
@@ -169,6 +177,13 @@ def apply(request, expected, rows=None, rpc=None):
         plan = preview(request, inventory)
         if plan['fingerprint'] != expected or not plan['can_apply']:
             raise core.MediaError('A seleção mudou ou existe um bloqueio; refaça a prévia.')
+        # Recheck every selected link before touching Transmission.
+        for row in (x for x in inventory['files'] if x['path'] in request['paths']):
+            file = core.media_root() / core.safe_relative(row['path'])
+            core.no_symlink_path(file, core.media_root())
+            check = file.stat()
+            if (check.st_dev, check.st_ino, check.st_nlink) != (row['dev'], row['ino'], row['nlink']):
+                raise core.MediaError('Arquivo mudou durante a confirmação; nova prévia necessária.')
         # No individual original is ever unlinked while a torrent is active.
         if request['mode'] == 'storage':
             if rpc is None:
