@@ -26,7 +26,8 @@ UNWANTED = re.compile(r'(?:^|[\W_])(sample|trailer|preview|promo|advert|1xbet|xb
 FANSUB = re.compile(r'^\[[A-Za-z0-9 ._-]{1,24}\]\s*(.+?)\s+-\s+(\d{1,3})\s+\[(?:480|720|1080|2160)p\](?:\[|$)', re.I)
 SERIES_ALIASES = {'sousou no frieren': ('Frieren Beyond Journeys End', 1)}
 # Bare trailing episode numbers are trusted only for explicitly identified shows.
-PLAIN_EPISODE = re.compile(r'^(.+?)\s+(\d{1,3})
+PLAIN_EPISODE = re.compile(r'^(.+?)\s+(\d{1,3})$')
+PLAIN_SERIES = {'fullmetal alchemist brotherhood': ('Fullmetal Alchemist Brotherhood', 1, 64)}
 
 class MediaError(Exception):
     pass
