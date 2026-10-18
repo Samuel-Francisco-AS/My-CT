@@ -4,9 +4,9 @@
 
 No Moto G06, 2 de 3 magnets deram "Transmission indisponível", embora o serviço de usuário estivesse `active`/`enabled` e a CLI `myct-torrent list` respondesse com exit 0 via RPC local em `127.0.0.1:19091`. No magnet investigado, 4 de 27 trackers falharam na resolução DNS. A causa foi localizada na validação `magnet()`: `socket.gaierror` escapava como `OSError` e virava o código 3 (serviço indisponível).
 
-Correção na branch `fix/torrent-dns-trackers`: ignorar **somente os trackers cujo DNS não resolve**, antes do `torrent_add`; preservar `xt`, `dn`, ordem e demais trackers. Endereços privados/não públicos resolvidos continuam rejeitados; protocolos inválidos e credenciais continuam proibidos. Se todos os trackers estiverem indisponíveis, o magnet sem `tr` ainda poderá ser entregue ao Transmission, sem garantia de descoberta via DHT. Esta filtragem não fornece isolamento de rede contra DNS rebinding ou metadados maliciosos.
+Correção na branch `fix/torrent-dns-trackers`: antes do `torrent_add`, descartar trackers com DNS indisponível **ou** cujo hostname resolve para qualquer IP não público (incluindo resposta mista pública/privada), sem encaminhá-los ao Transmission; preservar `xt`, `dn`, ordem e demais trackers. **IPs privados ou reservados informados literalmente na URL continuam rejeitados**; protocolos inválidos e credenciais também. Se todos os trackers forem descartados, o magnet sem `tr` ainda poderá ser entregue ao Transmission, sem garantia de descoberta por DHT. Esta filtragem não fornece isolamento de rede contra DNS rebinding ou metadados maliciosos.
 
-Adicionados testes de filtragem, encaminhamento da URI ao RPC e manutenção das rejeições. **Não houve instalação em `~/.local/bin`, reinício do daemon ou alteração do APK.** Exige execução dos testes no Fedora, atualização explícita da CLI e aceite com um magnet anteriormente recusado. Não declarar corrigido em produção antes disso.
+Na primeira rodada, o proprietário executou os 10 testes de `ops/tests/test_torrent.py` no Fedora (10/10 PASS, 0,528 s; `git diff --check` limpo). No reteste, a inclusão direta pela CLI instalada respondeu **"Tracker precisa de endereço público." / exit 2**: diagnóstico de segundo bloqueio, corrigido na mesma branch com testes adicionais. **A revisão ampliada ainda depende de testes no Fedora, instalação explícita da CLI e reteste no Moto G06.** O APK, serviço Transmission, RPC, hook e os downloads existentes não foram alterados por esta atualização remota. Não declarar corrigido em produção antes do aceite.
 
 ---
 
@@ -293,8 +293,9 @@ Mutações não são repetidas após falha/timeout. Somente 409 anterior à exec
 permite reenviar o pedido na negociação CSRF, com limite de uma tentativa extra.
 
 Magnet v1 hexadecimal/base32, limitado a 8.192 caracteres; aceita `xt`, `dn` e
-`tr`. Trackers resolvidos precisam ser HTTP/HTTPS/UDP públicos; os que não
-resolvem DNS são descartados antes da inclusão (correção posterior de 17/10).
+`tr`. Trackers precisam usar HTTP/HTTPS/UDP; hostnames sem resolução DNS ou
+resolvidos para IPs não públicos são descartados antes da inclusão (correção
+posterior de 17/10). IPs privados/reservados literais continuam rejeitados.
 Credenciais, fontes `xs/as/ws`, controles e outras opções são recusados. O motor
 resolve DNS e peers independentemente: essa checagem **não é sandbox de rede**
 nem impede rebind posterior ou destinos originados nos metadados/peers. Use
