@@ -19,7 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 @Composable
-internal fun DownloadsScreen(http: DownloadsModel, torrents: TorrentsModel, filesBusy: Boolean,
+internal fun DownloadsScreen(http: DownloadsModel, torrents: TorrentsModel, media: MediaModel, filesBusy: Boolean,
                              openFiles: (String) -> Unit, modifier: Modifier = Modifier) {
     var section by rememberSaveable { mutableIntStateOf(0) }
     val feedback = rememberNavigationFeedback()
@@ -29,11 +29,15 @@ internal fun DownloadsScreen(http: DownloadsModel, torrents: TorrentsModel, file
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             FilterChip(section == 0, { select(0) }, label = { Text("HTTP/HTTPS") })
             FilterChip(section == 1, { select(1) }, label = { Text("Torrents") })
+            FilterChip(section == 2, { select(2) }, label = { Text("Mídia") })
         }
         Box(Modifier.weight(1f).panelEntrance(section, if (section == 1) 1f else -1f)) {
             panels.SaveableStateProvider(section) {
-                if (section == 0) HttpDownloadsScreen(http, filesBusy, openFiles, Modifier.fillMaxSize())
-                else TorrentsScreen(torrents, filesBusy, openFiles, Modifier.fillMaxSize())
+                when (section) {
+                    0 -> HttpDownloadsScreen(http, filesBusy, openFiles, Modifier.fillMaxSize())
+                    1 -> TorrentsScreen(torrents, filesBusy, openFiles, Modifier.fillMaxSize())
+                    else -> MediaScreen(media, Modifier.fillMaxSize())
+                }
             }
         }
     }
