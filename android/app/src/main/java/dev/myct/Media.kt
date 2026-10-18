@@ -68,7 +68,9 @@ internal fun parseMediaSources(text: String): List<MediaSource> {
             value.getString("name"), value.getString("path")).also {
             require(validMediaId(it.id) && Regex("[0-9a-f]{40}").matches(it.torrent) &&
                 it.id == it.torrent + ":" + it.path && it.name.length <= 8192 &&
-                it.path.length in 1..4096 && it.path.none { ch -> ch.isISOControl() })
+                it.path.length in 1..4096 && !it.path.startsWith('/') &&
+                it.path.split('/').none { part -> part.isEmpty() || part == "." || part == ".." } &&
+                it.path.none { ch -> ch.isISOControl() })
         }
     }
 }
