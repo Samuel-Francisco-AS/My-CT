@@ -30,30 +30,39 @@ internal class IdeDocument(val identity: String, var snapshot: EditSnapshot) {
 }
 
 /** Process-owned buffer/undo, independent of section composition and of SSH connection lifetime. */
-internal class IdeModel {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+internal class RemoteIdeModel(
+    dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
+    private val openStore: (SshConnection, TransferControl) -> RemoteEditorStore = { connection, token -> connection.openFiles(token) as RemoteEditorStore }
+) : IdeSession {
+    private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private var connection: SshConnection? = null
     private var identity = ""
     private var epoch = 0
-    internal val scroll = IdeScrollHistory()
+    override val scroll = IdeScrollHistory()
     private var control: TransferControl? = null
     private var savingDocument: IdeDocument? = null
     private var savingBackupPath: String? = null
-    var connected by mutableStateOf(false); private set
-    var busy by mutableStateOf(false); private set
-    var listing by mutableStateOf<RemoteListing?>(null); private set
-    var document by mutableStateOf<IdeDocument?>(null); private set
-    var browse by mutableStateOf(true)
-    var message by mutableStateOf("Conecte pelo Terminal para abrir arquivos do Fedora."); private set
-    var noticeIsError by mutableStateOf(false); private set
-    val canSave get() = connected && !busy && document?.let { it.identity == identity && it.dirty && !it.uncertain && !it.readOnly } == true
+    override var connected by mutableStateOf(false); private set
+    override var busy by mutableStateOf(false); private set
+    override var listing by mutableStateOf<RemoteListing?>(null); private set
+    override var document by mutableStateOf<IdeDocument?>(null); private set
+    override var browse by mutableStateOf(true)
+    override var message by mutableStateOf("Conecte pelo Terminal para abrir arquivos do Fedora."); private set
+    override var noticeIsError by mutableStateOf(false); private set
+    override val canSave get() = connected && !busy && document?.let { it.identity == identity && it.dirty && !it.uncertain && !it.readOnly } == true
+
+    override fun child(parent: String, name: String) = RemotePath.child(parent, name)
+    override fun parent(path: String) = RemotePath.parent(path)
+    override fun displayPath(path: String) = path
+    override fun atRoot(path: String) = path == "/"
 
     fun attach(value: SshConnection?, remoteIdentity: String = identity) {
         if (value === connection && remoteIdentity == identity) return
         savingDocument?.apply { uncertain = true; backupPath = savingBackupPath }
         savingDocument = null
         epoch++
-        control?.let { token -> scope.launch(Dispatchers.IO) { token.cancel() } }
+        control?.let { token -> scope.launch(io) { token.cancel() } }
         control = null; busy = false
         connection = value; connected = value != null
         if (remoteIdentity != identity) { listing = null; scroll.clear() }
@@ -70,8 +79,8 @@ internal class IdeModel {
         val token = TransferControl(); control = token; busy = true; noticeIsError = false
         scope.launch {
             try {
-                val result = withContext(Dispatchers.IO) {
-                    current.openFiles(token).use { store -> work(store as RemoteEditorStore, token) }
+                val result = withContext(io) {
+                    openStore(current, token).use { store -> work(store, token) }
                 }
                 if (id == epoch) done(result)
             } catch (error: Exception) {
@@ -93,15 +102,15 @@ internal class IdeModel {
             }
         }
     }
-    fun cancel() { control?.let { token -> scope.launch(Dispatchers.IO) { token.cancel() } } }
-    fun loadDirectory(path: String? = null) {
+    override fun cancel() { control?.let { token -> scope.launch(io) { token.cancel() } } }
+    override fun loadDirectory(path: String?) {
         operation({ store, token ->
             val directory = store.canonical(path?.let(RemotePath::absolute) ?: store.home())
             token.check(); store.list(directory)
         }) { listing = it; browse = true; message = if (it.limited) "Lista limitada a 2000 entradas." else "Toque em um arquivo textual para editar." }
     }
     /** Caller confirms dirty-buffer replacement first. No remote write on opening or discarding. */
-    fun open(path: String) {
+    override fun open(path: String) {
         val owner = identity
         operation({ store, token -> RemoteEditor.load(store, path, token) }) {
             document = IdeDocument(owner, it); browse = false
@@ -109,8 +118,8 @@ internal class IdeModel {
                 else "UTF-8 · ${it.bytes.size} bytes · alterações só serão enviadas ao tocar em Salvar."
         }
     }
-    fun closeDocument() { if (!busy) { document = null; browse = true } }
-    fun save() {
+    override fun closeDocument() { if (!busy) { document = null; browse = true } }
+    override fun save() {
         if (!canSave) return
         val doc = document ?: return
         // A single snapshot per explicit save; never copy the whole document on each keystroke.

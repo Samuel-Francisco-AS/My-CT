@@ -39,7 +39,10 @@ class TerminalModel(application: Application) {
     var diagnostics = TerminalDiagnostics()
         private set
     val files = FilesModel(application)
-    internal val ide = IdeModel()
+    internal val ide = IdeModel(java.io.File(application.filesDir, "ide-local"),
+        preferred = runCatching { IdeEnvironment.valueOf(prefs.getString("ide-environment", "LOCAL") ?: "LOCAL") }.getOrDefault(IdeEnvironment.LOCAL)) { mode ->
+        prefs.edit { putString("ide-environment", mode.name) }
+    }
     val health = HealthModel()
     val vault = VaultModel()
     internal val antivirusSignatures = AntivirusSignaturesModel()

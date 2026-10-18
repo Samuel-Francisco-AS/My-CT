@@ -5,7 +5,7 @@ import org.junit.Test
 import java.io.*
 
 class RemoteEditorTest {
-    private class Store : RemoteEditorStore {
+    internal class Store : RemoteEditorStore {
         val bytes = mutableMapOf("/work/code.py" to "print('ação')\r\n".toByteArray())
         val metadata = mutableMapOf("/work/code.py" to EditMetadata(bytes.getValue("/work/code.py").size.toLong(), 7, 0x1A0, 1000, 1000))
         var replaced = false
