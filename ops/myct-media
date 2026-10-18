@@ -231,7 +231,17 @@ def inspect(rows, state, apply=False, override=None, acl=ensure_access):
                 continue
             relative = destination(root, candidate, spec)
             if not apply:
-                result['added'].append({'id': key, 'target': str(relative), 'preview': True})
+                target = root / relative
+                no_symlink_path(target.parent, root)
+                if target.exists() or target.is_symlink():
+                    source_info = candidate['source'].stat()
+                    dest_info = target.stat()
+                    if (source_info.st_dev, source_info.st_ino) == (dest_info.st_dev, dest_info.st_ino):
+                        result['existing'].append({'id': key, 'target': str(relative)})
+                    else:
+                        raise MediaError('Destino já existe com conteúdo diferente: ' + str(relative))
+                else:
+                    result['added'].append({'id': key, 'target': str(relative), 'preview': True})
                 continue
             outcome = add_one(candidate, relative, state, acl=acl)
             result[outcome].append({'id': key, 'target': str(relative)})
