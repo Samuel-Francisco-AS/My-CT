@@ -1,6 +1,8 @@
 import importlib.machinery
 import importlib.util
 import json
+import socket
+from urllib.parse import parse_qs, urlencode, urlsplit
 from pathlib import Path
 import tempfile
 import unittest
@@ -58,6 +60,51 @@ class TorrentTest(unittest.TestCase):
             self.assertEqual(MAGNET, rpc.calls[0][1]['filename'])
             self.assertTrue(rpc.calls[0][1]['paused'])
             self.assertFalse(any(method == 'torrent_start' for method, _ in rpc.calls))
+
+    def test_unresolvable_trackers_are_dropped_before_rpc(self):
+        live = 'udp://live.example:6969/announce'
+        dead = 'udp://dead.example:6969/announce'
+        raw = 'magnet:?' + urlencode([
+            ('xt', 'urn:btih:' + HASH), ('dn', 'Arquivo de teste'),
+            ('tr', live), ('tr', dead)])
+        def dns(host, port, type):
+            if host == 'dead.example':
+                raise socket.gaierror(socket.EAI_NONAME, 'Unknown host')
+            return [(socket.AF_INET, socket.SOCK_DGRAM, 17, '', ('8.8.8.8', port))]
+
+        with patch.object(torrent.socket, 'getaddrinfo', side_effect=dns):
+            cleaned = torrent.magnet(raw)
+            params = parse_qs(urlsplit(cleaned).query)
+            self.assertEqual(['urn:btih:' + HASH], params['xt'])
+            self.assertEqual(['Arquivo de teste'], params['dn'])
+            self.assertEqual([live], params['tr'])
+            # No needless rewriting of the original URI when DNS works.
+            self.assertEqual(MAGNET + '&tr=' + urlencode({'tr': live})[3:],
+                             torrent.magnet(MAGNET + '&tr=' + urlencode({'tr': live})[3:]))
+
+            with tempfile.TemporaryDirectory() as home, patch.object(torrent.Path, 'home', return_value=Path(home)):
+                rpc = FakeRpc(torrent.destination())
+                self.assertTrue(torrent.run(['add', raw], rpc)['duplicate'])
+                self.assertEqual(cleaned, rpc.calls[0][1]['filename'])
+                self.assertEqual(1, len([m for m, _ in rpc.calls if m == 'torrent_add']))
+
+            # A trackerless magnet can still be handed to the daemon (DHT).
+            all_dead = 'magnet:?' + urlencode([
+                ('xt', 'urn:btih:' + HASH), ('tr', dead)])
+            self.assertEqual(['urn:btih:' + HASH],
+                             parse_qs(urlsplit(torrent.magnet(all_dead)).query)['xt'])
+            self.assertNotIn('tr', parse_qs(urlsplit(torrent.magnet(all_dead)).query))
+
+    def test_private_dns_answers_and_other_resolver_errors_stay_rejected(self):
+        tracker = 'udp://private.example:6969/announce'
+        raw = 'magnet:?' + urlencode([('xt', 'urn:btih:' + HASH), ('tr', tracker)])
+        answer = [(socket.AF_INET, socket.SOCK_DGRAM, 17, '', ('192.168.0.1', 6969))]
+        with patch.object(torrent.socket, 'getaddrinfo', return_value=answer):
+            with self.assertRaisesRegex(torrent.Failure, 'endereço público'):
+                torrent.magnet(raw)
+        with patch.object(torrent.socket, 'getaddrinfo', side_effect=OSError('resolver I/O error')):
+            with self.assertRaisesRegex(torrent.Failure, 'Falha de rede'):
+                torrent.magnet(raw)
 
     def test_controls_exact_hash_and_preserve_data(self):
         rpc = FakeRpc(torrent.destination())
