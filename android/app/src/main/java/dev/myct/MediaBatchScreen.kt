@@ -133,35 +133,72 @@ internal fun MediaBatchScreen(model: MediaModel, modifier: Modifier = Modifier) 
                     if (kind == "movie") " Para filmes, escolha um arquivo por vez." else "")
             }
         }
-        items(sourceFolders, key = { it.first.first + "/" + it.first.second }) { group ->
-            val files = group.second
-            val folderName = group.first.second.ifEmpty { "Raiz do torrent" }
-            val count = files.count { marked[it.id] == true }
-            ScreenPanel {
-                Text(folderName, style = MaterialTheme.typography.titleSmall)
-                Text("Torrent ${group.first.first.take(12)}… · $count/${files.size} selecionados",
-                    style = MaterialTheme.typography.bodySmall)
-                if (kind != "movie") {
-                    MyCtTextButton(onClick = {
-                        if (count == files.size) files.forEach { marked.remove(it.id) }
-                        else files.forEach {
-                            if (marked.size < 128 || marked[it.id] == true) marked[it.id] = true
+        sourceFolders.forEach { (key, files) ->
+            val name = folderKey(key.first, key.second)
+            val expanded = expandedFolders[name] == true
+            val count = selectedByFolder[name]?.size ?: 0
+            item(key = "folder:" + name) {
+                ScreenPanel {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { expandedFolders[name] = !expanded },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(if (expanded) "▾" else "▸",
+                            style = MaterialTheme.typography.titleLarge)
+                        Column(Modifier.weight(1f)) {
+                            Text(key.second.ifEmpty { "Raiz do torrent" },
+                                style = MaterialTheme.typography.titleSmall,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            // The first file distinguishes torrents that have no subfolder.
+                            Text(files.firstOrNull()?.name.orEmpty(),
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("$count/${files.size} selecionados · ${key.first.take(10)}…",
+                                style = MaterialTheme.typography.labelSmall)
                         }
-                    }, enabled = model.connected && !model.busy) {
-                        Text(if (count == files.size) "Desmarcar pasta" else "Selecionar pasta inteira")
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MyCtTextButton(onClick = { expandedFolders[name] = !expanded }) {
+                            Text(if (expanded) "Recolher" else "Ver arquivos")
+                        }
+                        if (kind != "movie") {
+                            MyCtTextButton(onClick = {
+                                if (count == files.size) files.forEach { marked.remove(it.id) }
+                                else files.forEach {
+                                    if (marked.size < 128 || marked[it.id] == true)
+                                        marked[it.id] = true
+                                }
+                            }, enabled = model.connected && !model.busy) {
+                                Text(if (count == files.size) "Desmarcar" else "Marcar todos")
+                            }
+                        }
                     }
                 }
-                files.forEach { file ->
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        Checkbox(checked = marked[file.id] == true,
-                            onCheckedChange = { active ->
-                                if (active) {
+            }
+            if (expanded) {
+                items(files.sortedWith { a, b -> mediaNaturalCompare(a.path, b.path) },
+                    key = { "file:" + it.id }) { file ->
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .clickable(enabled = model.connected && !model.busy) {
+                                if (marked[file.id] == true) marked.remove(file.id)
+                                else {
                                     if (kind == "movie") marked.clear()
                                     if (marked.size < 128) marked[file.id] = true
-                                } else marked.remove(file.id)
-                            }, enabled = model.connected && !model.busy)
+                                }
+                            }
+                            .padding(start = 10.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = marked[file.id] == true,
+                            onCheckedChange = null,
+                            enabled = model.connected && !model.busy
+                        )
                         Text(file.name, modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodySmall)
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
