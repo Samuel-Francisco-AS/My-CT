@@ -158,6 +158,57 @@ static int worker(const fs::path& p) {
         put(p/"message",canceled?"Cancelado; parcial preservado":e.what()); put(p/"state",canceled?"canceled":"failed"); return 1;
     }
 }
+static bool valid_name(const std::string& s) {
+    return std::regex_match(s, std::regex("[A-Za-z0-9][A-Za-z0-9._-]{0,119}")) &&
+           !s.ends_with(".part");
+}
+static void no_symlinks_to_home(fs::path p) {
+    const auto boundary = home();
+    while (p != boundary) {
+        if (p.empty() || p == p.parent_path())
+            throw std::runtime_error("Caminho fora do HOME.");
+        if (fs::is_symlink(fs::symlink_status(p)))
+            throw std::runtime_error("Diretório/arquivo redirecionado; exclusão recusada.");
+        p = p.parent_path();
+    }
+    if (fs::is_symlink(fs::symlink_status(boundary)))
+        throw std::runtime_error("HOME redirecionado; exclusão recusada.");
+}
+static void erase_download(const std::string& id) {
+    auto p = job(id);
+    no_symlinks_to_home(p);
+    const auto status = line(p/"state");
+    if (status.empty()) throw std::runtime_error("Download desconhecido.");
+    if (active(p) || status == "running" || status == "starting")
+        throw std::runtime_error("Download ativo ou não finalizado; cancele antes de excluir.");
+    if (status != "completed" && status != "canceled" &&
+        status != "failed" && status != "interrupted")
+        throw std::runtime_error("Estado não permite exclusão.");
+    auto name = line(p/"name");
+    if (!valid_name(name))
+        throw std::runtime_error("Nome de arquivo inválido; exclusão recusada.");
+    const auto folder = home()/"Downloads/My-CT"/id;
+    no_symlinks_to_home(folder);
+    auto target = folder/(name + (status == "completed" ? "" : ".part"));
+    no_symlinks_to_home(target);
+    std::error_code ec;
+    if (fs::exists(target,ec)) {
+        if (!fs::is_regular_file(target,ec) || ec)
+            throw std::runtime_error("Arquivo não é regular; exclusão recusada.");
+        if (fs::hard_link_count(target,ec) > 1 || ec)
+            throw std::runtime_error("Arquivo possui outros hardlinks. Remova os vínculos antes.");
+        if (!fs::remove(target,ec) || ec)
+            throw std::runtime_error("Falha ao excluir arquivo de download.");
+    } else if (ec) {
+        throw std::runtime_error("Falha ao inspecionar arquivo de download.");
+    }
+    // Never recursively remove payload: unrelated files in this folder are preserved.
+    fs::remove(folder,ec);  // only succeeds for an empty folder
+    ec.clear();
+    // Metadata directory is owned by this job ID; removal retires its history card.
+    fs::remove_all(p,ec);
+    if (ec) throw std::runtime_error("Arquivo excluído; falha ao retirar histórico.");
+}
 int main(int argc,char** argv) {
     umask(0077);
     try {
@@ -188,11 +239,16 @@ int main(int argc,char** argv) {
             if(fs::exists(root())) for(const auto& e:fs::directory_iterator(root())) if(e.is_directory() && valid_id(e.path().filename())) { show(e.path()); std::cout<<'\n'; }
             return 0;
         }
+        if(cmd=="delete" && argc==3) {
+            erase_download(argv[2]);
+            std::cout << "deleted: " << argv[2] << '\n';
+            return 0;
+        }
         if((cmd=="status" || cmd=="cancel") && argc==3) {
             auto p=job(argv[2]); if(!fs::exists(p/"state")) throw std::runtime_error("Download desconhecido");
             if(cmd=="cancel" && active(p) && run({"systemctl","--user","stop",unit(p)})) throw std::runtime_error("Falha ao cancelar unidade");
             show(p); return 0;
         }
-        std::cerr<<"Uso: myct-download start URL [nome] [--allow-private] | list | status ID | cancel ID\n"; return 2;
+        std::cerr<<"Uso: myct-download start URL [nome] [--allow-private] | list | status ID | cancel ID | delete ID\n"; return 2;
     } catch(const std::exception& e) { std::cerr<<"myct-download: "<<e.what()<<'\n'; return 1; }
 }
