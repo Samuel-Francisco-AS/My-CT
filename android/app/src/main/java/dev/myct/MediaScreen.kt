@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -17,7 +18,8 @@ import androidx.compose.ui.unit.dp
 internal fun MediaScreen(model: MediaModel, modifier: Modifier = Modifier) {
     var mode by remember { mutableIntStateOf(0) }
     Column(modifier) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(mode == 0, { mode = 0 }, label = { Text("Organizar manualmente") })
             FilterChip(mode == 1, { mode = 1 }, label = { Text("Reconhecimento automático") })
         }
