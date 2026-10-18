@@ -61,6 +61,21 @@ class MyCtMediaTest(unittest.TestCase):
         self.assertEqual(b'previous version',
                          (target / 'Frieren Beyond Journeys End S01E01.mkv').read_bytes())
 
+    def test_fullmetal_brotherhood_64_numbered_episodes_only_known_title(self):
+        home = self.setup_home()
+        names = [f'Fullmetal Alchemist Brotherhood {n:02d}.mkv' for n in range(1, 65)]
+        names.extend(['Unrelated Anime 01.mkv', 'Fullmetal Alchemist Brotherhood 65.mkv'])
+        rows = make_torrent(home, names)
+        preview = media.run(['scan'], rows)
+        self.assertEqual(64, len(preview['added']))
+        self.assertEqual(2, len(preview['pending']))
+        targets = {item['target'] for item in preview['added']}
+        self.assertIn('Series/Fullmetal Alchemist Brotherhood/Season 01/Fullmetal Alchemist Brotherhood S01E01.mkv', targets)
+        self.assertIn('Series/Fullmetal Alchemist Brotherhood/Season 01/Fullmetal Alchemist Brotherhood S01E64.mkv', targets)
+        self.assertFalse((home / 'Media').exists())
+        self.assertIsNone(media.classify('Other Anime 01.mkv'))
+        self.assertIsNone(media.classify('Fullmetal Alchemist Brotherhood 65.mkv'))
+
     def test_preview_is_read_only_and_incomplete_not_imported(self):
         home = self.setup_home()
         rows = make_torrent(home, ['Frieren.Beyond.Journeys.End.S01E01.1080p.mkv'], complete=False)
