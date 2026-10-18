@@ -79,8 +79,8 @@ class TorrentTest(unittest.TestCase):
             self.assertEqual(['Arquivo de teste'], params['dn'])
             self.assertEqual([live], params['tr'])
             # No needless rewriting of the original URI when DNS works.
-            self.assertEqual(MAGNET + '&tr=' + urlencode({'tr': live})[3:],
-                             torrent.magnet(MAGNET + '&tr=' + urlencode({'tr': live})[3:]))
+            good_only = 'magnet:?' + urlencode([('xt', 'urn:btih:' + HASH), ('tr', live)])
+            self.assertEqual(good_only, torrent.magnet(good_only))
 
             with tempfile.TemporaryDirectory() as home, patch.object(torrent.Path, 'home', return_value=Path(home)):
                 rpc = FakeRpc(torrent.destination())
@@ -91,9 +91,9 @@ class TorrentTest(unittest.TestCase):
             # A trackerless magnet can still be handed to the daemon (DHT).
             all_dead = 'magnet:?' + urlencode([
                 ('xt', 'urn:btih:' + HASH), ('tr', dead)])
-            self.assertEqual(['urn:btih:' + HASH],
-                             parse_qs(urlsplit(torrent.magnet(all_dead)).query)['xt'])
-            self.assertNotIn('tr', parse_qs(urlsplit(torrent.magnet(all_dead)).query))
+            no_trackers = parse_qs(urlsplit(torrent.magnet(all_dead)).query)
+            self.assertEqual(['urn:btih:' + HASH], no_trackers['xt'])
+            self.assertNotIn('tr', no_trackers)
 
     def test_private_dns_answers_and_other_resolver_errors_stay_rejected(self):
         tracker = 'udp://private.example:6969/announce'
