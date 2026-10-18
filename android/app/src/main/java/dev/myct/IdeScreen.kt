@@ -84,6 +84,7 @@ internal fun IdeScreen(model: IdeModel, terminal: () -> Unit, files: (String) ->
 private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () -> Unit, files: (String) -> Unit,
                              importDocument: () -> Unit, exportDocument: () -> Unit, selectTree: () -> Unit, modifier: Modifier) {
     val local = owner.environment == IdeEnvironment.LOCAL
+    val navigationFeedback = rememberNavigationFeedback()
     val shared = model as? SharedIdeModel
     var storageMenu by remember { mutableStateOf(false) }
     val doc = model.document
@@ -130,7 +131,10 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
     fun restoreFocus() { editor?.post { if (editor?.isReleased == false) editor?.requestFocus() } }
     fun action(block: () -> Unit) { menu = false; keys.clear(); block() }
     fun requestClose() { action { closeAsked = true } }
-    fun open(path: String) { if (doc?.dirty == true || doc?.uncertain == true) pendingOpen = path else model.open(path) }
+    fun open(path: String) {
+        navigationFeedback()
+        if (doc?.dirty == true || doc?.uncertain == true) pendingOpen = path else model.open(path)
+    }
 
     val listing = model.listing
     val entries = listing?.entries.orEmpty()
@@ -143,7 +147,10 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
     fun saveScroll() {
         listing?.let { model.scroll.remember(it.path, entries, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) }
     }
-    fun directory(path: String? = null) { saveScroll(); model.loadDirectory(path) }
+    fun directory(path: String? = null) {
+        if (path != listing?.path) navigationFeedback()
+        saveScroll(); model.loadDirectory(path)
+    }
     DisposableEffect(model, listing?.path, browsing) {
         val current = listing
         onDispose {
@@ -152,7 +159,8 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
         }
     }
     val dateFormat = remember { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT) }
-    Column(modifier.fillMaxSize().padding(horizontal = 8.dp)) {
+    Column(modifier.fillMaxSize().padding(horizontal = 8.dp)
+        .panelEntrance(listOf(owner.environment, owner.storage, shared?.tree))) {
         // Local contextual strip only. No status paragraphs/path rows above the code.
         Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
             Box {
@@ -162,6 +170,7 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
                 }
                 DropdownMenu(environmentMenu, onDismissRequest = { environmentMenu = false }) {
                     IdeEnvironment.entries.forEach { value -> DropdownMenuItem(text = { Text(value.label) }, onClick = {
+                        if (owner.environment != value) navigationFeedback()
                         saveScroll(); environmentMenu = false; keys.clear(); owner.select(value)
                     }) }
                 }
@@ -190,7 +199,10 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
                         HorizontalDivider()
                         IdeStorage.entries.forEach { storage -> DropdownMenuItem(
                             text = { Text("${if (owner.storage == storage) "✓ " else ""}${storage.label}") },
-                            enabled = !model.busy, onClick = { action { saveScroll(); owner.selectStorage(storage) } }) }
+                            enabled = !model.busy, onClick = { action {
+                                if (owner.storage != storage) navigationFeedback()
+                                saveScroll(); owner.selectStorage(storage)
+                            } }) }
                         if (shared != null) {
                             DropdownMenuItem(text = { Text("Selecionar pasta compartilhada…") }, enabled = !model.busy,
                                 onClick = { action(selectTree) })
@@ -232,6 +244,7 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
                 MyCtTextButton(onClick = { storageMenu = true }, enabled = !model.busy) { Text("${owner.storage.label} ▾") }
                 DropdownMenu(storageMenu, onDismissRequest = { storageMenu = false }) {
                     IdeStorage.entries.forEach { value -> DropdownMenuItem(text = { Text(value.label) }, onClick = {
+                        if (owner.storage != value) navigationFeedback()
                         saveScroll(); storageMenu = false; owner.selectStorage(value)
                     }) }
                 }
@@ -270,7 +283,8 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
             }
         }
         Box(Modifier.fillMaxWidth().height(4.dp)) { if (model.busy) LinearProgressIndicator(Modifier.fillMaxWidth()) }
-        Box(Modifier.fillMaxWidth().weight(1f)) {
+        Box(Modifier.fillMaxWidth().weight(1f).panelEntrance(
+            listOf(browsing, if (browsing) listing?.path else doc, !browsing && ready && !languageError))) {
             if (browsing) {
                 LazyColumn(Modifier.fillMaxSize(), state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     items(rows, key = { it.reference }) { (entry, path) ->

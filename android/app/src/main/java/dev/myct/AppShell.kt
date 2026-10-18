@@ -11,6 +11,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -51,6 +54,7 @@ private val powerIcon = shellIcon("Disconnect", "M12,3 L12,11 M7,6 C0,11 4,21 12
 @Composable
 internal fun AppShell(
     section: AppSection,
+    drawer: DrawerState,
     phase: TerminalModel.Phase,
     host: String,
     user: String,
@@ -65,9 +69,10 @@ internal fun AppShell(
     modifier: Modifier = Modifier,
     content: @Composable (openMenu: () -> Unit) -> Unit
 ) {
-    val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    val openMenu: () -> Unit = { scope.launch { drawer.open() }; Unit }
+    val feedback = rememberNavigationFeedback()
+    var drawerWidth by remember { mutableFloatStateOf(0f) }
+    val openMenu: () -> Unit = { feedback(); scope.launch { drawer.open() }; Unit }
     val closeMenu: () -> Unit = { scope.launch { drawer.close() }; Unit }
     val connected = phase == TerminalModel.Phase.CONNECTED
     val active = connected || phase == TerminalModel.Phase.CONNECTING
@@ -88,7 +93,7 @@ internal fun AppShell(
             // The state-aware overload supplies Back/predictive Back; outer insets are consumed once.
             ModalDrawerSheet(
                 drawerState = drawer,
-                modifier = Modifier.widthIn(max = 320.dp).fillMaxHeight(),
+                modifier = Modifier.widthIn(max = 320.dp).fillMaxHeight().onSizeChanged { drawerWidth = it.width.toFloat() },
                 drawerShape = MyCtGeometry.Drawer,
                 drawerContainerColor = MaterialTheme.colorScheme.surface,
                 drawerTonalElevation = 0.dp,
@@ -128,7 +133,7 @@ internal fun AppShell(
                     DrawerCaption("NAVEGAÇÃO")
                     AppSection.entries.forEach { destination ->
                         DrawerDestination(destination.label, checkNotNull(sectionIcons[destination]), section == destination) {
-                            // Accept navigation immediately; the overlay closes without a layout transition.
+                            // Select immediately for ripple/highlight; the content host waits for actual closure.
                             onSelect(destination)
                             closeMenu()
                         }
@@ -176,7 +181,15 @@ internal fun AppShell(
             }
         }
     ) {
-        Box(Modifier.fillMaxSize().drawerEdgeOpening(drawer, scope).semantics {
+        Box(Modifier.fillMaxSize().clipToBounds().graphicsLayer {
+            // Follow the real drawer, including drag/reversal, without resizing the native viewport.
+            val offset = drawer.currentOffset
+            val reveal = if (drawerWidth > 0f && offset.isFinite())
+                (1f + offset / drawerWidth).coerceIn(0f, 1f) else 0f
+            translationX = reveal * 18.dp.toPx()
+            scaleX = 1f - reveal * 0.015f
+            scaleY = scaleX
+        }.drawerEdgeOpening(drawer, scope).semantics {
             customActions = listOf(CustomAccessibilityAction("Abrir menu de navegação") { openMenu(); true })
         }) {
             content(openMenu)

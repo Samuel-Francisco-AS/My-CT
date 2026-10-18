@@ -44,6 +44,7 @@ private class CreateRemoteDocument : ActivityResultContract<String, Uri?>() {
 @Composable
 fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val navigationFeedback = rememberNavigationFeedback()
     var notificationsGranted by remember { mutableStateOf(Build.VERSION.SDK_INT < 33 ||
         context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) }
     var afterPermission by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -83,6 +84,7 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
         }
     }
     fun openDirectory(path: String) {
+        if (path != listing?.path) navigationFeedback()
         saveScroll()
         model.load(path)
     }
@@ -156,7 +158,7 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
                     else LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
             }
-            LazyColumn(Modifier.weight(1f), state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            LazyColumn(Modifier.weight(1f).panelEntrance(listing?.path), state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(visibleEntries, key = { it.name }) { entry ->
                     Surface(shape = MyCtGeometry.Control, color = MaterialTheme.colorScheme.surface,
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {

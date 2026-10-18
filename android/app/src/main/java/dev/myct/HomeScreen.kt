@@ -2,13 +2,18 @@ package dev.myct
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -20,6 +25,7 @@ import androidx.compose.ui.unit.sp
 internal fun HomeScreen(phase: TerminalModel.Phase, onIde: () -> Unit, onTerminal: () -> Unit,
                         onFedora: () -> Unit, onMenu: () -> Unit) {
     val palette = MaterialTheme.colorScheme
+    val entrance = rememberHomeEntrance()
     val remoteStatus = when (phase) {
         TerminalModel.Phase.CONNECTED -> "SSH conectado"
         TerminalModel.Phase.CONNECTING -> "SSH conectando…"
@@ -35,7 +41,7 @@ internal fun HomeScreen(phase: TerminalModel.Phase, onIde: () -> Unit, onTermina
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            Row(Modifier.fillMaxWidth().then(entrance(0)), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(Modifier.width(3.dp).height(40.dp).background(palette.primary))
                 Column(Modifier.weight(1f)) {
@@ -45,19 +51,19 @@ internal fun HomeScreen(phase: TerminalModel.Phase, onIde: () -> Unit, onTermina
                 }
                 MyCtTextButton(onClick = onMenu) { Text("Menu") }
             }
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(entrance(1), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Seu espaço de trabalho.", style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.semantics { heading() })
                 Text("Edite e use o terminal no Android.\nConecte ao Fedora quando precisar.",
                     style = MaterialTheme.typography.bodyMedium, color = palette.onSurfaceVariant)
             }
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("NO ANDROID", style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
+                Text("NO ANDROID", modifier = entrance(2), style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace,
                     letterSpacing = 1.4.sp, color = palette.secondary)
-                HomeAction(AppSection.Ide, "IDE Local", "Seus projetos e arquivos, mesmo offline.", onIde, prominent = true)
-                HomeAction(AppSection.Terminal, "Terminal Local", "Abrir ou retomar o shell Android.", onTerminal)
+                HomeAction(AppSection.Ide, "IDE Local", "Seus projetos e arquivos, mesmo offline.", onIde, modifier = entrance(2), prominent = true)
+                HomeAction(AppSection.Terminal, "Terminal Local", "Abrir ou retomar o shell Android.", onTerminal, modifier = entrance(3))
             }
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(entrance(4), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 MyCtPanelRule()
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.size(5.dp).background(statusColor))
@@ -74,9 +80,14 @@ internal fun HomeScreen(phase: TerminalModel.Phase, onIde: () -> Unit, onTermina
 
 @Composable
 private fun HomeAction(section: AppSection, title: String, description: String, onClick: () -> Unit,
-                       prominent: Boolean = false) {
+                       modifier: Modifier = Modifier, prominent: Boolean = false) {
     val palette = MaterialTheme.colorScheme
-    Surface(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = MyCtGeometry.Panel,
+    val interactions = remember { MutableInteractionSource() }
+    val pressed by interactions.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.97f else 1f,
+        tween(120, easing = NavigationEnterEasing), label = "Home press")
+    Surface(onClick = onClick, interactionSource = interactions,
+        modifier = modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale }, shape = MyCtGeometry.Panel,
         color = if (prominent) palette.primaryContainer else palette.surface,
         border = BorderStroke(1.dp, if (prominent) palette.outline else palette.outlineVariant)) {
         Row(Modifier.heightIn(min = 88.dp).padding(16.dp), verticalAlignment = Alignment.CenterVertically,
