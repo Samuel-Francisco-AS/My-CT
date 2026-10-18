@@ -101,7 +101,7 @@ class Rpc:
                     if isinstance(error, dict) and isinstance(error.get('code'), int) and isinstance(error.get('message'), str):
                         # The daemon's short JSON-RPC error message is more useful
                         # than blaming its version. Never print request params/magnet.
-                        message = re.sub(r'[\\x00-\\x1f\\x7f]+', ' ', error['message']).strip()[:160]
+                        message = re.sub(r'[\x00-\x1f\x7f]+', ' ', error['message']).strip()[:160]
                         raise Failure(f'Transmission recusou {method}: {message} (código {error["code"]}).')
                     raise Failure(f'Transmission recusou {method}: erro RPC sem detalhes válidos.')
                 if not isinstance(result.get('result'), dict):
