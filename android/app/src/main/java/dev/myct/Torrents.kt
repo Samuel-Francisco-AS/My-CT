@@ -44,6 +44,7 @@ internal fun parseTorrents(text: String): List<ServerTorrent> {
             optionalTorrentCounter(row, "downloaded_ever"), optionalTorrentCounter(row, "uploaded_ever"),
             (row.opt("upload_ratio") as? Number)?.toDouble()?.takeIf { it.isFinite() && (it >= 0 || it == -1.0 || it == -2.0) })
     }.also { require(it.map { row -> row.hash }.distinct().size == it.size) }
+        .sortedByDescending { it.id }
 }
 internal sealed interface TorrentAction {
     data object List : TorrentAction
@@ -62,7 +63,7 @@ internal fun torrentCommand(action: TorrentAction): String {
             "add ${quote(action.magnet)}"
         }
         is TorrentAction.Control -> {
-            require(action.verb in setOf("pause", "resume", "remove") && torrentHash.matches(action.hash))
+            require(action.verb in setOf("pause", "resume", "remove", "delete-data") && torrentHash.matches(action.hash))
             "${action.verb} ${quote(action.hash)}"
         }
     }
