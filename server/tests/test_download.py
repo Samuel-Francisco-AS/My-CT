@@ -188,8 +188,8 @@ class Downloads(unittest.TestCase):
             ident = str(uuid.uuid4())
             job = self.home / '.local/share/myct/downloads' / ident
             job.mkdir(parents=True)
-            (job / 'name').write_text('demo.bin\\n')
-            (job / 'state').write_text(state + '\\n')
+            (job / 'name').write_text('demo.bin\n')
+            (job / 'state').write_text(state + '\n')
             folder = self.home / 'Downloads/My-CT' / ident
             folder.mkdir(parents=True)
             payload = folder / ('demo.bin' if state == 'completed' else 'demo.bin.part')
@@ -207,15 +207,15 @@ class Downloads(unittest.TestCase):
         ident = str(uuid.uuid4())
         job = self.home / '.local/share/myct/downloads' / ident
         job.mkdir(parents=True)
-        (job / 'name').write_text('demo.bin\\n')
-        (job / 'state').write_text('running\\n')
+        (job / 'name').write_text('demo.bin\n')
+        (job / 'state').write_text('running\n')
         folder = self.home / 'Downloads/My-CT' / ident
         folder.mkdir(parents=True)
         payload = folder / 'demo.bin.part'
         payload.write_bytes(b'partial')
         self.assertNotEqual(self.cli('delete', ident).returncode, 0)
         self.assertTrue(payload.exists())
-        (job / 'state').write_text('canceled\\n')
+        (job / 'state').write_text('canceled\n')
         linked = self.home / 'outside.bin'
         os.link(payload, linked)
         self.assertNotEqual(self.cli('delete', ident).returncode, 0)
