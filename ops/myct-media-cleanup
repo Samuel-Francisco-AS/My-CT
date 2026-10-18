@@ -148,6 +148,10 @@ def preview(request, inventory):
                     blockers.append('Torrent ' + key[:12] + ': existem outros hardlinks fora da biblioteca. ' +
                                     'Não é possível garantir a liberação de espaço.')
             unlinked_video = [f['name'] for f in files if f['id'] not in represented]
+            if unlinked_video:
+                blockers.append('Torrent ' + key[:12] + ': há ' + str(len(unlinked_video)) +
+                                ' vídeos originais fora da seleção/biblioteca. ' +
+                                'Exclusão definitiva bloqueada para evitar perda inesperada.')
             affected.append({'hash': key, 'name': torrent.get('name', ''),
                              'videos_outside_library': len(unlinked_video),
                              'examples': unlinked_video[:3],
