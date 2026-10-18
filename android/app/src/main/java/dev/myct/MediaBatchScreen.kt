@@ -80,9 +80,37 @@ internal fun MediaBatchScreen(model: MediaModel, modifier: Modifier = Modifier) 
         }) else null
     val plan = model.manualPlan?.takeIf { spec != null && spec == model.plannedSpec }
 
-    LazyColumn(modifier.padding(horizontal = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(bottom = 20.dp)) {
+    val lazyState = rememberLazyListState()
+    val jumpScope = rememberCoroutineScope()
+    // Every expanded video is its own LazyColumn row (not a giant folder card).
+    val folderRows = sourceFolders.sumOf { (key, files) ->
+        1 + if (expandedFolders[folderKey(key.first, key.second)] == true) files.size else 0
+    }
+    val episodesAnchor = 2 + folderRows
+    val episodesRows = if (kind != "movie" && selected.isNotEmpty())
+        1 + if (editEpisodes) selected.size else 0 else 0
+    val previewAnchor = episodesAnchor + episodesRows
+    fun jumpTo(index: Int) {
+        jumpScope.launch { lazyState.animateScrollToItem(index) }
+    }
+    LaunchedEffect(plan) {
+        if (plan != null) lazyState.animateScrollToItem(previewAnchor)
+    }
+
+    Column(modifier) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            AssistChip(onClick = { jumpTo(0) }, label = { Text("Dados") })
+            AssistChip(onClick = { jumpTo(1) }, label = { Text("Pastas") })
+            if (kind != "movie" && selected.isNotEmpty())
+                AssistChip(onClick = { jumpTo(episodesAnchor) }, label = { Text("Episódios") })
+            AssistChip(onClick = { jumpTo(previewAnchor) }, label = { Text("Prévia") })
+        }
+        LazyColumn(Modifier.weight(1f).padding(horizontal = 12.dp),
+            state = lazyState,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 12.dp)) {
         item("intro") {
             ScreenPanel {
                 ScreenHeading("Organizar biblioteca",
