@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import subprocess
 import sys
 
 CORE_PATH = Path(__file__).with_name('myct-media')
@@ -183,7 +184,7 @@ def main():
     try:
         print(json.dumps(run(sys.argv[1:]), ensure_ascii=False))
         return 0
-    except (core.MediaError, ValueError, KeyError, OSError, TypeError) as exc:
+    except (core.MediaError, ValueError, KeyError, OSError, TypeError, subprocess.CalledProcessError) as exc:
         print(str(exc) if isinstance(exc, core.MediaError) else 'Falha ao consultar ou importar mídia.', file=sys.stderr)
         return 2
 
