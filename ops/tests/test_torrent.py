@@ -95,6 +95,46 @@ class TorrentTest(unittest.TestCase):
             self.assertEqual(['urn:btih:' + HASH], no_trackers['xt'])
             self.assertNotIn('tr', no_trackers)
 
+    def test_empty_magnet_separators_are_ignored_but_fields_stay_strict(self):
+        # Link generators may emit 63 segments with 31 empty entries:
+        # repeated '&&' separators must not invalidate otherwise valid magnets.
+        good = 'udp://good.example:6969/announce'
+        offline = 'udp://offline.example:6969/announce'
+        encoded_good = 'udp%3A%2F%2Fgood.example%3A6969%2Fannounce'
+        encoded_offline = 'udp%3A%2F%2Foffline.example%3A6969%2Fannounce'
+        fields = [
+            'xt=urn:btih:' + HASH,
+            'dn=Nome%20original',
+            'tr=' + encoded_good,
+            'tr=' + encoded_offline,
+        ]
+        malformed_separators = 'magnet:?' + '&&'.join(fields) + '&&'
+        expected = 'magnet:?' + '&'.join(fields[:3])
+
+        def dns(host, port, type):
+            if host == 'offline.example':
+                raise socket.gaierror(socket.EAI_NONAME, 'not found')
+            return [(socket.AF_INET, socket.SOCK_DGRAM, 17, '', ('8.8.8.8', port))]
+
+        with patch.object(torrent.socket, 'getaddrinfo', side_effect=dns):
+            cleaned = torrent.magnet(malformed_separators)
+            self.assertEqual(expected, cleaned)
+            self.assertIn('xt=urn:btih:', cleaned)
+            self.assertNotIn('xt=urn%3A', cleaned)
+            self.assertEqual('magnet:?' + '&'.join(fields[:3]),
+                             torrent.magnet('magnet:?' + '&&'.join(fields[:3]) + '&'))
+            with tempfile.TemporaryDirectory() as home, patch.object(
+                    torrent.Path, 'home', return_value=Path(home)):
+                rpc = FakeRpc(torrent.destination())
+                self.assertTrue(torrent.run(['add', malformed_separators], rpc)['duplicate'])
+                self.assertEqual(cleaned, rpc.calls[0][1]['filename'])
+
+        with self.assertRaises(ValueError):
+            torrent.magnet(MAGNET + '&&bare-parameter')
+        with self.assertRaises(torrent.Failure):
+            torrent.magnet(MAGNET + '&&xs=http://example.org/metadata')
+        self.assertEqual(MAGNET, torrent.magnet('magnet:?&&xt=urn:btih:' + HASH + '&&'))
+
     def test_filtered_magnet_keeps_original_xt_encoding_for_transmission_413(self):
         # libtransmission 4.1.3 matches raw xt values beginning with 'urn:btih:'.
         # Rebuilding query params with urlencode() used to convert ':' to '%3A'
