@@ -137,8 +137,8 @@ internal sealed interface MediaAction {
 
 /** Use existing trusted SSH session, with literal command plus individually quoted arguments. */
 internal fun mediaCommand(action: MediaAction): String {
-    fun quote(value: String): String {
-        require(value.isNotEmpty() && value.length <= 8192 && value.none { it.isISOControl() })
+    fun quote(value: String, limit: Int = 8192): String {
+        require(value.isNotEmpty() && value.length <= limit && value.none { it.isISOControl() })
         return "'" + value.replace("'", "'\"'\"'") + "'"
     }
     fun id(value: String) = quote(value.also { require(validMediaId(it)) })
@@ -148,8 +148,8 @@ internal fun mediaCommand(action: MediaAction): String {
     })
     val arguments = when (action) {
         MediaAction.BulkSources -> "sources"
-        is MediaAction.BulkPlan -> "plan ${quote(manualToken(action.spec))}"
-        is MediaAction.BulkImport -> "import ${quote(manualToken(action.spec))}"
+        is MediaAction.BulkPlan -> "plan ${quote(manualToken(action.spec), 48000)}"
+        is MediaAction.BulkImport -> "import ${quote(manualToken(action.spec), 48000)}"
         MediaAction.Scan -> "scan"
         MediaAction.List -> "list"
         MediaAction.Sync -> "sync"
