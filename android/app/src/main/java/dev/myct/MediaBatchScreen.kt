@@ -60,6 +60,13 @@ internal fun MediaBatchScreen(model: MediaModel, modifier: Modifier = Modifier) 
     val selectedByFolder = selected.groupBy {
         folderKey(it.torrent, it.path.substringBeforeLast('/', ""))
     }
+    LaunchedEffect(model.sources) {
+        val present = model.sources.map { it.id }.toSet()
+        marked.keys.toList().filterNot { it in present }.forEach {
+            marked.remove(it)
+            episodeOverrides.remove(it)
+        }
+    }
     val seasonValue = season.toIntOrNull()
     val first = firstEpisode.toIntOrNull()
     val yearValue = year.toIntOrNull()
@@ -179,7 +186,10 @@ internal fun MediaBatchScreen(model: MediaModel, modifier: Modifier = Modifier) 
                                 style = MaterialTheme.typography.titleSmall,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
                             // The first file distinguishes torrents that have no subfolder.
-                            Text(files.firstOrNull()?.name.orEmpty(),
+                            Text(files.firstOrNull { file ->
+                                !Regex("1xbet|promo|trailer|sample", RegexOption.IGNORE_CASE)
+                                    .containsMatchIn(file.name)
+                            }?.name ?: files.firstOrNull()?.name.orEmpty(),
                                 style = MaterialTheme.typography.bodySmall,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text("$count/${files.size} selecionados · ${key.first.take(10)}…",
