@@ -122,7 +122,60 @@ internal fun manualToken(value: ManualBatch): String {
     return token
 }
 
+internal data class MediaLibrarySeason(
+    val number: Int, val episodes: List<Int>, val missing: List<Int>, val files: Int,
+    val unidentified: Int, val managed: Int
+)
+internal data class MediaLibraryGroup(
+    val kind: String, val folder: String, val title: String, val path: String,
+    val year: Int?, val files: Int, val managed: Int, val seasons: List<MediaLibrarySeason>
+)
+
+internal fun parseMediaLibrary(text: String): List<MediaLibraryGroup> {
+    val groups = JSONObject(text).getJSONArray("groups")
+    require(groups.length() <= 250)
+    return (0 until groups.length()).map { index ->
+        val entry = groups.getJSONObject(index)
+        val seasons = entry.getJSONArray("seasons")
+        require(seasons.length() <= 100)
+        val parsedSeasons = (0 until seasons.length()).map { n ->
+            val season = seasons.getJSONObject(n)
+            fun episodes(name: String): List<Int> {
+                val arr = season.getJSONArray(name)
+                require(arr.length() <= 999)
+                return (0 until arr.length()).map { arr.getInt(it) }.also {
+                    require(it.all { num -> num in 1..999 } && it.distinct().size == it.size)
+                }
+            }
+            MediaLibrarySeason(
+                season.getInt("number"), episodes("episodes"), episodes("missing"),
+                season.getInt("files"), season.getInt("unidentified"), season.getInt("managed")
+            ).also {
+                require(it.number in 0..99 && it.files in 0..2000 &&
+                    it.unidentified in 0..it.files && it.managed in 0..it.files)
+            }
+        }
+        MediaLibraryGroup(
+            entry.getString("kind"), entry.getString("folder"),
+            entry.getString("title"), entry.getString("path"),
+            if (entry.isNull("year")) null else entry.getInt("year"),
+            entry.getInt("files"), entry.getInt("managed"), parsedSeasons
+        ).also {
+            require(it.kind in setOf("anime", "series", "movie") &&
+                validMediaPath(it.path) && it.folder.length in 1..110 &&
+                it.title.length in 1..100 && it.files in 0..2000 &&
+                it.managed in 0..it.files &&
+                it.path == (when (it.kind) {
+                    "anime" -> "Series/"
+                    "series" -> "Series-TV/"
+                    else -> "Filmes/"
+                }) + it.folder)
+        }
+    }
+}
+
 internal sealed interface MediaAction {
+    data object LibraryList : MediaAction
     data object BulkSources : MediaAction
     data class BulkPlan(val spec: ManualBatch) : MediaAction
     data class BulkImport(val spec: ManualBatch) : MediaAction
@@ -147,6 +200,7 @@ internal fun mediaCommand(action: MediaAction): String {
         require(it.length in 1..100 && it.none { c -> c == '/' || c == '\\' || c.isISOControl() })
     })
     val arguments = when (action) {
+        MediaAction.LibraryList -> "list"
         MediaAction.BulkSources -> "sources"
         is MediaAction.BulkPlan -> "plan ${quote(manualToken(action.spec), 48000)}"
         is MediaAction.BulkImport -> "import ${quote(manualToken(action.spec), 48000)}"
@@ -164,8 +218,11 @@ internal fun mediaCommand(action: MediaAction): String {
             "approve ${id(action.id)} movie ${title(action.title)} ${action.year}"
         }
     }
-    val binary = if (action is MediaAction.BulkSources || action is MediaAction.BulkPlan ||
-        action is MediaAction.BulkImport) "myct-media-bulk" else "myct-media"
+    val binary = when (action) {
+        MediaAction.LibraryList -> "myct-media-library"
+        MediaAction.BulkSources, is MediaAction.BulkPlan, is MediaAction.BulkImport -> "myct-media-bulk"
+        else -> "myct-media"
+    }
     return "if [ -x \"\$HOME/.local/bin/$binary\" ]; then exec \"\$HOME/.local/bin/$binary\" $arguments; else exit 127; fi"
 }
 
