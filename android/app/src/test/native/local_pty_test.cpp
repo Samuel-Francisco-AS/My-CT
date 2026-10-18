@@ -32,7 +32,10 @@ public:
     void send(const std::string& text) { pty.writeBytes(text.data(), text.size()); }
     void expect(const std::string& text) {
         std::unique_lock<std::mutex> lock(mutex);
-        if (!changed.wait_for(lock, 4s, [&] { return output.find(text) != std::string::npos; })) {
+        if (!changed.wait_for(lock, 4s, [&] {
+            // Host Bash enables bracketed paste before PS1; Android's mksh need not.
+            return std::regex_replace(output, std::regex("\x1b\\[\\?2004h"), "").find(text) != std::string::npos;
+        })) {
             std::cerr << "Missing " << text << " in " << output << std::endl;
             std::abort();
         }
@@ -53,18 +56,19 @@ int main() {
         assert(dup2(inherited, 200) == 200); close(inherited); // Deliberately lacks CLOEXEC.
         Terminal local(root), remote(root); // Independent actual PTYs, no network or Fedora service.
         close(200);
+        local.expect("My-CT> ");
         local.send("test ! -e /proc/$$/fd/200 && echo NO_APP_FD\n"); local.expect("NO_APP_FD\r\n");
         local.send("test -t 0 && test -t 1 && test -t 2 && echo REAL_TTY; pwd; echo $HOME; echo $TERM; echo $PATH\n");
         local.expect("REAL_TTY\r\n"); local.expect(root + "\r\n"); local.expect("xterm-256color\r\n");
         local.send("cd ProjetoTeste; pwd; /bin/ls; /bin/cat teste.c; echo PIPE_TEST | /bin/cat\n");
-        local.expect(root + "/ProjetoTeste\r\n"); local.expect("MYCT_FILE_CONTENT\r\n"); local.expect("PIPE_TEST\r\n");
+        local.expect(root + "/ProjetoTeste\r\n"); local.expect("MYCT_FILE_CONTENT\r\n"); local.expect("PIPE_TEST\r\nMy-CT> ");
         local.pty.resize(57, 13, 456, 208);
         local.send("/bin/stty size\n"); local.expect("13 57\r\n");
         local.send("echo WAITING; read value; echo INPUT_$value\n"); local.expect("WAITING\r\n");
         local.send("hello\n"); local.expect("INPUT_hello\r\n");
         local.send("echo SLEEPING; /bin/sleep 20; echo INTERRUPTED_$?\n"); local.expect("SLEEPING\r\n");
         std::this_thread::sleep_for(100ms); local.send(std::string(1, 3));
-        local.send("echo CTRL_C_$?\n"); local.expect("CTRL_C_130\r\n");
+        local.send("echo CTRL_C_$?\n"); local.expect("CTRL_C_130\r\nMy-CT> ");
         local.send("exit 7\n"); assert(local.pty.waitForExit() == 7); assert(local.pty.waitForExit() == 7);
         local.pty.stop(); local.pty.stop();
         remote.send("echo SURVIVED\n"); remote.expect("SURVIVED\r\n");

@@ -112,7 +112,7 @@ private fun TerminalApp(model: TerminalModel) {
     var captureWarning by remember { mutableStateOf(false) }
     var stopPersistenceFor by remember { mutableStateOf<TerminalSession?>(null) }
     var measurements by remember { mutableStateOf<String?>(null) }
-    var selectedTab by rememberSaveable { mutableStateOf(AppSection.Terminal) }
+    var selectedTab by rememberSaveable { mutableStateOf(AppSection.Home) }
     val active = model.phase == TerminalModel.Phase.CONNECTING || model.phase == TerminalModel.Phase.CONNECTED
     val connected = model.phase == TerminalModel.Phase.CONNECTED
     val showingLocal = selectedTab == AppSection.Terminal && model.terminalSelection.environment == IdeEnvironment.LOCAL
@@ -190,7 +190,7 @@ private fun TerminalApp(model: TerminalModel) {
         },
         onDisconnect = { model.disconnect() },
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).windowInsetsPadding(insets)
-    ) {
+    ) { openMenu ->
         AppSectionContent(selectedTab) {
             Column(Modifier.fillMaxSize()) {
                 if (selectedTab == AppSection.Terminal) Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -200,7 +200,16 @@ private fun TerminalApp(model: TerminalModel) {
                             onClick = { model.selectTerminal(environment) }, label = { Text(environment.label) })
                     }
                 }
-                if (selectedTab == AppSection.Ide) IdeScreen(model.ide,
+                if (selectedTab == AppSection.Home) HomeScreen(model.phase,
+                    onIde = { model.ide.select(IdeEnvironment.LOCAL); selectedTab = AppSection.Ide },
+                    onTerminal = {
+                        model.selectTerminal(IdeEnvironment.LOCAL)
+                        if (model.localTerminal.terminal == null) model.localTerminal.start()
+                        selectedTab = AppSection.Terminal
+                    },
+                    onFedora = { model.selectTerminal(IdeEnvironment.REMOTE); selectedTab = AppSection.Terminal },
+                    onMenu = openMenu)
+                else if (selectedTab == AppSection.Ide) IdeScreen(model.ide,
                     terminal = { model.selectTerminal(model.ide.environment); selectedTab = AppSection.Terminal },
                     files = { path -> if (connected && !model.files.busy) { model.files.load(path); selectedTab = AppSection.Files } },
                     modifier = Modifier.weight(1f))

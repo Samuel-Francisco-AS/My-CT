@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 
 internal enum class AppSection(val label: String) {
-    Terminal("Terminal"), Files("Arquivos"), Ide("IDE"), Health("Saúde"), Vault("Cofre"), Downloads("Downloads")
+    Home("Início"), Terminal("Terminal"), Files("Arquivos"), Ide("IDE"), Health("Saúde"), Vault("Cofre"), Downloads("Downloads")
 }
 
 /** Opening navigation or options must never override the vault's unconditional protection. */

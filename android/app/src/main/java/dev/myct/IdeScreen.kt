@@ -129,6 +129,7 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
     }
     fun restoreFocus() { editor?.post { if (editor?.isReleased == false) editor?.requestFocus() } }
     fun action(block: () -> Unit) { menu = false; keys.clear(); block() }
+    fun requestClose() { action { closeAsked = true } }
     fun open(path: String) { if (doc?.dirty == true || doc?.uncertain == true) pendingOpen = path else model.open(path) }
 
     val listing = model.listing
@@ -174,6 +175,9 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
                 maxLines = 1, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             MyCtButton(onClick = model::save, enabled = model.canSave) { Text("Salvar${if (doc?.dirty == true) " *" else ""}") }
+            if (doc != null) IconButton(onClick = ::requestClose, enabled = !model.busy) {
+                Icon(FileGlyphs.Close, contentDescription = "Fechar arquivo", modifier = Modifier.size(18.dp))
+            }
             Box {
                 IconButton(onClick = { keys.clear(); menu = true }, modifier = Modifier.semantics { contentDescription = "Ações da IDE" }) { Text("⋮") }
                 DropdownMenu(menu, onDismissRequest = { menu = false }, properties = PopupProperties(focusable = false)) {
@@ -213,7 +217,7 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
                         DropdownMenuItem(text = { Text(if (keysVisible) "Recolher teclas" else "Mostrar teclas") },
                             onClick = { action { keysVisible = !keysVisible; restoreFocus() } })
                         DropdownMenuItem(text = { Text("Fechar arquivo") }, enabled = !model.busy,
-                            onClick = { action { closeAsked = true } })
+                            onClick = ::requestClose)
                     }
                     HorizontalDivider()
                     if (shared == null) DropdownMenuItem(text = { Text("Ir para caminho…") }, enabled = model.connected && !model.busy,

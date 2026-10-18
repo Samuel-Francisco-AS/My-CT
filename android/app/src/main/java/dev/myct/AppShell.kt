@@ -35,7 +35,8 @@ private fun shellIcon(name: String, path: String) = ImageVector.Builder(name, 24
     .addPath(addPathNodes(path), stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
         strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round).build()
 
-private val sectionIcons = mapOf(
+internal val sectionIcons = mapOf(
+    AppSection.Home to shellIcon("Início", "M3,11 L12,3 L21,11 M5,10 L5,21 L10,21 L10,15 L14,15 L14,21 L19,21 L19,10"),
     AppSection.Terminal to shellIcon("Terminal", "M4,5 L20,5 L20,19 L4,19 Z M7,9 L10,12 L7,15 M13,15 L17,15"),
     AppSection.Files to shellIcon("Files", "M3,7 L3,19 L21,19 L21,7 L12,7 L10,4 L3,4 Z"),
     AppSection.Ide to shellIcon("IDE", "M8,5 L2,12 L8,19 M16,5 L22,12 L16,19 M14,3 L10,21"),
@@ -62,7 +63,7 @@ internal fun AppShell(
     onPersistenceChange: (Boolean) -> Unit,
     onDisconnect: () -> Unit,
     modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
+    content: @Composable (openMenu: () -> Unit) -> Unit
 ) {
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -103,7 +104,7 @@ internal fun AppShell(
                                 Box(Modifier.width(3.dp).height(36.dp).background(palette.primary))
                                 Column {
                                     Text("My-CT", style = MaterialTheme.typography.headlineLarge)
-                                    Text("PAINEL REMOTO", style = MaterialTheme.typography.labelSmall,
+                                    Text("LOCAL + REMOTO", style = MaterialTheme.typography.labelSmall,
                                         color = palette.secondary, letterSpacing = 1.8.sp)
                                 }
                             }
@@ -178,7 +179,7 @@ internal fun AppShell(
         Box(Modifier.fillMaxSize().drawerEdgeOpening(drawer, scope).semantics {
             customActions = listOf(CustomAccessibilityAction("Abrir menu de navegação") { openMenu(); true })
         }) {
-            content()
+            content(openMenu)
             if (drawer.isClosed) {
                 // Reserve only a small segment against Android Back; no pointer input overlay.
                 // This semantic action also opens navigation through TalkBack/Voice/Switch Access.

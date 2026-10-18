@@ -60,7 +60,8 @@ LocalPty::LocalPty(const std::string& shell, const std::string& cwd) {
         char term[] = "TERM=xterm-256color";
         char path[] = "PATH=/system/bin:/system/xbin";
         char lang[] = "LANG=C.UTF-8";
-        char* env[] = {home.data(), term, path, lang, nullptr};
+        char prompt[] = "PS1=My-CT> "; // The interactive shell renders each prompt; cwd stays real.
+        char* env[] = {home.data(), term, path, lang, prompt, nullptr};
         char interactive[] = "-i";
         char* args[] = {const_cast<char*>(shell.c_str()), interactive, nullptr};
         struct sigaction action{};

@@ -42,18 +42,19 @@ class LocalPtyInstrumentedTest {
             File(root, "ProjetoTeste").mkdir()
             File(root, "ProjetoTeste/teste.c").writeText("ANDROID_IDE_FILE\n")
             Harness(root.absolutePath).use { t ->
+                t.expect("My-CT> ")
                 t.send("test -t 0 && test -t 1 && test -t 2 && echo REAL_ANDROID_TTY; pwd; echo \$HOME; echo \$TERM; echo \$PATH\n")
                 t.expect("REAL_ANDROID_TTY\r\n"); t.expect(root.absolutePath + "\r\n")
                 t.expect("xterm-256color\r\n"); t.expect("/system/bin:/system/xbin\r\n")
                 t.send("ls; cd ProjetoTeste; cat teste.c; echo ANDROID_PIPE | cat\n")
-                t.expect("ANDROID_IDE_FILE\r\n"); t.expect("ANDROID_PIPE\r\n")
+                t.expect("ANDROID_IDE_FILE\r\n"); t.expect("ANDROID_PIPE\r\nMy-CT> ")
                 t.child.resize(49, 15, 392, 240)
                 t.send("stty size\n"); t.expect("15 49\r\n")
                 t.send("echo READ_READY; read value; echo READ_\$value\n"); t.expect("READ_READY\r\n")
                 t.send("myct\n"); t.expect("READ_myct\r\n")
                 t.send("echo SLEEP_READY; sleep 20\n"); t.expect("SLEEP_READY\r\n")
                 Thread.sleep(150); t.send("\u0003"); Thread.sleep(100)
-                t.send("echo CTRL_C_\$?\n"); t.expect("CTRL_C_130\r\n")
+                t.send("echo CTRL_C_\$?\n"); t.expect("CTRL_C_130\r\nMy-CT> ")
                 t.send("exit 7\n"); assertEquals(7, t.child.waitForExit())
             }
         } finally { root.deleteRecursively() } // Only this test's private cache fixture.
