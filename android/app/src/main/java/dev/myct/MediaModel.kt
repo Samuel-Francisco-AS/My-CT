@@ -24,6 +24,12 @@ internal class MediaModel internal constructor(
         private set
     var message by mutableStateOf("Conecte ao Fedora pelo Terminal.")
         private set
+    var sources by mutableStateOf(emptyList<MediaSource>())
+        private set
+    var manualPlan by mutableStateOf<ManualPlan?>(null)
+        private set
+    var plannedSpec by mutableStateOf<ManualBatch?>(null)
+        private set
 
     fun attach(ssh: SshConnection?) {
         generation++
@@ -31,11 +37,15 @@ internal class MediaModel internal constructor(
         connection = ssh
         connected = ssh != null
         busy = false; stale = false
-        preview = null; entries = emptyList()
+        preview = null; entries = emptyList(); sources = emptyList()
+        manualPlan = null; plannedSpec = null
         message = if (connected) "Consulte a biblioteca do Fedora." else "SSH desconectado."
     }
 
     fun refresh() = operate(MediaAction.Scan)
+    fun loadSources() = operate(MediaAction.BulkSources)
+    fun planManual(spec: ManualBatch) = operate(MediaAction.BulkPlan(spec))
+    fun importManual(spec: ManualBatch) = operate(MediaAction.BulkImport(spec))
     fun sync() = operate(MediaAction.Sync)
     fun approveSeries(id: String, title: String, season: Int, episode: Int) =
         operate(MediaAction.ApproveSeries(id, title, season, episode))
@@ -51,17 +61,40 @@ internal class MediaModel internal constructor(
         busy = true
         job = scope.launch {
             try {
-                if (action != MediaAction.Scan) {
-                    // A timeout cannot prove whether the command applied; never retry automatically.
-                    runInterruptible(Dispatchers.IO) { execute(ssh, action) }
+                if (action is MediaAction.BulkSources) {
+                    val fresh = parseMediaSources(runInterruptible(Dispatchers.IO) { execute(ssh, action) })
+                    if (epoch == generation) {
+                        sources = fresh
+                        manualPlan = null; plannedSpec = null
+                        stale = false
+                        message = "${fresh.size} vídeos concluídos disponíveis para seleção."
+                    }
+                    return@launch
                 }
+                if (action is MediaAction.BulkPlan) {
+                    val result = parseManualPlan(runInterruptible(Dispatchers.IO) { execute(ssh, action) })
+                    if (epoch == generation) {
+                        manualPlan = result
+                        plannedSpec = action.spec
+                        stale = false
+                        message = "Prévia manual pronta. Nenhum arquivo foi importado."
+                    }
+                    return@launch
+                }
+                val response = if (action != MediaAction.Scan)
+                    runInterruptible(Dispatchers.IO) { execute(ssh, action) } else null
                 val nextPreview = parseMediaPreview(runInterruptible(Dispatchers.IO) { execute(ssh, MediaAction.Scan) })
                 val nextEntries = parseMediaEntries(runInterruptible(Dispatchers.IO) { execute(ssh, MediaAction.List) })
                 if (epoch == generation) {
                     preview = nextPreview
                     entries = nextEntries
                     stale = false
-                    message = when (action) {
+                    if (action is MediaAction.BulkImport) {
+                        manualPlan = null; plannedSpec = null
+                        val summary = org.json.JSONObject(checkNotNull(response))
+                        message = "Lote concluído: ${summary.getInt("added")} hardlinks criados, " +
+                            "${summary.getInt("existing")} já existentes."
+                    } else message = when (action) {
                         MediaAction.Scan -> "Prévia atualizada. Nenhuma importação foi realizada."
                         MediaAction.Sync -> "Importação solicitada. Confira os resultados e pendências."
                         else -> "Comando aceito pelo Fedora. Biblioteca consultada novamente."
