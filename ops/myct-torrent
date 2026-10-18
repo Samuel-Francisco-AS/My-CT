@@ -94,8 +94,18 @@ class Rpc:
                 if len(payload) > LIMIT:
                     raise Failure('Histórico excedeu 256 KiB; consulte pelo Transmission local.')
                 result = json.loads(payload)
-                if result.get('jsonrpc') != '2.0' or result.get('id') != 1 or 'error' in result:
-                    raise Failure('Pedido recusado pelo motor; requer Transmission 4.1+. Atualize antes de repetir.')
+                if not isinstance(result, dict) or result.get('jsonrpc') != '2.0' or result.get('id') != 1:
+                    raise Failure('Resposta RPC inválida ou incompatível.')
+                if 'error' in result:
+                    error = result['error']
+                    if isinstance(error, dict) and isinstance(error.get('code'), int) and isinstance(error.get('message'), str):
+                        # The daemon's short JSON-RPC error message is more useful
+                        # than blaming its version. Never print request params/magnet.
+                        message = re.sub(r'[\\x00-\\x1f\\x7f]+', ' ', error['message']).strip()[:160]
+                        raise Failure(f'Transmission recusou {method}: {message} (código {error["code"]}).')
+                    raise Failure(f'Transmission recusou {method}: erro RPC sem detalhes válidos.')
+                if not isinstance(result.get('result'), dict):
+                    raise Failure('Resposta RPC sem resultado válido.')
                 return result['result']
             finally:
                 conn.close()
