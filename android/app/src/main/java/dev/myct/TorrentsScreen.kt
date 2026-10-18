@@ -68,7 +68,14 @@ internal fun TorrentsScreen(model: TorrentsModel, filesBusy: Boolean, openFiles:
     LazyColumn(modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
         item(key = "form") {
             ScreenPanel {
-                ScreenHeading("Novo torrent", "Magnet confiável. O motor continua no Fedora ao fechar o app. Concluídos podem continuar compartilhando (seeding); use Pausar para parar. Pasta por hash durante download, título real ao concluir; legados preservados. Acumulados são por torrent e podem exceder o tamanho atual. Ratio é o upload_ratio informado pelo Transmission (4.1: enviado / tamanho final), não uma divisão das taxas. Dados extras ausentes exigem o adaptador R2B, cuja instalação é manual e separada do Git.")
+                ScreenHeading("Novo torrent",
+                    "Cole um magnet para baixar no Fedora, mesmo com o aplicativo fechado.")
+                ExpandDetails("Como funcionam os torrents") {
+                    Text("Arquivos concluídos podem continuar compartilhando (seeding). " +
+                        "Use Pausar para interromper. Durante o download, o diretório usa o hash; " +
+                        "ao concluir, pode receber um nome legível. Estatísticas acumuladas " +
+                        "são por torrent e o ratio vem do Transmission.")
+                }
                 OutlinedTextField(magnet, { if (it.length <= 8192) magnet = it }, label = { Text("Magnet legal e confiável") },
                     singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = model.formEnabled,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false))
