@@ -71,9 +71,14 @@ internal fun torrentCommand(action: TorrentAction): String {
 }
 internal fun executeTorrent(action: TorrentAction, open: () -> DownloadExec, timeoutMs: Long = 25000): String =
     executeSshCommand(torrentCommand(action), open, timeoutMs) { status, _ ->
-        DownloadFailure(when (status) {
-            127 -> "CLI myct-torrent ausente. Consulte a instalação MYCT-5C no Fedora."
-            3 -> "Transmission indisponível. Confira pacote e serviço myct-transmission no Fedora."
+        DownloadFailure(when {
+            status == 127 -> "CLI myct-torrent ausente. Atualize o helper no Fedora."
+            status == 3 -> "Transmission indisponível. Confira o serviço myct-transmission no Fedora."
+            action is TorrentAction.Control && action.verb == "delete-data" &&
+                (reason.contains("hardlinks") || reason.contains("vinculada ao Jellyfin")) ->
+                "Exclusão bloqueada: há hardlinks na biblioteca. Retire-os em Mídia → Armazenamento."
+            action is TorrentAction.Control && action.verb == "delete-data" ->
+                "Não foi possível confirmar a exclusão. Consulte o Transmission antes de tentar novamente."
             else -> "Pedido recusado pelo motor. Confira magnet, diretório e Transmission 4.1+. Atualize antes de repetir."
         })
     }
