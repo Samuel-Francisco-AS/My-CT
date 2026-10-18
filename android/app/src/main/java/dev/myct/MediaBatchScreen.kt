@@ -1,14 +1,39 @@
 package dev.myct
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+
+/** Naturally orders episode_2 before episode_10 even without zero-padding. */
+internal fun mediaNaturalCompare(a: String, b: String): Int {
+    val tokens = Regex("""\d+|\D+""")
+    val left = tokens.findAll(a).map { it.value }.toList()
+    val right = tokens.findAll(b).map { it.value }.toList()
+    for (i in 0 until minOf(left.size, right.size)) {
+        val x = left[i].toIntOrNull()
+        val y = right[i].toIntOrNull()
+        val result = if (x != null && y != null) x.compareTo(y)
+            else left[i].compareTo(right[i], ignoreCase = true)
+        if (result != 0) return result
+    }
+    return left.size.compareTo(right.size)
+}
+
+private fun folderKey(torrent: String, path: String) = "$torrent/$path"
 
 /**
  * Manual organizer. The user chooses completed torrent files or a whole folder,
@@ -22,12 +47,19 @@ internal fun MediaBatchScreen(model: MediaModel, modifier: Modifier = Modifier) 
     var firstEpisode by remember { mutableStateOf("1") }
     var year by remember { mutableStateOf("2026") }
     var confirmation by remember { mutableStateOf(false) }
+    var editEpisodes by remember { mutableStateOf(false) }
+    var showDestinations by remember { mutableStateOf(false) }
+    val expandedFolders = remember { mutableStateMapOf<String, Boolean>() }
     val marked = remember { mutableStateMapOf<String, Boolean>() }
     val episodeOverrides = remember { mutableStateMapOf<String, String>() }
-    val selected = model.sources.filter { marked[it.id] == true }.sortedBy { it.path }
+    val selected = model.sources.filter { marked[it.id] == true }
+        .sortedWith { a, b -> mediaNaturalCompare(a.path, b.path) }
     val sourceFolders = model.sources.groupBy {
         it.torrent to it.path.substringBeforeLast('/', "")
     }.toList()
+    val selectedByFolder = selected.groupBy {
+        folderKey(it.torrent, it.path.substringBeforeLast('/', ""))
+    }
     val seasonValue = season.toIntOrNull()
     val first = firstEpisode.toIntOrNull()
     val yearValue = year.toIntOrNull()
