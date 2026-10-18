@@ -70,7 +70,7 @@ internal fun torrentCommand(action: TorrentAction): String {
     return "if [ -x \"\$HOME/.local/bin/myct-torrent\" ]; then exec \"\$HOME/.local/bin/myct-torrent\" $args; else exit 127; fi"
 }
 internal fun executeTorrent(action: TorrentAction, open: () -> DownloadExec, timeoutMs: Long = 25000): String =
-    executeSshCommand(torrentCommand(action), open, timeoutMs) { status, _ ->
+    executeSshCommand(torrentCommand(action), open, timeoutMs) { status, reason ->
         DownloadFailure(when {
             status == 127 -> "CLI myct-torrent ausente. Atualize o helper no Fedora."
             status == 3 -> "Transmission indisponível. Confira o serviço myct-transmission no Fedora."
