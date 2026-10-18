@@ -49,6 +49,7 @@ internal fun MediaBatchScreen(model: MediaModel, modifier: Modifier = Modifier) 
     var confirmation by remember { mutableStateOf(false) }
     var editEpisodes by remember { mutableStateOf(false) }
     var showDestinations by remember { mutableStateOf(false) }
+    var libraryExpanded by remember { mutableStateOf(false) }
     val expandedFolders = remember { mutableStateMapOf<String, Boolean>() }
     val marked = remember { mutableStateMapOf<String, Boolean>() }
     val episodeOverrides = remember { mutableStateMapOf<String, String>() }
@@ -93,7 +94,8 @@ internal fun MediaBatchScreen(model: MediaModel, modifier: Modifier = Modifier) 
     val folderRows = sourceFolders.sumOf { (key, files) ->
         1 + (if (expandedFolders[folderKey(key.first, key.second)] == true) files.size else 0)
     }
-    val episodesAnchor = 2 + folderRows
+    val sourceAnchor = 2 + if (libraryExpanded) model.libraryGroups.size else 0
+    val episodesAnchor = sourceAnchor + 1 + folderRows
     val episodesRows = if (kind != "movie" && selected.isNotEmpty())
         1 + (if (editEpisodes) selected.size else 0) else 0
     val previewAnchor = episodesAnchor + episodesRows
@@ -109,7 +111,8 @@ internal fun MediaBatchScreen(model: MediaModel, modifier: Modifier = Modifier) 
             .padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             AssistChip(onClick = { jumpTo(0) }, label = { Text("Dados") })
-            AssistChip(onClick = { jumpTo(1) }, label = { Text("Pastas") })
+            AssistChip(onClick = { jumpTo(1) }, label = { Text("Biblioteca") })
+            AssistChip(onClick = { jumpTo(sourceAnchor) }, label = { Text("Pastas") })
             if (kind != "movie" && selected.isNotEmpty())
                 AssistChip(onClick = { jumpTo(episodesAnchor) }, label = { Text("Episódios") })
             AssistChip(onClick = { jumpTo(previewAnchor) }, label = { Text("Prévia") })
@@ -150,6 +153,49 @@ internal fun MediaBatchScreen(model: MediaModel, modifier: Modifier = Modifier) 
                             label = { Text("Primeiro episódio") },
                             singleLine = true, modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    }
+                }
+            }
+        }
+        item(key = "library") {
+            ScreenPanel {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Biblioteca existente", style = MaterialTheme.typography.titleMedium)
+                    Text("${model.libraryGroups.size} títulos",
+                        style = MaterialTheme.typography.labelMedium)
+                }
+                Text("Veja os nomes das pastas, temporadas e episódios já armazenados. " +
+                    "O título exibido pelo Jellyfin pode ser traduzido.",
+                    style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MyCtButton(onClick = {
+                        libraryExpanded = true
+                        model.loadLibrary()
+                    }, enabled = model.connected && !model.busy) {
+                        Text("Consultar biblioteca")
+                    }
+                    if (model.libraryGroups.isNotEmpty())
+                        MyCtTextButton(onClick = { libraryExpanded = !libraryExpanded }) {
+                            Text(if (libraryExpanded) "Recolher" else "Explorar")
+                        }
+                }
+            }
+        }
+        if (libraryExpanded) {
+            model.libraryGroups.forEach { group ->
+                item(key = "library:" + group.path) {
+                    MediaLibraryGroupCard(group) { chosen, selectedSeason ->
+                        kind = chosen.kind
+                        title = chosen.title
+                        if (chosen.kind == "movie") {
+                            year = (chosen.year ?: 2026).toString()
+                        } else {
+                            val latest = chosen.seasons.maxByOrNull { it.number }
+                            season = (selectedSeason?.number ?: ((latest?.number ?: 0) + 1)).toString()
+                            firstEpisode = if (selectedSeason == null) "1"
+                                else ((selectedSeason.episodes.maxOrNull() ?: 0) + 1).toString()
+                        }
+                        jumpTo(0)
                     }
                 }
             }
