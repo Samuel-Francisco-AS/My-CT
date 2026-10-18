@@ -41,7 +41,7 @@ class MediaTest {
         try {
             val cli = root.resolve(".local/bin/myct-media")
             checkNotNull(cli.parentFile).mkdirs()
-            cli.writeText("#!/bin/sh\nprintf '%s\\n' \"\\$@\"\n")
+            cli.writeText("#!/bin/sh\nprintf '%s\\n' \"\$@\"\n")
             assertTrue(cli.setExecutable(true))
             val evil = "Film'; touch injected; echo '"
             val command = mediaCommand(MediaAction.ApproveMovie(id, evil, 2025))
