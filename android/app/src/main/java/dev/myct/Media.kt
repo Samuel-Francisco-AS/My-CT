@@ -174,7 +174,69 @@ internal fun parseMediaLibrary(text: String): List<MediaLibraryGroup> {
     }
 }
 
+internal data class CleanupFile(val path: String, val bytes: Long,
+    val torrent: String?, val managed: Boolean, val eligible: Boolean)
+internal data class CleanupSelection(val mode: String, val paths: List<String>)
+internal data class CleanupTorrent(val hash: String, val name: String,
+    val videosOutsideLibrary: Int, val examples: List<String>)
+internal data class CleanupPlan(val mode: String, val selected: Int, val bytes: Long,
+    val blockers: List<String>, val torrents: List<CleanupTorrent>,
+    val canApply: Boolean, val fingerprint: String)
+
+internal fun parseCleanupFiles(text: String): List<CleanupFile> {
+    val files = JSONObject(text).getJSONArray("files")
+    require(files.length() <= 2000)
+    return (0 until files.length()).map { index ->
+        val item = files.getJSONObject(index)
+        CleanupFile(item.getString("path"), item.getLong("bytes"),
+            if (item.isNull("torrent")) null else item.getString("torrent"),
+            item.getBoolean("managed"), item.getBoolean("eligible")).also {
+            require(validMediaPath(it.path) && it.bytes >= 0L &&
+                (it.torrent == null || Regex("[0-9a-f]{40}").matches(it.torrent)))
+        }
+    }
+}
+internal fun parseCleanupPlan(text: String): CleanupPlan {
+    val j = JSONObject(text)
+    val warnings = j.getJSONArray("blocked")
+    val torrentRows = j.getJSONArray("torrents")
+    require(warnings.length() <= 256 && torrentRows.length() <= 256)
+    val blocked = (0 until warnings.length()).map { warnings.getString(it) }
+    val torrents = (0 until torrentRows.length()).map { n ->
+        val t = torrentRows.getJSONObject(n)
+        val sample = t.getJSONArray("examples")
+        require(sample.length() <= 3)
+        CleanupTorrent(t.getString("hash"), t.optString("name"),
+            t.getInt("videos_outside_library"),
+            (0 until sample.length()).map { sample.getString(it) }).also {
+            require(Regex("[0-9a-f]{40}").matches(it.hash) && it.videosOutsideLibrary >= 0)
+        }
+    }
+    val result = CleanupPlan(j.getString("mode"), j.getInt("selected"), j.getLong("bytes"),
+        blocked, torrents, j.getBoolean("can_apply"), j.getString("fingerprint"))
+    require(result.mode in setOf("links", "storage") &&
+        result.selected in 1..256 && result.bytes >= 0 &&
+        result.canApply == result.blockers.isEmpty() &&
+        Regex("[0-9a-f]{64}").matches(result.fingerprint))
+    return result
+}
+internal fun cleanupToken(request: CleanupSelection): String {
+    require(request.mode in setOf("links", "storage") && request.paths.size in 1..256 &&
+        request.paths.distinct().size == request.paths.size &&
+        request.paths.all(::validMediaPath))
+    val paths = org.json.JSONArray()
+    request.paths.sorted().forEach { paths.put(it) }
+    val json = JSONObject().put("version", 1).put("mode", request.mode).put("paths", paths)
+    val token = java.util.Base64.getUrlEncoder().withoutPadding()
+        .encodeToString(json.toString().toByteArray(Charsets.UTF_8))
+    require(token.length <= 48000 && Regex("[A-Za-z0-9_-]+").matches(token))
+    return token
+}
+
 internal sealed interface MediaAction {
+    data object CleanupList : MediaAction
+    data class CleanupPreview(val selection: CleanupSelection) : MediaAction
+    data class CleanupApply(val selection: CleanupSelection, val fingerprint: String) : MediaAction
     data object LibraryList : MediaAction
     data object BulkSources : MediaAction
     data class BulkPlan(val spec: ManualBatch) : MediaAction
@@ -200,6 +262,12 @@ internal fun mediaCommand(action: MediaAction): String {
         require(it.length in 1..100 && it.none { c -> c == '/' || c == '\\' || c.isISOControl() })
     })
     val arguments = when (action) {
+        MediaAction.CleanupList -> "list"
+        is MediaAction.CleanupPreview -> "preview ${quote(cleanupToken(action.selection), 48000)}"
+        is MediaAction.CleanupApply -> {
+            require(Regex("[0-9a-f]{64}").matches(action.fingerprint))
+            "apply ${quote(cleanupToken(action.selection), 48000)} ${quote(action.fingerprint)}"
+        }
         MediaAction.LibraryList -> "list"
         MediaAction.BulkSources -> "sources"
         is MediaAction.BulkPlan -> "plan ${quote(manualToken(action.spec), 48000)}"
@@ -219,6 +287,8 @@ internal fun mediaCommand(action: MediaAction): String {
         }
     }
     val binary = when (action) {
+        MediaAction.CleanupList, is MediaAction.CleanupPreview,
+        is MediaAction.CleanupApply -> "myct-media-cleanup"
         MediaAction.LibraryList -> "myct-media-library"
         MediaAction.BulkSources, is MediaAction.BulkPlan, is MediaAction.BulkImport -> "myct-media-bulk"
         else -> "myct-media"
@@ -228,7 +298,8 @@ internal fun mediaCommand(action: MediaAction): String {
 
 internal fun executeMedia(action: MediaAction, open: () -> DownloadExec): String =
     executeSshCommand(mediaCommand(action), open,
-        if (action is MediaAction.BulkImport) 120000 else 25000) { status, _ ->
-        DownloadFailure(if (status == 127) "Instale myct-media e myct-media-bulk no Fedora."
+        if (action is MediaAction.BulkImport || action is MediaAction.CleanupApply)
+            120000 else 25000) { status, _ ->
+        DownloadFailure(if (status == 127) "Instale as CLIs myct-media, myct-media-bulk, myct-media-library e myct-media-cleanup no Fedora."
             else "A operação falhou. Consulte o terminal Fedora; atualize antes de tentar novamente.")
     }
