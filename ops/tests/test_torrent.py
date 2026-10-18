@@ -95,6 +95,35 @@ class TorrentTest(unittest.TestCase):
             self.assertEqual(['urn:btih:' + HASH], no_trackers['xt'])
             self.assertNotIn('tr', no_trackers)
 
+    def test_filtered_magnet_keeps_original_xt_encoding_for_transmission_413(self):
+        # libtransmission 4.1.3 matches raw xt values beginning with 'urn:btih:'.
+        # Rebuilding query params with urlencode() used to convert ':' to '%3A'
+        # and cause JSON-RPC error 4 ('unrecognized info').
+        good = 'udp://good.example:6969/announce'
+        bad = 'udp://offline.example:6969/announce'
+        good_param = 'udp%3A%2F%2Fgood.example%3A6969%2Fannounce'
+        bad_param = 'udp%3A%2F%2Foffline.example%3A6969%2Fannounce'
+        magnet_raw = (
+            MAGNET + '&dn=Nome%20do%20Arquivo' +
+            '&tr=' + good_param + '&tr=' + bad_param
+        )
+        expected = MAGNET + '&dn=Nome%20do%20Arquivo&tr=' + good_param
+        def dns(host, port, type):
+            if host == 'offline.example':
+                raise socket.gaierror(socket.EAI_NONAME, 'not found')
+            return [(socket.AF_INET, socket.SOCK_DGRAM, 17, '', ('8.8.8.8', port))]
+
+        with patch.object(torrent.socket, 'getaddrinfo', side_effect=dns):
+            cleaned = torrent.magnet(magnet_raw)
+            self.assertEqual(expected, cleaned)
+            self.assertIn('xt=urn:btih:', cleaned)
+            self.assertNotIn('xt=urn%3A', cleaned)
+            with tempfile.TemporaryDirectory() as home, patch.object(
+                    torrent.Path, 'home', return_value=Path(home)):
+                rpc = FakeRpc(torrent.destination())
+                self.assertTrue(torrent.run(['add', magnet_raw], rpc)['duplicate'])
+                self.assertEqual(expected, rpc.calls[0][1]['filename'])
+
     def test_nonpublic_dns_answer_is_filtered_without_forwarding_to_rpc(self):
         good = 'udp://public.example:6969/announce'
         private = 'udp://parked.example:6969/announce'
