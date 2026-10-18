@@ -32,6 +32,12 @@ internal class MediaModel internal constructor(
         private set
     var libraryGroups by mutableStateOf(emptyList<MediaLibraryGroup>())
         private set
+    var cleanupFiles by mutableStateOf(emptyList<CleanupFile>())
+        private set
+    var cleanupPlan by mutableStateOf<CleanupPlan?>(null)
+        private set
+    var cleanupSelection by mutableStateOf<CleanupSelection?>(null)
+        private set
 
     fun attach(ssh: SshConnection?) {
         generation++
@@ -41,12 +47,17 @@ internal class MediaModel internal constructor(
         busy = false; stale = false
         preview = null; entries = emptyList(); sources = emptyList()
         manualPlan = null; plannedSpec = null; libraryGroups = emptyList()
+        cleanupFiles = emptyList(); cleanupPlan = null; cleanupSelection = null
         message = if (connected) "Consulte a biblioteca do Fedora." else "SSH desconectado."
     }
 
     fun refresh() = operate(MediaAction.Scan)
     fun loadSources() = operate(MediaAction.BulkSources)
     fun loadLibrary() = operate(MediaAction.LibraryList)
+    fun loadCleanup() = operate(MediaAction.CleanupList)
+    fun previewCleanup(selection: CleanupSelection) = operate(MediaAction.CleanupPreview(selection))
+    fun applyCleanup(selection: CleanupSelection, fingerprint: String) =
+        operate(MediaAction.CleanupApply(selection, fingerprint))
     fun planManual(spec: ManualBatch) = operate(MediaAction.BulkPlan(spec))
     fun importManual(spec: ManualBatch) = operate(MediaAction.BulkImport(spec))
     fun sync() = operate(MediaAction.Sync)
@@ -64,6 +75,53 @@ internal class MediaModel internal constructor(
         busy = true
         job = scope.launch {
             try {
+                if (action == MediaAction.CleanupList) {
+                    val files = parseCleanupFiles(
+                        runInterruptible(Dispatchers.IO) { execute(ssh, action) }
+                    )
+                    if (epoch == generation) {
+                        cleanupFiles = files
+                        cleanupPlan = null; cleanupSelection = null
+                        stale = false
+                        message = "${files.size} arquivos encontrados na biblioteca para gerenciamento."
+                    }
+                    return@launch
+                }
+                if (action is MediaAction.CleanupPreview) {
+                    val plan = parseCleanupPlan(
+                        runInterruptible(Dispatchers.IO) { execute(ssh, action) }
+                    )
+                    if (epoch == generation) {
+                        cleanupPlan = plan
+                        cleanupSelection = action.selection
+                        stale = false
+                        message = if (plan.canApply) "Prévia de exclusão pronta. Nada foi removido."
+                            else "Prévia bloqueada. Confira os arquivos relacionados."
+                    }
+                    return@launch
+                }
+                if (action is MediaAction.CleanupApply) {
+                    val summary = org.json.JSONObject(
+                        runInterruptible(Dispatchers.IO) { execute(ssh, action) }
+                    )
+                    val files = parseCleanupFiles(
+                        runInterruptible(Dispatchers.IO) { execute(ssh, MediaAction.CleanupList) }
+                    )
+                    val groups = parseMediaLibrary(
+                        runInterruptible(Dispatchers.IO) { execute(ssh, MediaAction.LibraryList) }
+                    )
+                    val managed = parseMediaEntries(
+                        runInterruptible(Dispatchers.IO) { execute(ssh, MediaAction.List) }
+                    )
+                    if (epoch == generation) {
+                        cleanupFiles = files; cleanupPlan = null; cleanupSelection = null
+                        libraryGroups = groups; entries = managed
+                        stale = false
+                        message = "${summary.getInt("removed_links")} hardlinks retirados; " +
+                            "${summary.getInt("removed_torrents")} torrents excluídos."
+                    }
+                    return@launch
+                }
                 if (action == MediaAction.LibraryList) {
                     val groups = parseMediaLibrary(
                         runInterruptible(Dispatchers.IO) { execute(ssh, action) }
