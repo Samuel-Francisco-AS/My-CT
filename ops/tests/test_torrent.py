@@ -249,7 +249,7 @@ class TorrentTest(unittest.TestCase):
         try:
             with patch.object(torrent, 'ENDPOINT_PORT', server.server_port):
                 with self.assertRaisesRegex(torrent.Failure,
-                    r'Transmission recusou torrent_add: unrecognized info \\(código 11\\)') as caught:
+                    r'Transmission recusou torrent_add: unrecognized info \(código 11\)') as caught:
                     torrent.Rpc().call('torrent_add', {'filename': MAGNET})
             self.assertNotIn(MAGNET, str(caught.exception))
             self.assertEqual(2, len(requests))  # CSRF 409 only; never retry an RPC error.
