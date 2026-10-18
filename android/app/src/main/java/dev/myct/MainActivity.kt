@@ -86,7 +86,8 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         )
-        applyCaptureProtection(model.protectScreenshots)
+        // Protect the first frame too, including restoration directly into the vault.
+        applyCaptureProtection(true)
         setContent {
             MyCtTheme {
                 // Surface supplies the correct onBackground content color to plain Text components.
@@ -112,7 +113,20 @@ private fun TerminalApp(model: TerminalModel) {
     var captureWarning by remember { mutableStateOf(false) }
     var stopPersistenceFor by remember { mutableStateOf<TerminalSession?>(null) }
     var measurements by remember { mutableStateOf<String?>(null) }
-    var selectedTab by rememberSaveable { mutableStateOf(AppSection.Home) }
+    val navigation = rememberSaveable(saver = SectionNavigation.Saver) { SectionNavigation(AppSection.Home) }
+    val selectedTab = navigation.displayed
+    val drawer = rememberDrawerState(DrawerValue.Closed)
+    val navigationReady = drawer.currentValue == DrawerValue.Closed &&
+        drawer.targetValue == DrawerValue.Closed && !drawer.isAnimationRunning
+    fun navigateTo(destination: AppSection) {
+        if (navigation.request(destination)) {
+            // Apply before any destination can be drawn, including a request during drawer close.
+            if (navigation.protectCapture) activity.applyCaptureProtection(true)
+            model.clearTerminalModifiers()
+            if (destination != AppSection.Terminal) (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
+                .hideSoftInputFromWindow(activity.window.decorView.windowToken, 0)
+        }
+    }
     val active = model.phase == TerminalModel.Phase.CONNECTING || model.phase == TerminalModel.Phase.CONNECTED
     val connected = model.phase == TerminalModel.Phase.CONNECTED
     val showingLocal = selectedTab == AppSection.Terminal && model.terminalSelection.environment == IdeEnvironment.LOCAL
@@ -145,7 +159,7 @@ private fun TerminalApp(model: TerminalModel) {
         } catch (_: Exception) { feedback("Não foi possível ler o clipboard nesta tela.") }
     }
     // Always block screenshots on the vault tab, regardless of the general preference.
-    val captureProtected = captureProtectionRequired(model.protectScreenshots, selectedTab)
+    val captureProtected = captureProtectionRequired(model.protectScreenshots, selectedTab, navigation.protectCapture)
     DisposableEffect(activity, captureProtected) {
         activity.applyCaptureProtection(captureProtected)
         onDispose { }
@@ -166,21 +180,14 @@ private fun TerminalApp(model: TerminalModel) {
     if (ideExitWarning) AlertDialog(onDismissRequest = { ideExitWarning = false },
         title = { Text("Há código não salvo") },
         text = { Text("Salve na IDE antes de fechar o app. O buffer está em memória e pode ser perdido se o processo Android encerrar.") },
-        confirmButton = { TextButton(onClick = { ideExitWarning = false; selectedTab = AppSection.Ide }) { Text("Voltar à IDE") } },
+        confirmButton = { TextButton(onClick = { ideExitWarning = false; navigateTo(AppSection.Ide) }) { Text("Voltar à IDE") } },
         dismissButton = { TextButton(onClick = { ideExitWarning = false; activity.finish() }) { Text("Sair sem salvar") } })
     // A single union consumes overlap once; AndroidView receives the actual remaining area.
     val insets = WindowInsets.systemBars.union(WindowInsets.displayCutout).union(WindowInsets.ime)
     AppShell(
-        section = selectedTab, phase = model.phase, host = model.host, user = model.user, port = model.port,
+        section = navigation.requested, drawer = drawer, phase = model.phase, host = model.host, user = model.user, port = model.port,
         backgroundEnabled = model.backgroundEnabled, protectScreenshots = model.protectScreenshots,
-        onSelect = { destination ->
-            if (selectedTab != destination) {
-                model.clearTerminalModifiers()
-                if (destination != AppSection.Terminal) (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
-                    .hideSoftInputFromWindow(activity.window.decorView.windowToken, 0)
-                selectedTab = destination
-            }
-        },
+        onSelect = ::navigateTo,
         onOptions = { settings = true },
         onCaptureChange = { if (it) model.setCaptureProtection(true) else captureWarning = true },
         onPersistenceChange = { requested ->
@@ -191,7 +198,7 @@ private fun TerminalApp(model: TerminalModel) {
         onDisconnect = { model.disconnect() },
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).windowInsetsPadding(insets)
     ) { openMenu ->
-        AppSectionContent(selectedTab) {
+        AnimatedAppSection(navigation, navigationReady) {
             Column(Modifier.fillMaxSize()) {
                 if (selectedTab == AppSection.Terminal) Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -201,20 +208,20 @@ private fun TerminalApp(model: TerminalModel) {
                     }
                 }
                 if (selectedTab == AppSection.Home) HomeScreen(model.phase,
-                    onIde = { model.ide.select(IdeEnvironment.LOCAL); selectedTab = AppSection.Ide },
+                    onIde = { model.ide.select(IdeEnvironment.LOCAL); navigateTo(AppSection.Ide) },
                     onTerminal = {
                         model.selectTerminal(IdeEnvironment.LOCAL)
                         if (model.localTerminal.terminal == null) model.localTerminal.start()
-                        selectedTab = AppSection.Terminal
+                        navigateTo(AppSection.Terminal)
                     },
-                    onFedora = { model.selectTerminal(IdeEnvironment.REMOTE); selectedTab = AppSection.Terminal },
+                    onFedora = { model.selectTerminal(IdeEnvironment.REMOTE); navigateTo(AppSection.Terminal) },
                     onMenu = openMenu)
                 else if (selectedTab == AppSection.Ide) IdeScreen(model.ide,
-                    terminal = { model.selectTerminal(model.ide.environment); selectedTab = AppSection.Terminal },
-                    files = { path -> if (connected && !model.files.busy) { model.files.load(path); selectedTab = AppSection.Files } },
+                    terminal = { model.selectTerminal(model.ide.environment); navigateTo(AppSection.Terminal) },
+                    files = { path -> if (connected && !model.files.busy) { model.files.load(path); navigateTo(AppSection.Files) } },
                     modifier = Modifier.weight(1f))
                 else if (selectedTab == AppSection.Downloads) DownloadsScreen(model.downloads, model.torrents, model.files.busy, { path ->
-                    if (!model.files.busy && connected) { model.files.load(path); selectedTab = AppSection.Files }
+                    if (!model.files.busy && connected) { model.files.load(path); navigateTo(AppSection.Files) }
                 }, Modifier.weight(1f))
                 else if (selectedTab == AppSection.Vault) VaultScreen(model.vault, Modifier.weight(1f))
                 else if (selectedTab == AppSection.Health) HealthScreen(model.health, Modifier.weight(1f))

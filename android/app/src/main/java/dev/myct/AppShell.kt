@@ -51,6 +51,7 @@ private val powerIcon = shellIcon("Disconnect", "M12,3 L12,11 M7,6 C0,11 4,21 12
 @Composable
 internal fun AppShell(
     section: AppSection,
+    drawer: DrawerState,
     phase: TerminalModel.Phase,
     host: String,
     user: String,
@@ -65,7 +66,6 @@ internal fun AppShell(
     modifier: Modifier = Modifier,
     content: @Composable (openMenu: () -> Unit) -> Unit
 ) {
-    val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val openMenu: () -> Unit = { scope.launch { drawer.open() }; Unit }
     val closeMenu: () -> Unit = { scope.launch { drawer.close() }; Unit }
@@ -128,7 +128,7 @@ internal fun AppShell(
                     DrawerCaption("NAVEGAÇÃO")
                     AppSection.entries.forEach { destination ->
                         DrawerDestination(destination.label, checkNotNull(sectionIcons[destination]), section == destination) {
-                            // Accept navigation immediately; the overlay closes without a layout transition.
+                            // Select immediately for ripple/highlight; the content host waits for actual closure.
                             onSelect(destination)
                             closeMenu()
                         }

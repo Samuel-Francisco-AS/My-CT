@@ -16,4 +16,8 @@ class ShellProtectionTest {
         AppSection.entries.forEach { assertTrue(captureProtectionRequired(true, it)) }
         assertTrue(captureProtectionRequired(false, AppSection.Vault))
     }
+
+    @Test fun transitionProtectionCannotBeOverriddenByGlobalPreferenceOrDestination() {
+        AppSection.entries.forEach { assertTrue(captureProtectionRequired(false, it, transitionProtected = true)) }
+    }
 }
