@@ -13,7 +13,7 @@ import socket
 import sys
 import time
 import unicodedata
-from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit
+from urllib.parse import parse_qs, unquote_plus, urlsplit
 
 ENDPOINT_PORT = 19091
 LIMIT = 262144
@@ -69,9 +69,17 @@ def magnet(value):
             skipped.add(tracker)
     if not skipped:
         return value
-    pairs = parse_qsl(uri.query, keep_blank_values=True, strict_parsing=True)
-    kept = [(key, val) for key, val in pairs if key != 'tr' or val not in skipped]
-    return uri._replace(query=urlencode(kept)).geturl()
+    # Do not re-encode the query: Transmission 4.1.3 expects the literal
+    # "xt=urn:btih:" prefix. urlencode() turns ':' into '%3A', and the
+    # daemon rejects that otherwise valid magnet as "unrecognized info".
+    # Preserve every raw parameter except the unwanted tracker entries.
+    kept = []
+    for part in uri.query.split('&'):
+        raw_key, _, raw_value = part.partition('=')
+        if unquote_plus(raw_key) == 'tr' and unquote_plus(raw_value) in skipped:
+            continue
+        kept.append(part)
+    return uri._replace(query='&'.join(kept)).geturl()
 
 class Rpc:
     def call(self, method, params):
