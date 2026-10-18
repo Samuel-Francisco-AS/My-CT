@@ -232,7 +232,7 @@ private fun TerminalApp(model: TerminalModel) {
                     terminal = { model.selectTerminal(model.ide.environment); navigateTo(AppSection.Terminal) },
                     files = { path -> if (connected && !model.files.busy) { model.files.load(path); navigateTo(AppSection.Files) } },
                     modifier = Modifier.weight(1f))
-                else if (selectedTab == AppSection.Downloads) DownloadsScreen(model.downloads, model.torrents, model.files.busy, { path ->
+                else if (selectedTab == AppSection.Downloads) DownloadsScreen(model.downloads, model.torrents, model.media, model.files.busy, { path ->
                     if (!model.files.busy && connected) { model.files.load(path); navigateTo(AppSection.Files) }
                 }, Modifier.weight(1f))
                 else if (selectedTab == AppSection.Vault) VaultScreen(model.vault, Modifier.weight(1f))
