@@ -172,6 +172,6 @@ internal fun mediaCommand(action: MediaAction): String {
 internal fun executeMedia(action: MediaAction, open: () -> DownloadExec): String =
     executeSshCommand(mediaCommand(action), open,
         if (action is MediaAction.BulkImport) 120000 else 25000) { status, _ ->
-        DownloadFailure(if (status == 127) "Instale a CLI myct-media no Fedora."
+        DownloadFailure(if (status == 127) "Instale myct-media e myct-media-bulk no Fedora."
             else "A operação falhou. Consulte o terminal Fedora; atualize antes de tentar novamente.")
     }
