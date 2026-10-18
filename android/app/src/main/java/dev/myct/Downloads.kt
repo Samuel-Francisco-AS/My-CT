@@ -46,6 +46,7 @@ internal sealed interface DownloadAction {
     data object List : DownloadAction
     data class Start(val url: String, val name: String) : DownloadAction
     data class Cancel(val id: String) : DownloadAction
+    data class Delete(val id: String) : DownloadAction
 }
 // SSH exec uses a shell on the server: quote every argument, never interpolate raw user text.
 internal fun downloadCommand(action: DownloadAction): String {
@@ -56,6 +57,7 @@ internal fun downloadCommand(action: DownloadAction): String {
     val args = when (action) {
         DownloadAction.List -> "list"
         is DownloadAction.Cancel -> { require(downloadId.matches(action.id)); "cancel ${quote(action.id)}" }
+        is DownloadAction.Delete -> { require(downloadId.matches(action.id)); "delete ${quote(action.id)}" }
         is DownloadAction.Start -> {
             require(URI(action.url).scheme?.lowercase() in setOf("http", "https"))
             // In this CLI, this filename would be interpreted as a privileged option.
@@ -94,7 +96,7 @@ internal fun executeDownload(action: DownloadAction, open: () -> DownloadExec, t
             reason.contains("Nome inválido") -> "Nome inválido. Use até 120 letras ASCII, números, ponto, _ ou -, sem .part final."
             reason.contains("Linger não") -> "A CLI informou linger indisponível. Consulte a documentação MYCT-5A com o proprietário."
             action is DownloadAction.Start -> "Pedido recusado pela CLI. Confira URL HTTP/HTTPS pública, nome, DNS e conexão. Atualize antes de repetir."
-            else -> "Falha ao consultar/cancelar pela CLI. Confira SSH e permissões; atualize antes de repetir."
+            else -> "Falha ao consultar ou excluir pela CLI. Confira SSH e permissões; atualize antes de repetir."
         })
     }
 }
