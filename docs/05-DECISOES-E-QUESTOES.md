@@ -361,3 +361,23 @@ após morte do app. Cwd/HOME usam a raiz L1A, sem chroot: shell tem o UID e as
 permissões do app. [Rationale, APIs, validação e gate Moto pendente](MYCT-L1B-RELATORIO.md).
 ADR-018/toolchain C fica para L1C, sem estudo nesta missão. Nenhum merge
 realizado, Fedora/FGS SSH intactos, R-01 continua suspensa.
+
+## 17/10/2026 — MYCT-L1D: SAF direto e compilação no Termux
+
+Decisão definitiva do proprietário substitui ADR-018 e planos de compilação
+embarcada: L1C cancelada e PR #30 fechado sem merge. A L1D parte de L1B,
+sem WCPL/WAMR/worker. O menor fluxo útil é editar no Sora existente e salvar
+**a URI do documento original** em `Documents/MyCT` autorizada por
+`ACTION_OPEN_DOCUMENT_TREE`; o Termux acessa o arquivo compartilhado e usa
+Clang instalado à parte, gerando executável no seu HOME. A IDE escolhe entre
+workspace privada e árvore SAF, sem nova aba ou terminal.
+
+Rationale: evita nova infraestrutura de compilação e usa as capacidades Android
+concedidas explicitamente por pasta, preservando target 36 e dados existentes.
+Grants e trilha persistem; conteúdo completo/metadados são conferidos antes
+de salvar e o resultado é relido. SAF não garante substituição atômica ou CAS:
+falha desde abrir `wt` deixa resultado incerto e buffer preservado. Renomeação
+segue a URI retornada; pasta com documento descendente aberto exige fechá-lo
+antes. Sem MANAGE_EXTERNAL_STORAGE, tradução URI→POSIX, root, distribuição,
+serviço ou mudança Fedora. Gate real Moto/Termux pendente, sem merge autorizado.
+[Implementação, limites e provas](MYCT-L1D-RELATORIO.md).

@@ -236,3 +236,18 @@ e SAF por cópias identificadas. Nenhuma mudança de serviço/Fedora, dependênc
 ou toolchain; L1B/L1C e R-01 continuam fora. Critérios registrados antes de
 codificar e evidências em [MYCT-L1A-RELATORIO.md](MYCT-L1A-RELATORIO.md).
 **Candidata para revisão e teste; LOC-01/LOC-04 ainda sem aceite físico.**
+
+## 17/10/2026 — MYCT-L1D candidata, aceite físico pendente
+
+Implementação iniciada na branch existente `myct-l1d-shared-storage`, em cima
+de L1B + registro documental `8a4e8d2`. Opção privada/compartilhada na IDE
+existente; árvore SAF persistente, criar/listar/navegar/abrir/editar/salvar
+original/renomear, conflitos e permissão revogada. Candidata code 28 para
+atualizar RC2/code 27 sem limpeza; nenhum componente L1C transportado.
+ADB sem aparelho; testes físicos não declarados. [Relatório, validação e gate
+Moto G06/Termux](MYCT-L1D-RELATORIO.md). Sem merge ou deploy Fedora.
+
+Entrega L1D: [PR #31 draft](https://github.com/Samuel-Francisco-AS/My-CT/pull/31)
+com base L1B; [candidata 0.7.0/code 28](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-l1d-v0.7.0-rc1)
+com APKs e SHA-256. Build/JVM/lint offline PASS: 224 testes, 223 aprovados,
+1 handshake opt-in ignorado. Roteiro físico pendente; sem merge.
