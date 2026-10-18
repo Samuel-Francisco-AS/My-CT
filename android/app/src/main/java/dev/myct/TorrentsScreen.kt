@@ -22,13 +22,20 @@ import kotlinx.coroutines.isActive
 internal fun DownloadsScreen(http: DownloadsModel, torrents: TorrentsModel, filesBusy: Boolean,
                              openFiles: (String) -> Unit, modifier: Modifier = Modifier) {
     var section by rememberSaveable { mutableIntStateOf(0) }
+    val feedback = rememberNavigationFeedback()
+    val panels = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    fun select(destination: Int) { if (section != destination) { feedback(); section = destination } }
     Column(modifier) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            FilterChip(section == 0, { section = 0 }, label = { Text("HTTP/HTTPS") })
-            FilterChip(section == 1, { section = 1 }, label = { Text("Torrents") })
+            FilterChip(section == 0, { select(0) }, label = { Text("HTTP/HTTPS") })
+            FilterChip(section == 1, { select(1) }, label = { Text("Torrents") })
         }
-        if (section == 0) HttpDownloadsScreen(http, filesBusy, openFiles, Modifier.weight(1f))
-        else TorrentsScreen(torrents, filesBusy, openFiles, Modifier.weight(1f))
+        Box(Modifier.weight(1f).panelEntrance(section, if (section == 1) 1f else -1f)) {
+            panels.SaveableStateProvider(section) {
+                if (section == 0) HttpDownloadsScreen(http, filesBusy, openFiles, Modifier.fillMaxSize())
+                else TorrentsScreen(torrents, filesBusy, openFiles, Modifier.fillMaxSize())
+            }
+        }
     }
 }
 

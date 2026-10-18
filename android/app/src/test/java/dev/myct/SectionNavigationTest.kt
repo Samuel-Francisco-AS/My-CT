@@ -28,6 +28,30 @@ class SectionNavigationTest {
         }
     }
 
+    @Test fun homeGroupsAreOrderedMonotonicAndFinishTogetherWithoutDelay() {
+        for (group in 0..4) {
+            assertEquals(0f, homeGroupProgress(0f, group))
+            assertEquals(1f, homeGroupProgress(1f, group))
+            assertTrue(homeGroupProgress(0.5f, group) > 0f)
+            for (step in 1..100) assertTrue(homeGroupProgress(step / 100f, group) >=
+                homeGroupProgress((step - 1) / 100f, group))
+        }
+        for (group in 1..4) assertTrue(homeGroupProgress(0.2f, group - 1) >= homeGroupProgress(0.2f, group))
+    }
+
+    @Test fun directionsReverseAndSignedTravelKeepsBackgroundContinuous() {
+        assertEquals(androidx.compose.ui.geometry.Offset(0f, 1f), navigationDirection(AppSection.Home, AppSection.Ide))
+        assertEquals(androidx.compose.ui.geometry.Offset(0f, -1f), navigationDirection(AppSection.Ide, AppSection.Home))
+        val forward = navigationDirection(AppSection.Terminal, AppSection.Files)
+        val backward = navigationDirection(AppSection.Files, AppSection.Terminal)
+        assertEquals(-forward.x, backward.x, 0f)
+        assertEquals(-forward.y, backward.y, 0f)
+        assertEquals(0f, navigationAlpha(-1f))
+        assertEquals(0f, navigationAlpha(1f))
+        assertEquals(1f, navigationAlpha(0f))
+        assertEquals(navigationAlpha(-0.4f), navigationAlpha(0.4f))
+    }
+
     @Test fun duplicateRequestsDoNotNavigateAndLatestIntentWins() {
         val nav = SectionNavigation(AppSection.Home)
         assertFalse(nav.request(AppSection.Home))
@@ -52,15 +76,15 @@ class SectionNavigationTest {
         val frames = Frames()
         runBlocking(frames.context) {
             val nav = SectionNavigation(AppSection.Home)
-            val opacity = Animatable(1f)
+            val travel = Animatable(0f)
             nav.request(AppSection.Ide)
-            val transition = launch { animateSectionChange(nav, opacity) { true } }
+            val transition = launch { animateSectionChange(nav, travel) { true } }
             frames.tick(); frames.tick(); frames.tick()
             assertEquals(AppSection.Home, nav.displayed)
-            assertTrue(opacity.value > 0f && opacity.value < 1f)
+            assertTrue(travel.value > -1f && travel.value < 0f)
             frames.finish(transition)
             assertEquals(AppSection.Ide, nav.displayed)
-            assertEquals(1f, opacity.value)
+            assertEquals(0f, travel.value)
         }
     }
 
@@ -68,17 +92,17 @@ class SectionNavigationTest {
         val frames = Frames()
         runBlocking(frames.context) {
             val nav = SectionNavigation(AppSection.Home)
-            val opacity = Animatable(1f)
+            val travel = Animatable(0f)
             nav.request(AppSection.Ide)
-            val old = launch { animateSectionChange(nav, opacity) { true } }
+            val old = launch { animateSectionChange(nav, travel) { true } }
             frames.tick(); frames.tick()
             nav.request(AppSection.Terminal)
             old.cancelAndJoin() // LaunchedEffect's key changed.
-            val latest = launch { animateSectionChange(nav, opacity) { true } }
+            val latest = launch { animateSectionChange(nav, travel) { true } }
             while (nav.displayed == AppSection.Home && !latest.isCompleted) frames.tick()
             assertEquals(AppSection.Terminal, nav.displayed)
             frames.finish(latest)
-            assertEquals(1f, opacity.value)
+            assertEquals(0f, travel.value)
         }
     }
 
@@ -86,9 +110,9 @@ class SectionNavigationTest {
         val frames = Frames()
         runBlocking(frames.context) {
             val nav = SectionNavigation(AppSection.Home)
-            val opacity = Animatable(1f)
+            val travel = Animatable(0f)
             nav.request(AppSection.Ide)
-            val transition = launch { animateSectionChange(nav, opacity) { true } }
+            val transition = launch { animateSectionChange(nav, travel) { true } }
             frames.tick(); frames.tick()
             // Models a click before recomposition cancels the old effect.
             nav.request(AppSection.Files)
@@ -97,20 +121,20 @@ class SectionNavigationTest {
         }
     }
 
-    @Test fun returningToDisplayedScreenDuringExitRestoresOpacity() {
+    @Test fun returningToDisplayedScreenDuringExitRestoresPositionAndOpacity() {
         val frames = Frames()
         runBlocking(frames.context) {
             val nav = SectionNavigation(AppSection.Terminal)
-            val opacity = Animatable(1f)
+            val travel = Animatable(0f)
             nav.request(AppSection.Files)
-            val old = launch { animateSectionChange(nav, opacity) { true } }
+            val old = launch { animateSectionChange(nav, travel) { true } }
             frames.tick(); frames.tick()
             nav.request(AppSection.Terminal)
             old.cancelAndJoin()
-            val restored = launch { animateSectionChange(nav, opacity) { true } }
+            val restored = launch { animateSectionChange(nav, travel) { true } }
             frames.finish(restored)
             assertEquals(AppSection.Terminal, nav.displayed)
-            assertEquals(1f, opacity.value)
+            assertEquals(0f, travel.value)
         }
     }
 
@@ -118,18 +142,18 @@ class SectionNavigationTest {
         val frames = Frames()
         runBlocking(frames.context) {
             val nav = SectionNavigation(AppSection.Home)
-            val opacity = Animatable(1f)
+            val travel = Animatable(0f)
             nav.request(AppSection.Vault)
-            frames.finish(launch { animateSectionChange(nav, opacity) { false } })
+            frames.finish(launch { animateSectionChange(nav, travel) { false } })
             assertEquals(AppSection.Home, nav.displayed)
             assertTrue(nav.protectCapture)
             var ready = true
-            val closing = launch { animateSectionChange(nav, opacity) { ready } }
+            val closing = launch { animateSectionChange(nav, travel) { ready } }
             frames.tick(); frames.tick()
             ready = false
             frames.finish(closing)
             assertEquals(AppSection.Home, nav.displayed)
-            frames.finish(launch { animateSectionChange(nav, opacity) { true } })
+            frames.finish(launch { animateSectionChange(nav, travel) { true } })
             assertEquals(AppSection.Vault, nav.displayed)
             assertTrue(nav.protectCapture)
         }
@@ -139,23 +163,24 @@ class SectionNavigationTest {
         val frames = Frames()
         runBlocking(frames.context) {
             val nav = SectionNavigation(AppSection.Home)
-            val opacity = Animatable(1f)
+            val travel = Animatable(0f)
             nav.request(AppSection.Vault)
             assertTrue(nav.protectCapture)
-            val enter = launch { animateSectionChange(nav, opacity) { true } }
-            repeat(8) { frames.tick() }
+            val enter = launch { animateSectionChange(nav, travel) { true } }
+            while (nav.displayed != AppSection.Vault && !enter.isCompleted) frames.tick()
+            frames.tick(); frames.tick()
             assertEquals(AppSection.Vault, nav.displayed)
-            assertTrue(opacity.value < 1f)
+            assertTrue(travel.value > 0f && travel.value < 1f)
             nav.request(AppSection.Files)
             enter.cancelAndJoin()
-            val exit = launch { animateSectionChange(nav, opacity) { true } }
+            val exit = launch { animateSectionChange(nav, travel) { true } }
             while (nav.displayed == AppSection.Vault && !exit.isCompleted) frames.tick()
             assertEquals(AppSection.Files, nav.displayed)
             assertTrue(nav.protectCapture)
             nav.request(AppSection.Home)
             exit.cancelAndJoin()
             assertTrue(nav.protectCapture)
-            frames.finish(launch { animateSectionChange(nav, opacity) { true } })
+            frames.finish(launch { animateSectionChange(nav, travel) { true } })
             assertFalse(nav.protectCapture)
         }
     }
@@ -164,14 +189,14 @@ class SectionNavigationTest {
         val frames = Frames(0f)
         runBlocking(frames.context) {
             val nav = SectionNavigation(AppSection.Home)
-            val opacity = Animatable(1f)
+            val travel = Animatable(0f)
             listOf(AppSection.Ide, AppSection.Terminal, AppSection.Vault, AppSection.Home).forEach {
                 nav.request(it)
                 val before = frames.count
-                frames.finish(launch { animateSectionChange(nav, opacity) { true } })
+                frames.finish(launch { animateSectionChange(nav, travel) { true } })
                 assertTrue("Scale zero must skip both tweens", frames.count - before <= 3)
                 assertEquals(it, nav.displayed)
-                assertEquals(1f, opacity.value)
+                assertEquals(0f, travel.value)
             }
             assertFalse(nav.protectCapture)
         }

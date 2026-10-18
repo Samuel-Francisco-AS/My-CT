@@ -1,177 +1,198 @@
-# MYCT-R5-F2 — navegação e transições
+# MYCT-R5-F2 — revisão visual R1
 
-**Candidata para teste; aceite visual Moto G06 pendente.** Branch
-`myct-r5-f2-navigation`, criada da `origin/main` atualizada `2dec947` em
-18/10/2026, em worktree separado `/home/sam/Projetos/My-CT-r5-f2`.
-O checkout `fix/torrent-dns-trackers` e o PR #34 permanecem intactos.
-Não realizar merge antes do retorno físico do proprietário.
+**Candidata R1; aprovação visual no Moto G06 pendente.** O proprietário testou a
+F2/code 31: houve melhora discreta, mas o acabamento não atingiu a expectativa.
+Esta é uma revisão da F2 no mesmo PR, não uma fase nova.
 
-## Causa e implementação
+- Branch/worktree preservados: `myct-r5-f2-navigation`,
+  `/home/sam/Projetos/My-CT-r5-f2`, base original `origin/main` `2dec947`.
+- [PR #35 draft](https://github.com/Samuel-Francisco-AS/My-CT/pull/35), sem merge.
+  PR #34 e seu checkout continuam intactos; backend/serviços/dados não alterados.
+- Nova candidata **0.7.3-r5-f2-r1 / code 32**, pacote `dev.myct`.
+  Branches remotas e releases consultadas: maior code encontrado 31.
 
-A seção selecionada era alterada diretamente e o conteúdo condicional era
-substituído no mesmo frame, sem saída/entrada. O drawer começava a fechar em
-paralelo. Início, atalhos da IDE/Downloads e retorno do diálogo de buffer sujo
-alteravam a seção por caminhos separados. Isso explica a troca visual abrupta;
-**não constitui diagnóstico de bloqueio da thread principal no Moto**.
+## Direção visual e implementação
 
-- `SectionNavigation` separa destino solicitado de seção exibida. Todos os
-  caminhos passam por `navigateTo`; repetição do mesmo destino não reinicia a
-  transição. A seleção do drawer e o ripple Material respondem ao toque.
-- O estado do drawer é elevado ao chamador. O conteúdo aguarda `currentValue`
-  e `targetValue` fechados e `isAnimationRunning == false`. Não há `delay`,
-  espera fixa ou duração de drawer duplicada no código.
-- `Animatable`: fade-out linear **80 ms**, troca no zero, fade-in
-  `FastOutSlowInEasing` **150 ms**; referência total **230 ms** na escala 1×,
-  além do fechamento real do drawer e do trabalho necessário de composição.
-  Sem deslocamento ou animação de tamanho, para preservar o viewport nativo.
-- Só uma seção fica composta. Não há `Crossfade`, `AnimatedContent`, bitmap
-  de captura ou segunda instância deliberada de TerminalView/Sora. A opacidade
-  é lida em `graphicsLayer`, sem recomposição/layout por frame da animação;
-  o fundo continua sendo a Surface do tema, sem inserir uma tela vazia.
-- Mudança de destino cancela o `LaunchedEffect` anterior e continua da
-  opacidade atual. O commit lê a solicitação mais recente. Retornar à seção
-  ainda exibida restaura sua opacidade. Reabrir o drawer suspende a troca.
-- `Animatable` usa `MotionDurationScale` do contexto Compose/Android, incluindo
-  escala zero para animações removidas; não se sobrescreve a preferência do
-  sistema. O teste JVM injeta escala zero e um relógio de frames controlado.
-- `SaveableStateHolder` permanece estável no host; a exceção existente de
-  Arquivos/SFTP e suas âncoras permanece. A restauração da Activity escolhe o
-  último destino solicitado, totalmente visível, sem restaurar animação parcial.
-- Cofre: `FLAG_SECURE` já é aplicado no primeiro frame da Activity e no pedido
-  de entrada; uma trava conserva a proteção durante saída, entrada, interrupções
-  e troca rápida para outras seções. Só é liberada após a chegada completa a
-  uma seção não protegida, se a preferência global permitir. Os diálogos
-  existentes continuam herdando a proteção da janela.
+A primeira F2 trocava seções com fade de 80 + 150 ms e não animava a primeira
+Home ou a maioria dos painéis internos. A R1 introduz movimento visível,
+reutilizando Compose Animation, sem dependências novas:
 
-Sessões/PTY/tmux, buffers `Content` e viewport do Sora, modelos de tela,
-transferências/Downloads, serviços e regras de insets mantêm seus proprietários
-e mecanismos anteriores. A navegação não encerra nem recria sessões. A limpeza
-de modificadores e a política existente do drawer de ocultar IME ao sair para
-uma seção não Terminal agora são aplicadas também aos atalhos. Não há mudança
-de backend, PostgreSQL, serviços Fedora ou dados de usuário.
+- Seções: saída acelerada de **100 ms**; entrada de **280 ms**, curva
+  `CubicBezierEasing(0.16, 1, 0.3, 1)` para chegar com velocidade e desacelerar
+  suavemente. Total nominal **380 ms** na escala 1×, mais o fechamento real do
+  menu e o custo necessário de composição. Deslocamento horizontal de **32 dp**
+  entre seções irmãs, invertido ao navegar na direção oposta; saída vertical de
+  **24 dp** nas navegações que envolvem a Home. A Home chega com sua entrada
+  própria descrita abaixo. O fundo permanece a Surface existente do tema.
+- Home: **280 ms** desde sua composição, inclusive na abertura do app e em cada
+  retorno. Um único relógio revela cabeçalho, texto, IDE, Terminal e bloco Fedora
+  em cinco grupos, com inícios distribuídos em apenas **67 ms**. Fade, subida de
+  **28 dp** e escala **0,975 → 1**. Todos os grupos terminam juntos. Sem splash,
+  bloqueio de interação, `delay` ou tarefas aguardando para iniciar carregamento.
+- Cartões da Home: ripple Material mantido; escala de pressão **1 → 0,97** e
+  retorno curto. Escolhas de navegação usam feedback nativo `CLOCK_TICK`, sem
+  permissão Vibrate nem flags para ignorar a preferência tátil do Android.
+  Teclas do Terminal e ações operacionais mantêm os mecanismos existentes.
+- Drawer: o conteúdo de fundo acompanha seu **offset real**, incluindo arrasto e
+  reversão, com deslocamento de **18 dp** e escala até **0,985**. A seleção é
+  imediata; a troca de seção continua aguardando o fechamento real. Não há timer
+  imitando o menu. Escala/translação são gráficas, sem redimensionar o PTY.
+- Painéis internos: entrada de **280 ms**, opacidade **0,35 → 1** e deslocamento
+  horizontal de **24 dp** ou vertical de **18 dp**. A nova informação aparece
+  imediatamente; não se retém cópia de uma tela antiga aguardando animação.
+  Só o estado gráfico é reiniciado, sem colocar `key` novo no conteúdo pesado.
 
-Referências técnicas: [animações sequenciais com Animatable](https://developer.android.com/develop/ui/compose/animation/choose-api)
-e [MotionDurationScale](https://developer.android.com/reference/kotlin/androidx/compose/ui/MotionDurationScale).
+Um valor de deslocamento assinado representa repouso, saída e entrada. Retornar
+à seção ainda exibida reverte o percurso; retarget durante movimento conserva
+seu eixo, sem saltar lateralmente. O commit continua lendo o último pedido.
+`SaveableStateHolder` e a trava de `FLAG_SECURE` da F2 continuam presentes:
+Cofre protegido desde o pedido/primeiro frame até concluir entrada/saída e
+interrupções. Restauração da Activity abre o último destino com entrada nova,
+sem retomar o meio de uma animação anterior.
 
-## Arquivos
+Toda animação temporal usa o contexto Compose e sua `MotionDurationScale`,
+incluindo escala zero. A animação do drawer segue o próprio Material. Leituras
+por frame ficam em `graphicsLayer`, sem recompor/remedir TerminalView ou Sora.
+O limite externo de desenho contém os deslocamentos na área útil da tela.
 
-- `android/app/src/main/java/dev/myct/AppSection.kt`: estado, transição e proteção.
-- `android/app/src/main/java/dev/myct/MainActivity.kt`: navegação central e drawer.
-- `android/app/src/main/java/dev/myct/AppShell.kt`: recebe o estado do drawer.
-- `android/app/build.gradle.kts`: candidata `0.7.2-r5-f2` / **code 31**.
-- `android/app/src/test/java/dev/myct/SectionNavigationTest.kt`: lógica e animação.
-- `android/app/src/test/java/dev/myct/ShellProtectionTest.kt`: proteção em trânsito.
-- Este relatório.
+Referências: [Animatable e animações sequenciais](https://developer.android.com/develop/ui/compose/animation/quick-guide)
+e [transformações na fase de desenho](https://developer.android.com/develop/ui/compose/performance/phases).
 
-## Validação automatizada
+## Cobertura inspecionada
 
-Rodada completa aprovada: build debug nas três ABIs e APK de instrumentação;
-**234 testes JVM PASS, 1 handshake SSH opt-in ignorado**, zero falhas/erros em
-45 suítes; **lint PASS, zero achados**. Os nove testes novos usam o Animatable
-real com relógio de frames JVM: pedidos repetidos, retarget durante saída,
-cancelamento/retorno à seção atual, último pedido antes do commit, drawer
-bloqueando troca/reabertura, proteção durante entrada/saída interrompidas,
-restauração e escala zero. Há mais uma asserção de proteção em trânsito no
-`ShellProtectionTest`. Isso não executa AndroidView, IME ou renderização Android.
+| Caminho | Tratamento na R1 |
+| --- | --- |
+| Primeira Home / retorno à Home | Entrada coordenada dos cinco grupos; saída pelo host comum |
+| Início → IDE/Terminal/Fedora; atalhos da IDE/Downloads; retorno do aviso de buffer sujo | Navegação central e transição sequencial, um destino composto |
+| IDE — entrada/saída da seção | Host comum com movimento e fade |
+| IDE — Local/Remoto; privado/compartilhado | Entrada do painel de ambiente/armazenamento |
+| IDE — navegador ↔ código; abrir/fechar/reabrir documento; mudar diretório | Entrada pela identidade do documento ou caminho/browsing; preparação do editor incluída |
+| Terminal — Local/Remoto; sessão criada; formulário SSH ↔ terminal | Movimento horizontal do painel por ambiente/sessão, sem trocar o dono do PTY |
+| Arquivos — entrada/saída; conexão; entrar/subir diretórios | Host comum e entrada da lista pelo caminho efetivamente carregado |
+| Downloads — entrada/saída; HTTP ↔ Torrents; Ver em Arquivos | Host comum, painéis com direção inversa e navegação central para Arquivos |
+| Saúde | Host comum; consultar métricas não reinicia animação de tela |
+| Cofre | Host comum protegido; consulta/senha/desbloqueio são ações operacionais, sem transição de tela adicional |
+| Menu lateral | Movimento Material existente + fundo coordenado ao offset real |
+| Opções ↔ Antivírus e assinaturas | Entrada horizontal do painel substituído; janela/segurança existentes |
+| Confirmações, busca, detalhes, ajuda, licenças, controles e operações | Comportamento Material existente; sem transformá-los em navegações de tela |
 
-**PTY real no host PASS** (cwd/env, pipes/read, resize, Ctrl+C, exit, isolamento,
-erros e ciclo de descritores/processos); proveniência de **21 arquivos e três
-patches do terminal verificada**. `git diff --check` PASS. Nenhuma dependência
-instalada; nenhuma configuração de serviço alterada.
+Chaves de animação são destinos semânticos: ambiente, sessão, armazenamento,
+diretório, documento e aba HTTP/Torrents. Digitação/dirty-buffer, polling,
+bytes transferidos, taxas, refresh do mesmo caminho e mensagens não reiniciam
+as animações. HTTP/Torrents agora têm `SaveableStateHolder` próprio para manter
+posições salvas ao trocar esses painéis. Não há cópias simultâneas dos painéis.
+Os modelos de sessões, documentos Sora/undo/viewport, SFTP e transferências
+permanecem com seus proprietários anteriores.
 
-A primeira rodada foi iniciada antes de estabilizar os fontes e encontrou uma
-assinatura intermediária entre código compilado e teste; a repetição completa
-com fontes estáveis passou. Na revisão posterior, o efeito de `FLAG_SECURE`
-voltou a ser vinculado exclusivamente às mudanças de proteção/Activity, evitando
-chamadas à janela em recomposições sem alteração. A candidata foi
-revalidada pelos mesmos checks após esse ajuste, todos aprovados.
+## Arquivos da revisão
 
-A rodada final da candidata durou **2 min 56 s**, pico RSS de build medido
-**2,20 GiB**, CPU **508%** (vários núcleos). São custos do build no Fedora,
-não consumo do app no Moto.
-Os avisos preexistentes de duas condições redundantes da IDE e de metaspace
-Gradle não impediram o build; configurações preservadas. Logs locais, ignorados
-pelo Git: `artifacts/myct-r5-f2-validation/`.
+`AppSection.kt` e o novo `NavigationMotion.kt` concentram o movimento;
+`HomeScreen.kt`, `AppShell.kt` e `MainActivity.kt` aplicam a apresentação e os
+controles; `IdeScreen.kt`, `FilesScreen.kt` e `TorrentsScreen.kt` cobrem os
+painéis internos. `SectionNavigationTest.kt` acompanha o percurso assinado e
+acrescenta dois testes pequenos de direção/alpha e progressão da Home.
+`android/app/build.gradle.kts` atualiza a versão. Este relatório registra o aceite.
 
-Ferramentas: OpenJDK 21.0.10, Gradle wrapper 8.14.3, SDK/build-tools 36,
-NDK 28.2.13676358, CMake 3.22.1, GCC 16.2.1, apksigner 0.9, Git 2.55.0 e
-gh 2.97.0, já disponíveis antes da execução.
+## Validação
 
-Comandos na raiz do worktree, usando ferramentas/caches existentes:
+Na primeira rodada, o Kotlin/APK compilou e dois testes falharam em asserções:
+comparação binária de `Offset` distinguia `-0.0` de `0.0`, e a amostragem por
+oito frames caiu exatamente no início da entrada, ainda com deslocamento 1.
+Hipótese/teste mínimo: comparar componentes numericamente e aguardar a troca
+real de fase antes de amostrar sua progressão, preservando as verificações da
+trava do Cofre. A repetição confirmou as hipóteses e passou. O lint também
+indicou a convenção de fábrica de Modifier; o helper passou a ser a extensão
+`Modifier.panelEntrance`, sem suprimir o aviso.
+
+**Candidata final: build PASS nas três ABIs; 236 testes JVM PASS, 1 SSH opt-in
+ignorado, zero falhas/erros em 45 suítes; lint PASS, zero achados.** Os 11 testes
+de navegação incluem escala zero, interrupções, último destino, cancelamento,
+proteção do Cofre e dois testes pequenos de direção/alpha e progressão da Home.
+`git diff --check` PASS. Rodada final: **2 min 23 s**, pico RSS de build
+**1,92 GiB**, CPU **452%** (vários núcleos), sem swap. São medidas do build
+no Fedora, não consumo Android. Os avisos preexistentes de condições redundantes
+na IDE e metaspace Gradle não impediram a validação; configurações preservadas.
+
+Comandos no worktree existente, ferramentas/caches já instalados:
 
 ```sh
 MYCT_TEST_LOCAL_SFTP=1 ANDROID_HOME=/home/sam/Android/Sdk \
   /usr/bin/time -v android/gradlew -p android :app:assembleDebug \
-  :app:assembleDebugAndroidTest :app:testDebugUnitTest \
-  :terminal:testDebugUnitTest :app:lintDebug --offline --console=plain
-g++ -std=c++20 -Wall -Wextra -Werror -pthread -Iandroid/app/src/main/cpp \
-  android/app/src/main/cpp/local_pty.cpp android/app/src/test/native/local_pty_test.cpp \
-  -lutil -o artifacts/myct-r5-f2-validation/local-pty-test
-artifacts/myct-r5-f2-validation/local-pty-test
-python3 android/terminal/upstream/verify.py
+  :app:testDebugUnitTest :app:lintDebug --offline --console=plain
+adb devices -l
 git diff --check
 ```
 
-`adb devices -l`: nenhum dispositivo conectado. Instrumentação compilada não
-equivale a teste Android executado. Nenhum APK foi instalado pelo agente.
+OpenJDK 21.0.10, Gradle 8.14.3, Compose 1.9.3/Material3 1.4.0, SDK/build-tools
+36, NDK 28.2.13676358 e CMake 3.22.1 existentes, sem instalar dependências.
+Logs em `artifacts/myct-r5-f2-r1-*.log`. Nesta revisão de UI não se repetiram
+os testes PTY nativos nem se adicionou instrumentação: o código nativo e o
+transporte não mudaram. Na F2 inicial, PTY host e proveniência passaram;
+234 testes JVM passaram e um SSH opt-in foi ignorado. Essa evidência histórica
+não substitui executar a candidata R1 no Android.
 
-## Candidata e atualização
+`adb devices -l` sem dispositivo conectado. **Sem execução visual, tátil, IME,
+AndroidView, captura ou medição de frames/RAM/GPU no Moto pelo agente.** A suíte
+JVM verifica lógica/relógio de frames e preservação pelos modelos, não acabamento
+físico. Composição/criação de TerminalView/Sora ainda tem custo; não foi mascarado
+com esperas. Camadas gráficas podem exigir memória de GPU, a medir no aparelho.
 
-As branches remotas e releases foram consultadas antes da versão: code máximo
-encontrado **30**, inclusive no PR #34. Code **31** não apresentou colisão nessa
-consulta. ApplicationId `dev.myct` e configuração habitual de assinatura debug
-preservados; nenhum certificado foi substituído.
+## Artefatos e atualização
 
-Artefato local: `artifacts/myct-r5-f2-0.7.2-debug.apk`, **18.367.054 bytes**,
-ABIs arm64-v8a, armeabi-v7a e x86_64, minSdk 26/targetSdk 36. Pacote/versão/code
-conferidos com `aapt`; `apksigner verify --verbose --print-certs` **PASS/v2**.
-Certificado SHA-256:
-`b788958be4c919889fc30813f13f1aceb5b6b69670514c82e16288f4b60b83b3`,
-idêntico ao APK F1/code 30 cujo hash local foi comparado ao digest da release
-publicada. Portanto, a candidata permite atualização compatível em assinatura.
+APK absoluto:
+`/home/sam/Projetos/My-CT-r5-f2/artifacts/myct-r5-f2-r1-0.7.3-debug.apk`.
 
-SHA-256 do APK:
-`e9827ae7fbd00e7c6d73a6f39cb48eedc9a85a69ebb27eba1c42c169f2395c52`.
+APK de **18,377,945 bytes** (três ABIs, minSdk 26/targetSdk 36),
+com pacote/code/versão conferidos por `aapt`. `apksigner verify` **PASS/v2**;
+certificado SHA-256 `b788958be4c919889fc30813f13f1aceb5b6b69670514c82e16288f4b60b83b3`,
+idêntico às codes 30/31. O APK baseline code 31 foi conferido contra o digest da
+release publicada; todas as bibliotecas `.so` da R1 são byte a byte idênticas
+às dele. Sem alteração/substituição de keystore ou configuração de assinatura.
 
-[Release candidata](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-r5-f2-v0.7.2-rc1)
-· [APK](https://github.com/Samuel-Francisco-AS/My-CT/releases/download/myct-r5-f2-v0.7.2-rc1/myct-r5-f2-0.7.2-debug.apk)
-· [SHA256SUMS](https://github.com/Samuel-Francisco-AS/My-CT/releases/download/myct-r5-f2-v0.7.2-rc1/myct-r5-f2-SHA256SUMS.txt).
+SHA-256 do APK R1:
+`1f4011e08ecd7f2fbdbe708765f9ea8639948e8353f2a275f7991e863c513555`.
+Arquivo de somas: `artifacts/myct-r5-f2-r1-SHA256SUMS.txt`.
+A cópia em artifacts foi comparada ao APK do build final.
 
-Atualizar **sobre a instalação existente**, aceitando a atualização de `dev.myct`;
-**não desinstalar nem limpar dados/armazenamento**. Alternativa por cabo:
-`adb install -r myct-r5-f2-0.7.2-debug.apk`. Fechar/reabrir o processo para atualizar
-um APK pode encerrar shells locais e buffers ainda apenas em memória: salvar
-documentos antes da instalação. Isso difere de navegar entre seções, que deve
-preservar esses recursos. SSH pode exigir reconexão conforme o modo persistente
-existente; permissões SAF, preferências e projetos em disco devem permanecer.
+[Release R1](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-r5-f2-r1-v0.7.3-rc1)
+· [APK R1](https://github.com/Samuel-Francisco-AS/My-CT/releases/download/myct-r5-f2-r1-v0.7.3-rc1/myct-r5-f2-r1-0.7.3-debug.apk)
+· [SHA256SUMS](https://github.com/Samuel-Francisco-AS/My-CT/releases/download/myct-r5-f2-r1-v0.7.3-rc1/myct-r5-f2-r1-SHA256SUMS.txt).
+A [candidata anterior code 31](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-r5-f2-v0.7.2-rc1)
+continua disponível como histórico.
 
-## Roteiro Moto G06 — pendente
+Salvar documentos antes de instalar. Atualizar **sobre a instalação existente,
+sem desinstalar nem limpar dados**. Por cabo:
+`adb install -r /home/sam/Projetos/My-CT-r5-f2/artifacts/myct-r5-f2-r1-0.7.3-debug.apk`.
+A atualização compatível preserva dados em disco/preferências/permissões SAF;
+a substituição do processo pode encerrar shells locais e buffers em memória.
+SSH pode exigir reconexão conforme o modo persistente existente. Isso é diferente
+de navegar entre telas, que deve preservar sessões e buffers.
 
-1. Início → IDE Local → Terminal → Início; repetir com SSH desconectado/conectado.
-   Conferir ripple imediato, saída/entrada discretas, ausência de flashes e
-   percepção de resposta rápida. Repetir com animações removidas e escala 0,5×/1×.
-2. Abrir drawer por botão/gesto, escolher todas as seções, inclusive a atual;
-   interromper fechamento com gesto/reabertura e selecionar outro destino.
-3. Terminal SSH e Local → Arquivos → Terminal: conferir mesma sessão, saída,
-   tmux, seleção Local/Remoto, digitação, teclas extras e Ctrl+C/resize.
-4. IDE com documento aberto e alterações não salvas → outra seção → IDE:
-   conferir texto/undo, cursor, rolagem e seleção de armazenamento; repetir com
-   documento SAF e remoto. Conferir os diálogos existentes, sem descartes.
-5. Permitir capturas globalmente; entrar no Cofre, abrir menu/Opções, sair e
-   retargetar durante entrada/saída. Tentar screenshot/gravação/Recentes durante
-   as transições: nenhum frame do Cofre pode ser exposto. Na seção comum,
-   capturas só devem voltar após a chegada completa.
-6. Tocar sucessivamente IDE/Terminal/Fedora no Início e vários destinos no
-   drawer: o último pedido prevalece; não há destino antigo reaparecendo,
-   instância duplicada, exceção ou tela permanentemente transparente.
-7. Repetir navegação com IME aberto no Terminal e na IDE. Conferir teclado,
-   foco, área útil e retorno ao terminal. Não houve alteração do código de resize.
-8. Rolar Início/Downloads/Saúde, navegar e voltar. Em SFTP, visitar diretórios,
-   rolar, sair/reentrar e voltar ao pai: conferir as âncoras existentes. Manter
-   transferência/download em andamento e verificar sua continuação.
+## Aceite Moto G06 — pendente
 
-Sem perfil de frames/RAM/bateria no Moto nesta entrega. Criar TerminalView,
-preparar Sora e aplicar seu documento ainda custam composição; a animação não
-elimina esses custos. Nenhum novo gargalo foi comprovado sem execução no
-aparelho. Se houver pausa real, registrar cenário e medições antes de ampliar
-animações ou mexer nos modelos. O aceite depende do roteiro físico acima.
+1. Abrir o app: conferir entrada do cabeçalho, título, cartões e indicador Fedora;
+   nada deve esperar uma splash artificial. Rolar e repetir Início → IDE → Terminal
+   → Início. Avaliar movimento, easing, resposta de pressão e feedback tátil.
+2. Percorrer todas as seções pelo menu. Abrir/arrastar/reverter/fechar o drawer;
+   conferir fundo coordenado e continuidade. Selecionar rapidamente destinos
+   diferentes, inclusive voltar ao atual, e repetir durante entrada/saída.
+3. Terminal Local ↔ Remoto; Terminal → Arquivos → Terminal: conferir a mesma
+   sessão/saída/tmux, digitação, Ctrl+C e resize. Repetir com IME aberto.
+4. IDE: documento com alterações → outra seção → IDE; conferir texto/undo,
+   cursor/rolagem. Trocar Local/Remoto, privado/compartilhado, Projetos/código,
+   diretórios e documentos. Fechar/reabrir com os diálogos de descarte existentes.
+5. SFTP: entrar em pastas, rolar, subir e sair/reentrar; conferir as âncoras e a
+   entrada da lista sem salto de posição. Manter transferência em andamento.
+6. HTTP ↔ Torrents: conferir entrada direcional e posição de rolagem; polling e
+   progresso não devem piscar ou reanimar o painel. Testar Ver em Arquivos.
+7. Saúde: consultar e atualizar sem reanimar a tela inteira. Opções ↔ Antivírus:
+   conferir a troca interna sem alterar ações/diálogos operacionais.
+8. Permitir capturas globalmente; entrar/sair do Cofre, inclusive com drawer,
+   Opções e cliques rápidos. Testar screenshot/gravação/Recentes durante todas
+   as transições: nenhum frame do Cofre pode ser exposto. Consultar/desbloquear
+   preservando o fluxo existente, com senha digitada somente pelo proprietário.
+9. Repetir com animações removidas e escala 0,5×/1×; conferir ausência de tela
+   permanentemente transparente, recortes, travamentos ou navegação atrasada.
+
+Retomar pelo mesmo worktree/PR, sem merge, aguardando o retorno visual do
+proprietário. Não declarar aprovação física a partir de build/testes JVM.

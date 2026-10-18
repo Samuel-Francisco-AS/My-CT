@@ -118,8 +118,10 @@ private fun TerminalApp(model: TerminalModel) {
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val navigationReady = drawer.currentValue == DrawerValue.Closed &&
         drawer.targetValue == DrawerValue.Closed && !drawer.isAnimationRunning
+    val navigationFeedback = rememberNavigationFeedback()
     fun navigateTo(destination: AppSection) {
         if (navigation.request(destination)) {
+            navigationFeedback()
             // Apply before any destination can be drawn, including a request during drawer close.
             if (navigation.protectCapture) activity.applyCaptureProtection(true)
             model.clearTerminalModifiers()
@@ -199,12 +201,22 @@ private fun TerminalApp(model: TerminalModel) {
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).windowInsetsPadding(insets)
     ) { openMenu ->
         AnimatedAppSection(navigation, navigationReady) {
-            Column(Modifier.fillMaxSize()) {
+            val panelMotion = when (selectedTab) {
+                AppSection.Terminal -> Modifier.panelEntrance(
+                    listOf(model.terminalSelection.environment, model.selectedTerminal, active),
+                    horizontal = if (showingLocal) -1f else 1f)
+                AppSection.Files -> Modifier.panelEntrance(connected)
+                else -> Modifier
+            }
+            Column(Modifier.fillMaxSize().then(panelMotion)) {
                 if (selectedTab == AppSection.Terminal) Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     IdeEnvironment.entries.forEach { environment ->
                         FilterChip(selected = model.terminalSelection.environment == environment,
-                            onClick = { model.selectTerminal(environment) }, label = { Text(environment.label) })
+                            onClick = {
+                                if (model.terminalSelection.environment != environment) navigationFeedback()
+                                model.selectTerminal(environment)
+                            }, label = { Text(environment.label) })
                     }
                 }
                 if (selectedTab == AppSection.Home) HomeScreen(model.phase,
@@ -375,9 +387,10 @@ private fun TerminalApp(model: TerminalModel) {
     if (settings) {
         var antivirusOptions by remember { mutableStateOf(false) }
         AlertDialog(onDismissRequest = { settings = false }, title = { Text("Opções") }, text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
+            Column(Modifier.verticalScroll(rememberScrollState())
+                .panelEntrance(antivirusOptions, if (antivirusOptions) 1f else -1f)) {
                 if (antivirusOptions) {
-                    MyCtTextButton(onClick = { antivirusOptions = false }) { Text("← Voltar às opções") }
+                    MyCtTextButton(onClick = { navigationFeedback(); antivirusOptions = false }) { Text("← Voltar às opções") }
                     AntivirusSignaturesSection(model.antivirusSignatures)
                 } else {
                     ScreenPanel {
@@ -400,7 +413,7 @@ private fun TerminalApp(model: TerminalModel) {
                     Spacer(Modifier.height(12.dp))
                     ScreenPanel {
                         Text("Ferramentas", style = MaterialTheme.typography.titleMedium)
-                        MyCtTextButton(onClick = { antivirusOptions = true }) { Text("Antivírus e assinaturas") }
+                        MyCtTextButton(onClick = { navigationFeedback(); antivirusOptions = true }) { Text("Antivírus e assinaturas") }
                         MyCtTextButton(onClick = { tmuxHelp = true; settings = false }) { Text("Recuperar trabalho · tmux") }
                         MyCtTextButton(onClick = { licenses = true; settings = false }) { Text("Licenças") }
                         ExpandDetails("Diagnóstico local") {
