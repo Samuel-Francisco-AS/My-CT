@@ -1,5 +1,15 @@
 # MYCT-5C — BitTorrent/magnet por SSH
 
+## Pós-aceite — separadores vazios em magnets (18/10/2026; reteste pendente)
+
+Após a correção de codificação `xt=urn:btih:` ter sido aprovada fisicamente no Moto G06 pelo proprietário, um magnet novo ainda foi recusado. Diagnóstico sem mutação com a CLI instalada: `ValueError` em `magnet() → urllib.parse.parse_qs(strict_parsing=True) → parse_qsl`. Verificação estrutural do link revelou **63 segmentos de consulta; 31 vazios; zero segmentos não vazios sem `=`**. A alternância de segmentos vazios sugere que a origem emite separadores `&&` em excesso, provocando a rejeição anterior ao RPC.
+
+Correção pontual na branch `fix/torrent-dns-trackers`: remover apenas segmentos vazios da consulta **antes** do parsing estrito e também da URI encaminhada ao motor. Preservar os segmentos não vazios em formato bruto, incluindo `xt=urn:btih:` literal, o `dn`, ordem e codificação de trackers. Parâmetros desconhecidos, campos não vazios sem `=` e fontes não permitidas continuam rejeitados; a filtragem DNS e de IPs não públicos permanece. Testes de regressão cobrem `&&`, separador final, inclusão por RPC fake, `xt` literal e recusa de parâmetro malformado.
+
+**Implementação remota publicada, mas suíte e reteste do magnet real no Fedora/Moto G06 pendentes.** Nenhum APK, serviço, configuração ou torrent existente foi modificado pela atualização remota. Não declarar essa correção aceita antes do teste físico.
+
+---
+
 ## Pós-aceite — correção pontual DNS de trackers (17/10/2026; aguardando instalação e reteste)
 
 No Moto G06, 2 de 3 magnets deram "Transmission indisponível", embora o serviço de usuário estivesse `active`/`enabled` e a CLI `myct-torrent list` respondesse com exit 0 via RPC local em `127.0.0.1:19091`. No magnet investigado, 4 de 27 trackers falharam na resolução DNS. A causa foi localizada na validação `magnet()`: `socket.gaierror` escapava como `OSError` e virava o código 3 (serviço indisponível).
