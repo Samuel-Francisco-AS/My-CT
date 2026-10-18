@@ -89,6 +89,8 @@ class MyCtMediaTest(unittest.TestCase):
         destination = home / 'Media' / target
         destination.parent.mkdir(parents=True)
         destination.write_bytes(b'other content')
+        preview = media.run(['scan'], rows)
+        self.assertEqual(1, len(preview['pending']))
         report = media.run(['sync'], rows, acl=lambda *a: None)
         self.assertEqual(1, len(report['pending']))
         self.assertEqual(b'other content', destination.read_bytes())
