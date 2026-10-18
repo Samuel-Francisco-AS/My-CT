@@ -227,6 +227,37 @@ class TorrentTest(unittest.TestCase):
             self.assertEqual('submitted', torrent.organize(rpc, HASH)['naming'])
             self.assertEqual(1, sum(m == 'torrent_set_location' for m, _ in rpc.calls))
 
+    def test_rpc_engine_error_exposes_code_without_leaking_magnet(self):
+        requests = []
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_POST(self):
+                requests.append(json.loads(self.rfile.read(int(self.headers['Content-Length']))))
+                if not self.headers.get('X-Transmission-Session-Id'):
+                    self.send_response(409)
+                    self.send_header('X-Transmission-Session-Id', 'abc123')
+                    self.end_headers()
+                    return
+                self.send_response(200)
+                self.end_headers()
+                response = {'jsonrpc': '2.0', 'id': 1,
+                            'error': {'code': 11, 'message': 'unrecognized info'}}
+                self.wfile.write(json.dumps(response).encode())
+            def log_message(self, *args): pass
+        server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with patch.object(torrent, 'ENDPOINT_PORT', server.server_port):
+                with self.assertRaisesRegex(torrent.Failure,
+                    r'Transmission recusou torrent_add: unrecognized info \\(código 11\\)') as caught:
+                    torrent.Rpc().call('torrent_add', {'filename': MAGNET})
+            self.assertNotIn(MAGNET, str(caught.exception))
+            self.assertEqual(2, len(requests))  # CSRF 409 only; never retry an RPC error.
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
     def test_real_http_csrf_handshake_and_no_ambiguous_retry(self):
         requests = []
         class Handler(http.server.BaseHTTPRequestHandler):
