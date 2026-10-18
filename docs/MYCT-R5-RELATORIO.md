@@ -1,5 +1,18 @@
 # MYCT-R5 — refinamento pontual UI/UX
 
+## Fechamento e aceite físico — 17/10/2026, Moto G06
+
+**R5 aprovada pelo proprietário para integração à main**, sem ampliar o escopo. Evidências:
+- **Início — PASS visual:** o proprietário aprovou a apresentação preto/dourado, a organização e os acessos exibidos (captura da code 29).
+- **IDE Sora — PASS visual:** o botão **X** aparece na barra superior do arquivo `teste.c` (captura da code 29); implementação usa a confirmação já existente. **O diálogo para buffer sujo não recebeu comprovação física individual**, portanto não registrar esse subteste como executado.
+- **Terminal local — PASS físico na F1/code 30:** após iniciar novo shell no Moto G06, a tela exibiu `My-CT> ls`, resultado `teste`, depois `My-CT> pwd`, resultado `/data/data/dev.myct/files/ide-local/projetos`, e novo prompt `My-CT>` aguardando comando. Confirmado que o prompt curto substitui o caminho extenso, sem alterar o cwd real.
+- **Automação:** build/lint, 224 testes JVM (um SSH opt-in ignorado), PTY host aprovados conforme validação da candidata. Instrumentação Android compilada, não executada.
+- **Pendências não bloqueantes:** Ctrl+C, resize, diálogo dirty-buffer e regressões SSH/SFTP/SAF não foram todos reconfirmados individualmente na candidata final. Não inferir PASS físico desses cenários.
+
+**Decisão:** encerrar R5 no escopo combinado (Início, X e prompt), integrar PR #33 na `main`, fechar issue #32 e excluir a branch apenas depois de sincronizar o clone local. Release final testada: [0.7.1-r5-f1/code 30](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-r5-f1-v0.7.1-rc1). **Não desinstalar nem limpar dados do Android**; não é necessário novo APK. Nenhuma ampliação da UI/UX foi solicitada.
+
+---
+
 **R5-F1 candidata code 30; prompt ainda aguarda novo teste Moto G06.** O
 proprietário aprovou visualmente **Início e X da IDE** na code 29, mas reprovou
 o prompt local (caminho extenso + `$` persistiu). Esse retorno não declara
