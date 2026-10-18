@@ -116,6 +116,7 @@ class DownloadsModelTest {
                 DownloadAction.List -> model.refresh()
                 is DownloadAction.Start -> model.start(action.url, action.name)
                 is DownloadAction.Cancel -> model.cancel(action.id)
+                is DownloadAction.Delete -> model.delete(action.id)
             }
             try {
                 model.attach(SshConnection()); model.refresh(passive = true)
