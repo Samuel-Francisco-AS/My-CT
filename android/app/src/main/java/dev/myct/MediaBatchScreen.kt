@@ -32,7 +32,8 @@ internal fun MediaBatchScreen(model: MediaModel, modifier: Modifier = Modifier) 
     val first = firstEpisode.toIntOrNull()
     val yearValue = year.toIntOrNull()
     val numbers = selected.mapIndexed { index, file ->
-        episodeOverrides[file.id]?.toIntOrNull() ?: first?.plus(index)
+        if (episodeOverrides.containsKey(file.id)) episodeOverrides[file.id]?.toIntOrNull()
+        else first?.plus(index)
     }
     val validNumbers = kind == "movie" || (numbers.all { it != null && it in 1..999 } &&
         numbers.distinct().size == numbers.size)
