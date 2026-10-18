@@ -93,7 +93,7 @@ def safe_relative(relative):
     candidate = Path(relative)
     if candidate.is_absolute() or not candidate.parts or any(p in {'.', '..', ''} for p in candidate.parts):
         raise MediaError('Caminho de biblioteca inválido.')
-    if len(candidate.parts) < 3 or candidate.parts[0] not in {'Series', 'Filmes'}:
+    if len(candidate.parts) < 3 or candidate.parts[0] not in {'Series', 'Series-TV', 'Filmes'}:
         raise MediaError('Caminho fora da biblioteca.')
     return candidate
 
