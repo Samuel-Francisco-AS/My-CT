@@ -251,3 +251,10 @@ Entrega L1D: [PR #31 draft](https://github.com/Samuel-Francisco-AS/My-CT/pull/31
 com base L1B; [candidata 0.7.0/code 28](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-l1d-v0.7.0-rc1)
 com APKs e SHA-256. Build/JVM/lint offline PASS: 224 testes, 223 aprovados,
 1 handshake opt-in ignorado. Roteiro físico pendente; sem merge.
+
+
+## 17/10/2026 — Fechamento do MVP local L1 (aceite do proprietário)
+
+Integração validada no Moto G06: IDE Sora salva `Documents/My-CT/Project-C/teste.c` pela árvore SAF; Termux lê o mesmo fonte, GCC compila e roda quando o binário é gravado em `$HOME` (`gcc teste.c -o "$HOME/teste" && "$HOME/teste"`). Execução direta em Documents negada por política de armazenamento Android, não bug do My-CT. L1A privada e PTY L1B também tiveram aceite físico funcional prévio. Testes detalhados de conflito/revogação, rotação/clipboard e regressão SSH não receberam PASS individual.
+
+PRs #28, #29 e #31 integrados por merges `4ae5fe7`, `b46c25b`, `e4d0a57`; PR #30 L1C cancelado/fechado sem merge. Decisão: encerrar MVP e realizar depois somente pequeno refinamento UI/UX, sem compilar dentro do APK. [Relatório de fechamento](MYCT-L1-FECHAMENTO.md).
