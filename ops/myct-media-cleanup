@@ -205,6 +205,17 @@ def apply(request, expected, rows=None, rpc=None):
             if row['source_id'] not in state['ignored']:
                 state['ignored'].append(row['source_id'])
             core.save_state(state)
+            # Prune only now-empty folders belonging to this library title.
+            category, title = Path(path).parts[:2]
+            boundary = core.media_root() / category
+            current = file.parent
+            while current != boundary:
+                core.no_symlink_path(current, core.media_root())
+                try:
+                    current.rmdir()  # fails harmlessly if any other file remains
+                except OSError:
+                    break
+                current = current.parent
             removed.append(path)
         return {'removed_links': len(removed), 'removed_torrents': len(plan['torrents'])
                 if request['mode'] == 'storage' else 0,
