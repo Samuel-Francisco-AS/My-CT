@@ -204,54 +204,87 @@ internal fun MediaBatchScreen(model: MediaModel, modifier: Modifier = Modifier) 
             }
         }
         if (kind != "movie" && selected.isNotEmpty()) {
-            item("episode-header") {
+            item(key = "episode-header") {
                 ScreenPanel {
-                    ScreenHeading("Numeração dos episódios",
-                        "Numeração inicial sugerida pela ordem dos nomes. Você pode corrigir qualquer episódio individualmente.")
-                    if (!validNumbers) StatusNotice("Corrija números vazios, repetidos ou fora de 1–999.", true)
+                    Row(Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Numeração", style = MaterialTheme.typography.titleMedium)
+                            Text("${selected.size} episódios · início $firstEpisode",
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                        MyCtTextButton(onClick = { editEpisodes = !editEpisodes }) {
+                            Text(if (editEpisodes) "Recolher" else "Editar")
+                        }
+                    }
+                    if (!validNumbers)
+                        StatusNotice("Há números repetidos, inválidos ou vazios.", true)
+                    else Text("Revise a ordem sugerida e expanda para corrigir os episódios.",
+                        style = MaterialTheme.typography.bodySmall)
                 }
             }
-            items(selected, key = { "number:" + it.id }) { file ->
-                val index = selected.indexOfFirst { it.id == file.id }
-                ScreenPanel {
-                    Text(file.name, style = MaterialTheme.typography.bodySmall)
-                    OutlinedTextField(episodeOverrides[file.id] ?: first?.plus(index)?.toString().orEmpty(),
-                        { episodeOverrides[file.id] = it.take(3) },
-                        label = { Text("Episódio correspondente") }, singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+            if (editEpisodes) {
+                itemsIndexed(selected, key = { _, file -> "number:" + file.id }) { index, file ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(file.name, modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        OutlinedTextField(
+                            value = if (episodeOverrides.containsKey(file.id))
+                                episodeOverrides[file.id].orEmpty()
+                                else first?.plus(index)?.toString().orEmpty(),
+                            onValueChange = { episodeOverrides[file.id] = it.take(3) },
+                            label = { Text("EP") },
+                            modifier = Modifier.width(88.dp),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                    }
                 }
             }
         }
-        item("preview-action") {
+        item(key = "preview-action") {
             ScreenPanel {
-                MyCtButton(onClick = { spec?.let(model::planManual) },
-                    enabled = spec != null && model.actionsEnabled) { Text("Pré-visualizar destinos") }
-                if (spec == null) StatusNotice("Preencha título, categoria e episódios; selecione os arquivos desejados.")
+                Text("Prévia dos destinos", style = MaterialTheme.typography.titleMedium)
+                if (spec == null)
+                    Text("Marque os arquivos e preencha os dados para gerar a prévia.",
+                        style = MaterialTheme.typography.bodySmall)
                 if (plan != null) {
                     HorizontalDivider()
                     DataLine("Prontos para importar", plan.ready.toString())
                     DataLine("Já existentes", plan.existing.toString())
                     DataLine("Conflitos", plan.collisions.toString())
                     if (plan.collisions > 0)
-                        StatusNotice("Há destinos ocupados. Desmarque os itens em conflito ou corrija a numeração e consulte a prévia novamente.", true)
-                    else if (plan.ready > 0)
-                        MyCtButton(onClick = { confirmation = true }, enabled = model.actionsEnabled) {
-                            Text("Criar ${plan.ready} hardlinks…")
-                        }
+                        StatusNotice("Destino ocupado. Desmarque ou renumere os arquivos conflitantes.", true)
+                    MyCtTextButton(onClick = {
+                        showDestinations = !showDestinations
+                    }) {
+                        Text(if (showDestinations) "Recolher destinos"
+                             else "Ver ${plan.items.size} destinos")
+                    }
                 }
             }
         }
-        if (plan != null) items(plan.items, key = { "plan:" + it.id }) { entry ->
-            ScreenPanel {
-                Text(entry.name, style = MaterialTheme.typography.bodySmall)
-                DetailValue("Destino", entry.target)
-                StatusNotice(when (entry.status) {
-                    "ready" -> "Pronto para criar hardlink."
-                    "existing" -> "Arquivo já existe com o mesmo inode; não será duplicado."
-                    else -> "COLISÃO: já há outro arquivo neste destino."
-                }, entry.status == "collision")
+        if (plan != null && showDestinations) {
+            items(plan.items, key = { "plan:" + it.id }) { entry ->
+                ScreenPanel {
+                    Text(entry.name, style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    DetailValue("Destino", entry.target)
+                    StatusNotice(when (entry.status) {
+                        "ready" -> "Pronto para criar hardlink."
+                        "existing" -> "Já existente com o mesmo inode."
+                        else -> "COLISÃO: destino ocupado."
+                    }, entry.status == "collision")
+                }
             }
         }
+
     }
 
     if (confirmation && plan != null && spec != null) AlertDialog(
