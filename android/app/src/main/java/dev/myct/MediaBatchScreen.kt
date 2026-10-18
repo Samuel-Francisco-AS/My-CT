@@ -94,7 +94,7 @@ internal fun MediaBatchScreen(model: MediaModel, modifier: Modifier = Modifier) 
     val folderRows = sourceFolders.sumOf { (key, files) ->
         1 + (if (expandedFolders[folderKey(key.first, key.second)] == true) files.size else 0)
     }
-    val sourceAnchor = 2 + if (libraryExpanded) model.libraryGroups.size else 0
+    val sourceAnchor = 2 + (if (libraryExpanded) model.libraryGroups.size else 0)
     val episodesAnchor = sourceAnchor + 1 + folderRows
     val episodesRows = if (kind != "movie" && selected.isNotEmpty())
         1 + (if (editEpisodes) selected.size else 0) else 0
