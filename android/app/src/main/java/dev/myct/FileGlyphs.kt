@@ -17,6 +17,7 @@ internal object FileGlyphs {
     private val Link = glyph("Link", "M9,15 L15,9 M8,10 L5,13 C1,17 7,23 11,19 L14,16 M10,8 L13,5 C17,1 23,7 19,11 L16,14")
     private val Other = glyph("Outro", "M12,3 L21,12 L12,21 L3,12 Z M12,8 L12,13 M12,17 L12,17")
     val Parent = glyph("Subir", "M12,20 L12,4 M6,10 L12,4 L18,10")
+    val Close = glyph("Fechar arquivo", "M6,6 L18,18 M18,6 L6,18")
     fun forKind(kind: RemoteKind) = when (kind) {
         RemoteKind.DIRECTORY -> Folder; RemoteKind.FILE -> File; RemoteKind.LINK -> Link; RemoteKind.OTHER -> Other
     }

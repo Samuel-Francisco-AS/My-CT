@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
 /** Run on Android explicitly; compilation alone is never recorded as a device pass. */
 class LocalPtyInstrumentedTest {
     private class Harness(directory: String) : AutoCloseable {
-        val child = AndroidPty(directory) // Also verifies System.loadLibrary + JNI symbols on this ABI.
+        val child = AndroidPty(directory, localShellStartup(File(directory)).absolutePath) // Real startup + JNI on this ABI.
         val executor = Executors.newSingleThreadExecutor()
         private val output = StringBuffer()
         private val reader = executor.submit {
@@ -42,18 +42,20 @@ class LocalPtyInstrumentedTest {
             File(root, "ProjetoTeste").mkdir()
             File(root, "ProjetoTeste/teste.c").writeText("ANDROID_IDE_FILE\n")
             Harness(root.absolutePath).use { t ->
+                t.expect("My-CT> ")
+                t.send("printf 'ENV_LOADED:%s\\n' \"\$PS1\"\n"); t.expect("ENV_LOADED:My-CT> \r\n")
                 t.send("test -t 0 && test -t 1 && test -t 2 && echo REAL_ANDROID_TTY; pwd; echo \$HOME; echo \$TERM; echo \$PATH\n")
                 t.expect("REAL_ANDROID_TTY\r\n"); t.expect(root.absolutePath + "\r\n")
                 t.expect("xterm-256color\r\n"); t.expect("/system/bin:/system/xbin\r\n")
                 t.send("ls; cd ProjetoTeste; cat teste.c; echo ANDROID_PIPE | cat\n")
-                t.expect("ANDROID_IDE_FILE\r\n"); t.expect("ANDROID_PIPE\r\n")
+                t.expect("ANDROID_IDE_FILE\r\n"); t.expect("ANDROID_PIPE\r\nMy-CT> ")
                 t.child.resize(49, 15, 392, 240)
                 t.send("stty size\n"); t.expect("15 49\r\n")
                 t.send("echo READ_READY; read value; echo READ_\$value\n"); t.expect("READ_READY\r\n")
                 t.send("myct\n"); t.expect("READ_myct\r\n")
                 t.send("echo SLEEP_READY; sleep 20\n"); t.expect("SLEEP_READY\r\n")
                 Thread.sleep(150); t.send("\u0003"); Thread.sleep(100)
-                t.send("echo CTRL_C_\$?\n"); t.expect("CTRL_C_130\r\n")
+                t.send("echo CTRL_C_\$?\n"); t.expect("CTRL_C_130\r\nMy-CT> ")
                 t.send("exit 7\n"); assertEquals(7, t.child.waitForExit())
             }
         } finally { root.deleteRecursively() } // Only this test's private cache fixture.
@@ -79,7 +81,7 @@ class LocalPtyInstrumentedTest {
             Harness(root.absolutePath).use { it.child.stop(); it.child.waitForExit() }
             val before = File("/proc/self/fd").list()!!.size
             repeat(8) {
-                try { AndroidPty(File(root, "missing").absolutePath).close(); fail("Expected chdir failure") }
+                try { AndroidPty(File(root, "missing").absolutePath, localShellStartup(root).absolutePath).close(); fail("Expected chdir failure") }
                 catch (_: IOException) { /* JNI reports child setup failure. */ }
             }
             assertEquals(before, File("/proc/self/fd").list()!!.size)

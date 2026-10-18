@@ -12,7 +12,9 @@ internal class LocalTerminalModel(
     private val base: File,
     dispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
     private val io: CoroutineDispatcher = Dispatchers.IO,
-    private val open: (String) -> PtyProcess = ::AndroidPty,
+    private val open: (String) -> PtyProcess = { directory ->
+        AndroidPty(directory, localShellStartup(base).absolutePath)
+    },
     private val post: (Runnable) -> Unit = { check(Handler(Looper.getMainLooper()).post(it)) }
 ) {
     enum class Phase { IDLE, STARTING, RUNNING, STOPPING, ENDED, ERROR }
