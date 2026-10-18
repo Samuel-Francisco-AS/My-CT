@@ -35,7 +35,7 @@ class DownloadsTest {
         try {
             val cli = root.resolve(".local/bin/myct-download")
             checkNotNull(cli.parentFile).mkdirs()
-            cli.writeText("#!/bin/sh\nprintf '%s\\n' \"\$@\"\n")
+            cli.writeText("#!/bin/sh\nprintf '%s\n' \"\$@\"\n")
             assertTrue(cli.setExecutable(true))
             val safeUrl = "https://example.com/a?q=';\$(id)&x=1"
             val name = "x'; touch ${root.path}/injected; echo '"
@@ -73,8 +73,8 @@ class DownloadsTest {
         assertThrows(IllegalArgumentException::class.java) {
             downloadCommand(DownloadAction.Delete("../invalid"))
         }
-        val command = Exec({ out, _ -> out.write(("deleted: " + id + "\\n").toByteArray()) })
-        assertEquals("deleted: " + id + "\\n",
+        val command = Exec({ out, _ -> out.write(("deleted: " + id + "\n").toByteArray()) })
+        assertEquals("deleted: " + id + "\n",
             executeDownload(DownloadAction.Delete(id), { command }))
     }
 
