@@ -80,13 +80,17 @@ internal class LocalTerminalModel(
                 coroutineScope {
                     val exited = async(io) { current.waitForExit() }
                     val monitor = launch {
-                        val error = failure.await()
-                        withContext(io) { current.stop() } // Wake waitpid and IO; no SSH interaction.
-                        throw error
+                        failure.await()
+                        // Wake waitpid before the waiter's normal-exit path can win the race.
+                        withContext(io) { current.stop() } // No SSH interaction.
                     }
                     try {
                         val status = exited.await()
                         withTimeoutOrNull(500) { drained.await() }
+                        // The monitor may have stopped the child after a reader/writer
+                        // failure. In that case, status 0 is NOT a normal process exit.
+                        // Check the failure before publishing Phase.ENDED.
+                        if (failure.isCompleted) throw failure.await()
                         if (id == epoch) {
                             exitStatus = status; phase = Phase.ENDED
                             message = "Shell local encerrado · status $status. Você pode iniciar outra sessão."
