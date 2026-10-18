@@ -6,13 +6,18 @@ plugins {
 android {
     namespace = "dev.myct"
     compileSdk = 36
+    ndkVersion = "28.2.13676358"
     defaultConfig {
         applicationId = "dev.myct"
         minSdk = 26
         targetSdk = 36
-        versionCode = 24
-        versionName = "0.6.7-l1a-local-ide"
+        versionCode = 25
+        versionName = "0.6.8-l1b-local-terminal"
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
+        externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+    externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
     buildFeatures { compose = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -34,4 +39,6 @@ dependencies {
     implementation("org.bouncycastle:bcprov-jdk18on:1.86")
     testImplementation("org.json:json:20250517")
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("junit:junit:4.13.2")
 }

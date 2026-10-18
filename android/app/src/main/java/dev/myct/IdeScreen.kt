@@ -160,7 +160,7 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
                 DropdownMenu(menu, onDismissRequest = { menu = false }, properties = PopupProperties(focusable = false)) {
                     DropdownMenuItem(text = { Text(if (browsing) "Voltar ao código" else "Projetos") }, enabled = doc != null,
                         onClick = { action { saveScroll(); model.browse = !model.browse } })
-                    DropdownMenuItem(text = { Text("Terminal · Fedora") }, onClick = { action { saveScroll(); terminal() } })
+                    DropdownMenuItem(text = { Text(if (local) "Terminal · Local" else "Terminal · Fedora") }, onClick = { action { saveScroll(); terminal() } })
                     DropdownMenuItem(text = { Text("Arquivos") }, enabled = !local && model.connected && listing != null,
                         onClick = { action { saveScroll(); listing?.path?.let(files) } })
                     if (local) {

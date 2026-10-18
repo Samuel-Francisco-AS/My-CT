@@ -345,3 +345,19 @@ em `docs/MYCT-R4-TERMINAL-IDE.md`. **Aceite físico R4-Fix concedido em 17/10/20
 ## MYCT-R4 — PASS e merge #26 (17/10/2026)
 
 R4-Fix 0.6.6/code 23 foi aceita fisicamente no Moto G06 após teste de IDE Sora com edição/salvamento e GCC Fedora retornando `My-CT IDE funcionando! Pós-r4-fix`. O proprietário aprovou os três ajustes de ergonomia e autorizou fechamento. [PR #26](https://github.com/Samuel-Francisco-AS/My-CT/pull/26) **MERGED** em `266e799a0fe3d5a4dd6d9a270095c3d2f3da6005`; [relatório formal](MYCT-R4-FECHAMENTO.md). As decisões sobre L1 (ADR-015 a ADR-018) permanecem intactas e o marco de entrada L1 está liberado. MYCT-6 automações segue posterior à L1. A investigação SSH da R4 não encontrou solução comprovada; lag R-01 continua suspenso.
+
+
+## 17/10/2026 — MYCT-L1B: PTY Android próprio, sem novo serviço
+
+Missão expressa do proprietário autoriza JNI/NDK e continuidade sobre L1A ainda
+sem merge (#28 draft), após teste físico parcial da IDE/code 24. Escolha:
+`openpty` (API 23, minSdk 26) + fork/setsid/TIOCSCTTY/dup2/execve de
+`/system/bin/sh -i`. Ponte própria pequena em biblioteca legítima do APK,
+NDK r28c/CMake, sem importar o app/JNI do Termux, pipes como transporte de shell,
+root, distribuição ou execução de binário em diretório gravável. Mesmo renderer,
+filas por sessão e dono de processo; seletor contextual independente do SSH.
+Sem FGS local: sobrevive a navegação/Activity dentro do processo, sem promessa
+após morte do app. Cwd/HOME usam a raiz L1A, sem chroot: shell tem o UID e as
+permissões do app. [Rationale, APIs, validação e gate Moto pendente](MYCT-L1B-RELATORIO.md).
+ADR-018/toolchain C fica para L1C, sem estudo nesta missão. Nenhum merge
+realizado, Fedora/FGS SSH intactos, R-01 continua suspensa.

@@ -1,6 +1,6 @@
 # MYCT-L1 — ambiente local independente (planejamento aprovado)
 
-**Decisão do proprietário:** 17/10/2026. **Estado:** direção e ordem aprovadas; **L1A implementada para revisão, aceite físico pendente**. L1B/L1C não iniciadas. **Próxima fase:** depois de fechar e integrar a MYCT-R4/Fix, **antes da MYCT-6 (automações/T5)**. Não iniciar L1 durante o aceite físico pendente da R4.
+**Decisão do proprietário:** 17/10/2026. **Estado:** direção e ordem aprovadas; **L1A com aceite físico parcial do proprietário; L1B candidata implementada, aceite Moto pendente; L1C não iniciada**. **Próxima fase:** depois de fechar e integrar a MYCT-R4/Fix, **antes da MYCT-6 (automações/T5)**. Não iniciar L1 durante o aceite físico pendente da R4.
 
 ## Objetivo e decisão
 
@@ -55,14 +55,22 @@ A partir da L1 comprovada: C++, Python, JavaScript, Git, Make, shells adicionais
 
 ## Gate de entrada liberado após MYCT-R4 — 17/10/2026
 
-**R4-Fix 0.6.6/code 23 recebeu PASS físico e foi integrada à main:** [PR #26](https://github.com/Samuel-Francisco-AS/My-CT/pull/26), merge commit `266e799a0fe3d5a4dd6d9a270095c3d2f3da6005`. [Fechamento R4](MYCT-R4-FECHAMENTO.md). A condição de entrada para L1 está **satisfeita**. O proprietário decidiu iniciar L1 **em uma nova conversa**, após sincronizar main e limpar branch R4. A missão L1A foi autorizada nesta conversa e executada na branch `myct-l1a-ide-local`; nenhum gate LOC recebeu aceite físico. [Relatório L1A](MYCT-L1A-RELATORIO.md). MYCT-6 permanece posterior.
+**R4-Fix 0.6.6/code 23 recebeu PASS físico e foi integrada à main:** [PR #26](https://github.com/Samuel-Francisco-AS/My-CT/pull/26), merge commit `266e799a0fe3d5a4dd6d9a270095c3d2f3da6005`. [Fechamento R4](MYCT-R4-FECHAMENTO.md). A condição de entrada para L1 está **satisfeita**. O proprietário decidiu iniciar L1 **em uma nova conversa**, após sincronizar main e limpar branch R4. A missão L1A foi executada na branch `myct-l1a-ide-local`; o retorno físico parcial posterior está registrado no relatório L1A. [Relatório L1A](MYCT-L1A-RELATORIO.md). MYCT-6 permanece posterior.
 
 ## Dependência e ordem oficial
 
 1. **Concluído:** MYCT-R4/Fix 0.6.6/code 23 — aceita fisicamente e integrada à `main`, merge #26 `266e799`. Essa pré-condição foi satisfeita; limpeza da branch depende de sincronização local.
-2. **Em revisão:** **MYCT-L1A**, seguida futuramente por L1B → L1C, testando no Moto e registrando limitações. A L1 foi planejada na `main` sem iniciar implementação ou branch de código antes do aceite R4.
+2. **Em revisão:** **MYCT-L1A** (PR #28 draft; aceite físico parcial), com **L1B empilhada sobre L1A**, candidata a teste no Moto; L1C posterior, ainda não iniciada. A L1 foi planejada na `main` sem iniciar implementação ou branch de código antes do aceite R4.
 3. **Depois:** retomar discussão de **MYCT-6/T5 Automações**, conforme requisitos originais de trabalhos predefinidos, execução headless e histórico; nada de automações nesta fase local.
 
 **Critério de conclusão da primeira L1:** programa C editado, salvo, compilado e executado **offline no Moto G06**, sem Termux instalado, sem Fedora e sem servidor; editor/terminal remoto anteriores continuam operacionais quando o Fedora está disponível. **Gate não comprovado = fase não aprovada.**
 
-**Situação atual L1A:** workspace privada em `filesDir/ide-local/projetos`, criação/renomeação/navegação, Sora offline e importação/exportação de cópias via SAF implementados. Uma única tela/editor, com sessões e buffers independentes Local/Remoto. Importação usa OpenDocument e cópia identificada; exportação usa CreateDocument e exige salvar primeiro. Sem permissão ampla, componente baixado, dependência do app Termux ou mudança no Fedora. **Implementação/testes disponíveis não equivalem a aceite físico LOC-01/LOC-04.** Terminal local e compilação permanecem não implementados; ADR-018 continua aberta. [Evidências e roteiro L1A](MYCT-L1A-RELATORIO.md).
+**Situação atual L1A:** workspace privada em `filesDir/ide-local/projetos`, criação/renomeação/navegação, Sora offline e importação/exportação de cópias via SAF implementados. Uma única tela/editor, com sessões e buffers independentes Local/Remoto. Importação usa OpenDocument e cópia identificada; exportação usa CreateDocument e exige salvar primeiro. Sem permissão ampla, componente baixado, dependência do app Termux ou mudança no Fedora. **O proprietário confirmou criação/edição/salvamento/persistência e renomeação no Moto com code 24; SAF, isolamento completo e regressão remota permanecem sem aceite individual.** L1B acrescenta PTY local real em candidata code 25, sem aceite físico; compilação permanece não implementada, ADR-018 continua aberta. [Evidências e roteiro L1A](MYCT-L1A-RELATORIO.md).
+
+
+**Situação L1B:** `/system/bin/sh -i` por JNI própria/openpty, workspace da L1A,
+seletor Local/Remoto no terminal existente, processos/emuladores/filas/modificadores
+independentes. Sessão local pertence ao processo Android; não acrescenta FGS.
+Início/fechamento explícitos, sem comandos por navegação. [Arquitetura, testes,
+APK e gate A–F pendente](MYCT-L1B-RELATORIO.md). L1C/toolchains não investigadas
+nesta fase, nenhum merge autorizado.

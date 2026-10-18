@@ -15,6 +15,18 @@ import java.nio.charset.StandardCharsets
 
 /** Process-scoped SSH owner shared by Activity and the opt-in foreground service. */
 class TerminalModel(application: Application) {
+    internal val localTerminal = LocalTerminalModel(java.io.File(application.filesDir, "ide-local"))
+    internal val terminalSelection = TerminalSelection()
+    internal val selectedTerminal get() = if (terminalSelection.environment == IdeEnvironment.LOCAL) localTerminal.terminal else terminal
+    internal val selectedRunning get() = if (terminalSelection.environment == IdeEnvironment.LOCAL) localTerminal.running else phase == Phase.CONNECTED
+    internal val selectedModifiers get() = if (terminalSelection.environment == IdeEnvironment.LOCAL) localTerminal.modifiers else modifiers
+    internal val selectedCallbacks get() = if (terminalSelection.environment == IdeEnvironment.LOCAL) localTerminal.callbacks else callbacks
+    internal fun terminalInput() = terminalSelection.bind(selectedTerminal, selectedModifiers, { selectedTerminal }, { selectedRunning })
+    internal fun selectTerminal(value: IdeEnvironment) {
+        modifiers.clear(); localTerminal.modifiers.clear()
+        terminalSelection.select(value)
+    }
+    internal fun clearTerminalModifiers() { modifiers.clear(); localTerminal.modifiers.clear() }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     var onConnectionStateChanged: (() -> Unit)? = null
     var backgroundEnabled by mutableStateOf(false)

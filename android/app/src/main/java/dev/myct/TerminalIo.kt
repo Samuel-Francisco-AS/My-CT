@@ -1,6 +1,6 @@
 package dev.myct
 
-/** Two per-connection workers. Session/emulator ownership stays on main; no subprocess/JNI. */
+/** Two per-transport workers. Session/emulator ownership stays on main. */
 internal class TerminalIo(
     private val outgoing: TerminalActionQueue,
     private val incoming: TerminalOutputQueue,
@@ -34,7 +34,7 @@ internal class TerminalIo(
         outgoing.close(); incoming.close()
         writer.interrupt(); reader.interrupt()
     }
-    /** Call only after closing the underlying SSH connection, and never on main. */
+    /** Call only after stopping the underlying transport, and never on main. */
     fun awaitStopped(): Boolean {
         writer.join(1000); reader.join(1000)
         return !writer.isAlive && !reader.isAlive

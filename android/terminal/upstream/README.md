@@ -34,3 +34,10 @@ Preservar as licenças e avisos ao redistribuir. O APK inclui os avisos de
 terceiros em assets e permite lê-los na tela de conexão. Para atualizar o
 terminal, comparar segurança/API/licenças, fixar novo commit, regenerar o
 manifesto e repetir testes ANSI, IME, teclado e resize no aparelho físico.
+
+
+MYCT-L1B acrescenta no **módulo app** uma ponte JNI própria para PTY Android,
+sem importar o código de subprocesso upstream. O adaptador TerminalSession agora
+serve tanto ao transporte SSH quanto ao PTY local, com instâncias independentes.
+As descrições sem JNI acima registram as fases anteriores; a lista de fontes
+vendorizadas, seus hashes e os quatro patches continuam iguais.

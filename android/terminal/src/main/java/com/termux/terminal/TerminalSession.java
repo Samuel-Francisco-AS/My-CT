@@ -1,6 +1,6 @@
 package com.termux.terminal;
 
-/** My-CT transport adapter for the upstream Termux view. No Android subprocess or JNI. */
+/** My-CT adapter for the upstream view. SSH/local PTY lifecycle stays in app transports. */
 public final class TerminalSession extends TerminalOutput {
     public interface Transport {
         void send(byte[] data);

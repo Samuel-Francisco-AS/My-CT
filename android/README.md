@@ -430,3 +430,29 @@ APK: `../artifacts/myct-l1a-0.6.7-debug.apk`; atualizar a instalação existente
 sem desinstalar. Não instalar automaticamente por agente. [Relatório, checksum,
 pré-release e seis testes físicos](../docs/MYCT-L1A-RELATORIO.md). **Aceite Moto
 G06 pendente; build/testes JVM não aprovam LOC-01/LOC-04 fisicamente.**
+
+
+## MYCT-L1B — candidata 0.6.8/code 25, terminal local real
+
+No Terminal, o seletor **Local · Moto G06 / Remoto · Fedora** aparece mesmo sem
+SSH. Em Local, toque **Iniciar shell local** para abrir `/system/bin/sh` em PTY
+real. Inicia em `filesDir/ide-local/projetos`, a mesma workspace da IDE L1A:
+`pwd`, `ls`, `cd ProjetoTeste`, `cat teste.c`, pipes e comandos Android disponíveis.
+CTRL depois C interrompe o comando; Fechar encerra a sessão; Novo shell cria
+outra. O menu Terminal da IDE escolhe seu ambiente, sem executar comandos.
+
+Alternar IDE/seções/Local/Remoto preserva a sessão enquanto o processo do app
+existir. Local não desconecta SSH, não depende de Termux/rede/root/ADB, não
+habilita serviço novo e não sobrevive garantidamente à morte do app. Shell tem
+permissões do UID My-CT, inclusive acesso aos próprios dados do app; não é
+chroot nem distribuição Linux. Não inclui compilador/runtimes/pacotes.
+
+APK `../artifacts/myct-l1b-0.6.8-debug.apk`, `dev.myct`, mesma assinatura/code
+crescente: **atualizar sobre a L1A sem desinstalar ou limpar dados**. JNI própria
+nas ABIs arm64-v8a/armeabi-v7a/x86_64. Para reconstruir: NDK 28.2.13676358 e
+CMake 3.22.1 no SDK; dependência AndroidX Test runner 1.7.0 exclusiva dos testes
+instrumentados. O build pode rodar offline após provisionar as ferramentas e
+caches. [Relatório, pré-release, checksum e checklist A–F](../docs/MYCT-L1B-RELATORIO.md).
+**Aceite L1B no Moto pendente**. O proprietário confirmou criação/edição/salvamento/
+persistência/renomeação da L1A; SAF, isolamento completo e regressão remota
+L1A continuam pendentes individualmente.
