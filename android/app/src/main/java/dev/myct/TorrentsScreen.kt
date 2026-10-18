@@ -48,11 +48,13 @@ internal fun TorrentsScreen(model: TorrentsModel, filesBusy: Boolean, openFiles:
     val activity = checkNotNull(LocalActivity.current as? androidx.activity.ComponentActivity)
     var magnet by remember { mutableStateOf("") }
     var remove by remember(model.connected) { mutableStateOf<ServerTorrent?>(null) }
+    var deleteData by remember(model.connected) { mutableStateOf<ServerTorrent?>(null) }
+    val expanded = remember { mutableStateMapOf<String, Boolean>() }
     var visible by remember { mutableStateOf(activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
     DisposableEffect(activity, model) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_START) visible = true
-            if (event == Lifecycle.Event.ON_STOP) { visible = false; model.hide(); remove = null }
+            if (event == Lifecycle.Event.ON_STOP) { visible = false; model.hide(); remove = null; deleteData = null }
         }
         activity.lifecycle.addObserver(observer)
         onDispose { activity.lifecycle.removeObserver(observer); model.hide() }
@@ -84,39 +86,84 @@ internal fun TorrentsScreen(model: TorrentsModel, filesBusy: Boolean, openFiles:
         }
         if (model.items.isEmpty()) item(key = "empty") { ScreenPanel { StatusNotice("Nenhum torrent para exibir.") } }
         items(model.items, key = { it.hash }) { item ->
+            val open = expanded[item.hash] == true
             ScreenPanel {
-                DetailValue("Torrent", item.name)
-                if (model.stale || !model.connected) StatusNotice("Dados anteriores · estado atual não confirmado", true)
-                Text(item.state.label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(item.name, style = MaterialTheme.typography.titleSmall)
+                if (model.stale || !model.connected)
+                    StatusNotice("Dados anteriores · estado atual não confirmado", true)
+                Text(item.state.label, style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary)
                 if (item.progress == null) {
-                    StatusNotice("Aguardando metadados · tamanho e progresso indisponíveis")
-                    if (!item.paused && model.connected && !model.stale) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    Text("Aguardando metadados", style = MaterialTheme.typography.bodySmall)
                 } else {
                     LinearProgressIndicator(progress = { item.progress }, modifier = Modifier.fillMaxWidth())
-                    Text("${(item.progress * 100).toInt()} % · ${item.bytes?.let(::formatFileSize) ?: "?"} / ${item.total?.let(::formatFileSize) ?: "?"}")
+                    Text("${(item.progress * 100).toInt()}% · ${item.bytes?.let(::formatFileSize) ?: "?"} / " +
+                        (item.total?.let(::formatFileSize) ?: "?"),
+                        style = MaterialTheme.typography.bodySmall)
                 }
-                DataLine(if (model.stale || !model.connected) "↓ Última taxa" else "↓ Agora", item.down?.let { formatFileSize(it) + "/s" } ?: "Indisponível")
-                DataLine(if (model.stale || !model.connected) "↑ Última taxa" else "↑ Agora", item.up?.let { formatFileSize(it) + "/s" } ?: "Indisponível")
-                DataLine("Peers", item.peers?.toString() ?: "Indisponível")
-                HorizontalDivider()
-                DataLine("Baixado acumulado", item.downloadedEver?.let(::formatFileSize) ?: "Indisponível")
-                DataLine("Enviado acumulado", item.uploadedEver?.let(::formatFileSize) ?: "Indisponível")
-                DataLine("Ratio (Transmission)", torrentRatioLabel(item.ratio))
-                StatusNotice(item.error, true)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MyCtTextButton(onClick = { model.control(if (item.paused) "resume" else "pause", item.hash) },
-                        enabled = model.actionsEnabled && !model.stale) { Text(if (item.paused) "Retomar" else "Pausar") }
-                    MyCtTextButton(onClick = { remove = item }, enabled = model.actionsEnabled && !model.stale) { Text("Remover…") }
-                    MyCtTextButton(onClick = { openFiles(item.directory) }, enabled = model.connected && !filesBusy) { Text("Ver em Arquivos") }
+                    MyCtTextButton(onClick = { expanded[item.hash] = !open }) {
+                        Text(if (open) "Recolher" else "Detalhes")
+                    }
+                    MyCtTextButton(onClick = {
+                        model.control(if (item.paused) "resume" else "pause", item.hash)
+                    }, enabled = model.actionsEnabled && !model.stale) {
+                        Text(if (item.paused) "Retomar" else "Pausar")
+                    }
+                    MyCtTextButton(onClick = { deleteData = item },
+                        enabled = model.actionsEnabled && !model.stale) { Text("Excluir arquivos…") }
                 }
-                if (filesBusy) StatusNotice("Aguarde a operação SFTP para abrir a pasta.")
-                ExpandDetails {
+                if (open) {
+                    HorizontalDivider()
+                    DataLine(if (model.stale || !model.connected) "↓ Última taxa" else "↓ Agora",
+                        item.down?.let { formatFileSize(it) + "/s" } ?: "Indisponível")
+                    DataLine(if (model.stale || !model.connected) "↑ Última taxa" else "↑ Agora",
+                        item.up?.let { formatFileSize(it) + "/s" } ?: "Indisponível")
+                    DataLine("Peers", item.peers?.toString() ?: "Indisponível")
+                    DataLine("Baixado acumulado", item.downloadedEver?.let(::formatFileSize) ?: "Indisponível")
+                    DataLine("Enviado acumulado", item.uploadedEver?.let(::formatFileSize) ?: "Indisponível")
+                    DataLine("Ratio (Transmission)", torrentRatioLabel(item.ratio))
+                    if (item.error.isNotBlank()) StatusNotice(item.error, true)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MyCtTextButton(onClick = { remove = item },
+                            enabled = model.actionsEnabled && !model.stale) {
+                            Text("Remover da lista…")
+                        }
+                        MyCtTextButton(onClick = { openFiles(item.directory) },
+                            enabled = model.connected && !filesBusy) { Text("Ver em Arquivos") }
+                    }
                     DetailValue("Diretório", item.directory)
                     DetailValue("Hash", item.hash, maxLines = 1)
                     DataLine("ID", item.id.toString())
                 }
             }
         }
+    }
+    deleteData?.let { item ->
+        AlertDialog(onDismissRequest = { deleteData = null },
+            title = { Text("Excluir torrent e arquivos?") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    DetailValue("Torrent", item.name)
+                    Text("O Transmission encerrará esta transferência e apagará seus dados, " +
+                        "inclusive arquivos parciais. O seeding será interrompido. " +
+                        "Se houver hardlinks na biblioteca, a operação será recusada: " +
+                        "retire-os primeiro em Mídia → Armazenamento.")
+                    Text("A exclusão de dados é irreversível.")
+                }
+            },
+            confirmButton = {
+                MyCtTextButton(onClick = {
+                    deleteData = null
+                    model.control("delete-data", item.hash)
+                }, enabled = model.actionsEnabled && !model.stale) {
+                    Text("Excluir torrent e arquivos")
+                }
+            },
+            dismissButton = {
+                MyCtTextButton(onClick = { deleteData = null }) { Text("Cancelar") }
+            }
+        )
     }
     remove?.let { item ->
         AlertDialog(onDismissRequest = { remove = null }, title = { Text("Remover torrent da lista?") },
