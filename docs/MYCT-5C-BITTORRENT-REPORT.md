@@ -10,6 +10,29 @@ Na primeira rodada, o proprietário executou os 10 testes de `ops/tests/test_tor
 
 ---
 
+### Raiz provável da recusa RPC — codificação `xt` (17/10/2026)
+
+Após instalar a segunda revisão, o proprietário obteve da CLI de diagnóstico:
+`Transmission recusou torrent_add: unrecognized info (código 4).`
+A análise do código-fonte de Transmission 4.1.3 em
+[`libtransmission/magnet-metainfo.cc`](https://github.com/transmission/transmission/blob/4.1.3/libtransmission/magnet-metainfo.cc)
+revelou que a identificação do hash v1 verifica o início **literal** de `xt` com `urn:btih:`.
+O reparo anterior removia trackers por `parse_qsl(...)` / `urlencode(...)`, que
+reescrevia `xt=urn:btih:HASH` como `xt=urn%3Abtih%3AHASH`. O motor não reconhece essa forma,
+retornando `unrecognized info`. Esse mecanismo explica a recusa após a filtragem,
+mas o aceite do magnet real ainda depende de reteste.
+
+Correção pontual na mesma branch: filtrar exclusivamente os componentes `tr`
+problemáticos diretamente dos parâmetros **brutos** do magnet, preservando
+`xt`, `dn`, sequência dos demais parâmetros e suas codificações originais.
+Teste específico garante que `xt=urn:btih:` chega intacto ao RPC, que `dn` mantém
+`%20` e que só o tracker inválido foi descartado. Proteções anteriores para
+trackers privados literais e domínios sem DNS/resolvidos para endereços privados
+continuam presentes. **Teste unitário da revisão final e reteste no Fedora/Moto
+ainda pendentes.** Não houve instalação, restart do Transmission ou merge pelo executor.
+
+---
+
 ### Diagnóstico RPC — tentativa posterior (17/10/2026)
 
 Após o reteste da segunda correção, o proprietário confirmou `11/11` testes no Fedora, sintaxe Python OK, cópia `~/.local/bin/myct-torrent` idêntica à fonte e `myct-torrent list` via RPC OK. O Moto G06 continuou mostrando "Pedido recusado pelo motor". Ao invocar diretamente a CLI instalada com o mesmo magnet, ela retornou **"Pedido recusado pelo motor; requer Transmission 4.1+. Atualize antes de repetir." / exit 2**, apesar de `transmission-daemon 4.1.3` comprovado. A mensagem original era genérica para um objeto `error` na resposta JSON-RPC ou resposta estruturalmente inesperada; não comprova incompatibilidade de versão.
