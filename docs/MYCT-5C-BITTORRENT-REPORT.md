@@ -1,5 +1,15 @@
 # MYCT-5C — BitTorrent/magnet por SSH
 
+## Pós-aceite — correção pontual DNS de trackers (17/10/2026; aguardando instalação e reteste)
+
+No Moto G06, 2 de 3 magnets deram "Transmission indisponível", embora o serviço de usuário estivesse `active`/`enabled` e a CLI `myct-torrent list` respondesse com exit 0 via RPC local em `127.0.0.1:19091`. No magnet investigado, 4 de 27 trackers falharam na resolução DNS. A causa foi localizada na validação `magnet()`: `socket.gaierror` escapava como `OSError` e virava o código 3 (serviço indisponível).
+
+Correção na branch `fix/torrent-dns-trackers`: ignorar **somente os trackers cujo DNS não resolve**, antes do `torrent_add`; preservar `xt`, `dn`, ordem e demais trackers. Endereços privados/não públicos resolvidos continuam rejeitados; protocolos inválidos e credenciais continuam proibidos. Se todos os trackers estiverem indisponíveis, o magnet sem `tr` ainda poderá ser entregue ao Transmission, sem garantia de descoberta via DHT. Esta filtragem não fornece isolamento de rede contra DNS rebinding ou metadados maliciosos.
+
+Adicionados testes de filtragem, encaminhamento da URI ao RPC e manutenção das rejeições. **Não houve instalação em `~/.local/bin`, reinício do daemon ou alteração do APK.** Exige execução dos testes no Fedora, atualização explícita da CLI e aceite com um magnet anteriormente recusado. Não declarar corrigido em produção antes disso.
+
+---
+
 ## Encerramento — aceite físico do proprietário (16/10/2026)
 
 **MYCT-5C ACEITA no Fedora 44 e Moto G06.** PR [#17](https://github.com/Samuel-Francisco-AS/My-CT/pull/17), candidata final **0.5.4-torrents / code 11**. Este fechamento é posterior às seções históricas abaixo e substitui qualquer anotação anterior de "teste pendente". **Merge realizado:** [PR #17](https://github.com/Samuel-Francisco-AS/My-CT/pull/17) integrado à `main` em `30d909be5c4ba17dbf46c2008c42448c3c08b9c9`. As branches de trabalho podem ser removidas pelo proprietário após sincronizar o Fedora, conforme bloco Git fornecido. A exclusão das branches não remove arquivos, serviço, seeding, hook ou registros do Transmission.
@@ -283,8 +293,9 @@ Mutações não são repetidas após falha/timeout. Somente 409 anterior à exec
 permite reenviar o pedido na negociação CSRF, com limite de uma tentativa extra.
 
 Magnet v1 hexadecimal/base32, limitado a 8.192 caracteres; aceita `xt`, `dn` e
-`tr`. Trackers precisam ser HTTP/HTTPS/UDP públicos na resolução inicial;
-credenciais, fontes `xs/as/ws`, controles e outras opções são recusados. O motor
+`tr`. Trackers resolvidos precisam ser HTTP/HTTPS/UDP públicos; os que não
+resolvem DNS são descartados antes da inclusão (correção posterior de 17/10).
+Credenciais, fontes `xs/as/ws`, controles e outras opções são recusados. O motor
 resolve DNS e peers independentemente: essa checagem **não é sandbox de rede**
 nem impede rebind posterior ou destinos originados nos metadados/peers. Use
 conteúdo confiável. Não confundir essa política com a fixação DNS do motor HTTP.
