@@ -30,6 +30,8 @@ internal class MediaModel internal constructor(
         private set
     var plannedSpec by mutableStateOf<ManualBatch?>(null)
         private set
+    var libraryGroups by mutableStateOf(emptyList<MediaLibraryGroup>())
+        private set
 
     fun attach(ssh: SshConnection?) {
         generation++
@@ -38,12 +40,13 @@ internal class MediaModel internal constructor(
         connected = ssh != null
         busy = false; stale = false
         preview = null; entries = emptyList(); sources = emptyList()
-        manualPlan = null; plannedSpec = null
+        manualPlan = null; plannedSpec = null; libraryGroups = emptyList()
         message = if (connected) "Consulte a biblioteca do Fedora." else "SSH desconectado."
     }
 
     fun refresh() = operate(MediaAction.Scan)
     fun loadSources() = operate(MediaAction.BulkSources)
+    fun loadLibrary() = operate(MediaAction.LibraryList)
     fun planManual(spec: ManualBatch) = operate(MediaAction.BulkPlan(spec))
     fun importManual(spec: ManualBatch) = operate(MediaAction.BulkImport(spec))
     fun sync() = operate(MediaAction.Sync)
@@ -61,6 +64,17 @@ internal class MediaModel internal constructor(
         busy = true
         job = scope.launch {
             try {
+                if (action == MediaAction.LibraryList) {
+                    val groups = parseMediaLibrary(
+                        runInterruptible(Dispatchers.IO) { execute(ssh, action) }
+                    )
+                    if (epoch == generation) {
+                        libraryGroups = groups
+                        stale = false
+                        message = "${groups.size} pastas de mídia encontradas no Fedora."
+                    }
+                    return@launch
+                }
                 if (action is MediaAction.BulkSources) {
                     val fresh = parseMediaSources(runInterruptible(Dispatchers.IO) { execute(ssh, action) })
                     if (epoch == generation) {
