@@ -10,6 +10,14 @@ Na primeira rodada, o proprietário executou os 10 testes de `ops/tests/test_tor
 
 ---
 
+### Diagnóstico RPC — tentativa posterior (17/10/2026)
+
+Após o reteste da segunda correção, o proprietário confirmou `11/11` testes no Fedora, sintaxe Python OK, cópia `~/.local/bin/myct-torrent` idêntica à fonte e `myct-torrent list` via RPC OK. O Moto G06 continuou mostrando "Pedido recusado pelo motor". Ao invocar diretamente a CLI instalada com o mesmo magnet, ela retornou **"Pedido recusado pelo motor; requer Transmission 4.1+. Atualize antes de repetir." / exit 2**, apesar de `transmission-daemon 4.1.3` comprovado. A mensagem original era genérica para um objeto `error` na resposta JSON-RPC ou resposta estruturalmente inesperada; não comprova incompatibilidade de versão.
+
+A especificação do Transmission 4.1.3 prevê `error.code`, `error.message` e opcionalmente `error.data.error_string`. A terceira revisão desta branch distingue erro de envelope de recusa RPC e apresenta **apenas código e mensagem curta** da recusa pelo terminal, sem imprimir URL de magnet nem repetir pedido mutante. Preserva os códigos de saída e a UI atual do Android; **não resolve ainda a causa da rejeição**. Próximo passo: testar a CLI da branch diretamente no Fedora com o mesmo magnet, capturar a mensagem específica e então decidir se há necessidade de uma terceira alteração funcional. Nada foi instalado, reiniciado ou mesclado nesta revisão de diagnóstico.
+
+---
+
 ## Encerramento — aceite físico do proprietário (16/10/2026)
 
 **MYCT-5C ACEITA no Fedora 44 e Moto G06.** PR [#17](https://github.com/Samuel-Francisco-AS/My-CT/pull/17), candidata final **0.5.4-torrents / code 11**. Este fechamento é posterior às seções históricas abaixo e substitui qualquer anotação anterior de "teste pendente". **Merge realizado:** [PR #17](https://github.com/Samuel-Francisco-AS/My-CT/pull/17) integrado à `main` em `30d909be5c4ba17dbf46c2008c42448c3c08b9c9`. As branches de trabalho podem ser removidas pelo proprietário após sincronizar o Fedora, conforme bloco Git fornecido. A exclusão das branches não remove arquivos, serviço, seeding, hook ou registros do Transmission.
