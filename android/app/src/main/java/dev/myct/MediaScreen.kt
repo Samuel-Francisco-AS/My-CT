@@ -22,9 +22,13 @@ internal fun MediaScreen(model: MediaModel, modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(mode == 0, { mode = 0 }, label = { Text("Organizar manualmente") })
             FilterChip(mode == 1, { mode = 1 }, label = { Text("Reconhecimento automático") })
+            FilterChip(mode == 2, { mode = 2 }, label = { Text("Armazenamento") })
         }
-        if (mode == 0) MediaBatchScreen(model, Modifier.weight(1f))
-        else MediaAutomaticScreen(model, Modifier.weight(1f))
+        when (mode) {
+            0 -> MediaBatchScreen(model, Modifier.weight(1f))
+            1 -> MediaAutomaticScreen(model, Modifier.weight(1f))
+            else -> MediaStorageScreen(model, Modifier.weight(1f))
+        }
     }
 }
 
