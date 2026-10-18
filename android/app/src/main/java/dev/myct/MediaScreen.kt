@@ -15,6 +15,19 @@ import androidx.compose.ui.unit.dp
 /** Hybrid workflow: explicit bulk confirmation, ambiguous files require named approval. */
 @Composable
 internal fun MediaScreen(model: MediaModel, modifier: Modifier = Modifier) {
+    var mode by remember { mutableIntStateOf(0) }
+    Column(modifier) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            FilterChip(mode == 0, { mode = 0 }, label = { Text("Organizar manualmente") })
+            FilterChip(mode == 1, { mode = 1 }, label = { Text("Reconhecimento automático") })
+        }
+        if (mode == 0) MediaBatchScreen(model, Modifier.weight(1f))
+        else MediaAutomaticScreen(model, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun MediaAutomaticScreen(model: MediaModel, modifier: Modifier = Modifier) {
     var bulkConfirmation by remember { mutableStateOf(false) }
     var pendingApproval by remember { mutableStateOf<MediaPending?>(null) }
     var pendingRemoval by remember { mutableStateOf<MediaEntry?>(null) }
