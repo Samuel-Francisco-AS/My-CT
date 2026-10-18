@@ -95,13 +95,38 @@ class TorrentTest(unittest.TestCase):
             self.assertEqual(['urn:btih:' + HASH], no_trackers['xt'])
             self.assertNotIn('tr', no_trackers)
 
-    def test_private_dns_answers_and_other_resolver_errors_stay_rejected(self):
-        tracker = 'udp://private.example:6969/announce'
-        raw = 'magnet:?' + urlencode([('xt', 'urn:btih:' + HASH), ('tr', tracker)])
-        answer = [(socket.AF_INET, socket.SOCK_DGRAM, 17, '', ('192.168.0.1', 6969))]
-        with patch.object(torrent.socket, 'getaddrinfo', return_value=answer):
+    def test_nonpublic_dns_answer_is_filtered_without_forwarding_to_rpc(self):
+        good = 'udp://public.example:6969/announce'
+        private = 'udp://parked.example:6969/announce'
+        raw = 'magnet:?' + urlencode([
+            ('xt', 'urn:btih:' + HASH), ('tr', good), ('tr', private)])
+        public_ip = (socket.AF_INET, socket.SOCK_DGRAM, 17, '', ('8.8.8.8', 6969))
+        private_ip = (socket.AF_INET, socket.SOCK_DGRAM, 17, '', ('192.168.0.1', 6969))
+
+        def dns(host, port, type):
+            return [private_ip] if host == 'parked.example' else [public_ip]
+
+        with patch.object(torrent.socket, 'getaddrinfo', side_effect=dns):
+            cleaned = torrent.magnet(raw)
+            self.assertEqual([good], parse_qs(urlsplit(cleaned).query)['tr'])
+            with tempfile.TemporaryDirectory() as home, patch.object(torrent.Path, 'home', return_value=Path(home)):
+                rpc = FakeRpc(torrent.destination())
+                self.assertTrue(torrent.run(['add', raw], rpc)['duplicate'])
+                self.assertEqual(cleaned, rpc.calls[0][1]['filename'])
+            # All unavailable after DNS resolution: the remaining magnet still carries xt.
+            only_private = MAGNET + '&tr=' + urlencode({'tr': private})[3:]
+            self.assertNotIn('tr', parse_qs(urlsplit(torrent.magnet(only_private)).query))
+            # A mixed public/private answer for the same hostname is also discarded.
+            with patch.object(torrent.socket, 'getaddrinfo', return_value=[public_ip, private_ip]):
+                self.assertNotIn('tr', parse_qs(urlsplit(torrent.magnet(only_private)).query))
+
+    def test_private_literal_trackers_and_non_dns_resolver_errors_stay_rejected(self):
+        for hostname in ('127.0.0.1', '192.168.0.1', '[::1]', '169.254.0.1'):
+            raw = MAGNET + '&tr=' + urlencode({'tr': 'udp://' + hostname + ':6969/announce'})[3:]
             with self.assertRaisesRegex(torrent.Failure, 'endereço público'):
                 torrent.magnet(raw)
+        tracker = 'udp://public.example:6969/announce'
+        raw = MAGNET + '&tr=' + urlencode({'tr': tracker})[3:]
         with patch.object(torrent.socket, 'getaddrinfo', side_effect=OSError('resolver I/O error')):
             with self.assertRaisesRegex(torrent.Failure, 'Falha de rede'):
                 torrent.magnet(raw)
