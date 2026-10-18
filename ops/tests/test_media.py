@@ -38,6 +38,29 @@ class MyCtMediaTest(unittest.TestCase):
         self.assertIsNone(media.classify('1XBET.COM_promo_SHREK_dinheiro_livre.mp4'))
         self.assertIsNone(media.classify('Foo.S01E02E03.mkv'))
 
+    def test_frieren_fansub_maps_to_existing_library_without_replacing_episodes(self):
+        home = self.setup_home()
+        sample = '[CR] Sousou no Frieren - 01 [720p][Multi-Audio][Multi-Subs][90BE6BB0].mkv'
+        self.assertEqual(
+            {'kind': 'series', 'title': 'Frieren Beyond Journeys End', 'season': 1, 'episode': 1},
+            media.classify(sample))
+        self.assertIsNone(media.classify('[ZZ] Unknown Series - 01 [720p][Multi-Subs].mkv'))
+        names = [f'[CR] Sousou no Frieren - {n:02d} [720p][Multi-Audio][Multi-Subs][90BE6BB0].mkv'
+                 for n in range(1, 29)]
+        rows = make_torrent(home, names)
+        target = home / 'Media/Series/Frieren Beyond Journeys End (2023)/Season 01'
+        target.mkdir(parents=True)
+        for n in (1, 2):
+            (target / f'Frieren Beyond Journeys End S01E{n:02d}.mkv').write_bytes(b'previous version')
+        report = media.run(['scan'], rows)
+        self.assertEqual(26, len(report['added']))
+        self.assertEqual(2, len(report['pending']))
+        self.assertTrue(all('Destino já existe' in x['reason'] for x in report['pending']))
+        self.assertTrue(all(x['target'].startswith('Series/Frieren Beyond Journeys End (2023)/Season 01/')
+                            for x in report['added']))
+        self.assertEqual(b'previous version',
+                         (target / 'Frieren Beyond Journeys End S01E01.mkv').read_bytes())
+
     def test_preview_is_read_only_and_incomplete_not_imported(self):
         home = self.setup_home()
         rows = make_torrent(home, ['Frieren.Beyond.Journeys.End.S01E01.1080p.mkv'], complete=False)
