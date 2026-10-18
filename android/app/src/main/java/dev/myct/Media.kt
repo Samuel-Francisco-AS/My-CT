@@ -86,7 +86,7 @@ internal fun mediaCommand(action: MediaAction): String {
             "approve ${id(action.id)} movie ${title(action.title)} ${action.year}"
         }
     }
-    return "if [ -x \"\\$HOME/.local/bin/myct-media\" ]; then exec \"\\$HOME/.local/bin/myct-media\" $arguments; else exit 127; fi"
+    return "if [ -x \"\$HOME/.local/bin/myct-media\" ]; then exec \"\$HOME/.local/bin/myct-media\" $arguments; else exit 127; fi"
 }
 
 internal fun executeMedia(action: MediaAction, open: () -> DownloadExec): String =
