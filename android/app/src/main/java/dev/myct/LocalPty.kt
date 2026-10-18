@@ -11,7 +11,7 @@ internal interface PtyProcess : AutoCloseable {
 
 internal object NativePty {
     init { System.loadLibrary("myct-pty") }
-    external fun open(directory: String): Long
+    external fun open(directory: String, startupFile: String): Long
     external fun read(handle: Long, bytes: ByteArray): Int
     external fun write(handle: Long, bytes: ByteArray, count: Int)
     external fun resize(handle: Long, columns: Int, rows: Int, width: Int, height: Int)
@@ -20,8 +20,8 @@ internal object NativePty {
     external fun release(handle: Long)
 }
 
-internal class AndroidPty(directory: String) : PtyProcess {
-    private val handle = NativePty.open(directory)
+internal class AndroidPty(directory: String, startupFile: String) : PtyProcess {
+    private val handle = NativePty.open(directory, startupFile)
     override fun read(bytes: ByteArray) = NativePty.read(handle, bytes)
     override fun write(bytes: ByteArray, count: Int) = NativePty.write(handle, bytes, count)
     override fun resize(columns: Int, rows: Int, width: Int, height: Int) = NativePty.resize(handle, columns, rows, width, height)

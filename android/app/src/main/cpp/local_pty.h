@@ -8,7 +8,7 @@
 // Independent of JNI so the actual PTY lifecycle can also be exercised on Linux.
 class LocalPty final {
 public:
-    LocalPty(const std::string& shell, const std::string& cwd);
+    LocalPty(const std::string& shell, const std::string& cwd, const std::string& startupFile = "");
     ~LocalPty();
     LocalPty(const LocalPty&) = delete;
     LocalPty& operator=(const LocalPty&) = delete;

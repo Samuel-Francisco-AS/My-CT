@@ -19,7 +19,7 @@ public:
     std::condition_variable changed;
     std::string output;
     std::thread reader;
-    explicit Terminal(const std::string& cwd) : pty("/bin/sh", cwd), reader([this] {
+    explicit Terminal(const std::string& cwd, const std::string& startupFile = "") : pty("/bin/sh", cwd, startupFile), reader([this] {
         char bytes[8192];
         for (;;) {
             int count = pty.readBytes(bytes, sizeof(bytes));
@@ -48,15 +48,18 @@ int main() {
     assert(!root.empty());
     std::filesystem::create_directory(root + "/ProjetoTeste");
     std::ofstream(root + "/ProjetoTeste/teste.c") << "MYCT_FILE_CONTENT\n";
+    const auto startup = root + "/shell init.rc";
+    std::ofstream(startup) << "PS1='My-CT> '\nexport PS1\n";
     const auto fdCount = [] { return std::distance(std::filesystem::directory_iterator("/proc/self/fd"), std::filesystem::directory_iterator()); };
     auto before = fdCount();
     {
         int inherited = open((root + "/ProjetoTeste/teste.c").c_str(), O_RDONLY);
         assert(inherited >= 0);
         assert(dup2(inherited, 200) == 200); close(inherited); // Deliberately lacks CLOEXEC.
-        Terminal local(root), remote(root); // Independent actual PTYs, no network or Fedora service.
+        Terminal local(root, startup), remote(root); // Independent actual PTYs, no network or Fedora service.
         close(200);
         local.expect("My-CT> ");
+        local.send("printf 'ENV_LOADED:%s\\n' \"$PS1\"\n"); local.expect("ENV_LOADED:My-CT> \r\n");
         local.send("test ! -e /proc/$$/fd/200 && echo NO_APP_FD\n"); local.expect("NO_APP_FD\r\n");
         local.send("test -t 0 && test -t 1 && test -t 2 && echo REAL_TTY; pwd; echo $HOME; echo $TERM; echo $PATH\n");
         local.expect("REAL_TTY\r\n"); local.expect(root + "\r\n"); local.expect("xterm-256color\r\n");

@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
 /** Run on Android explicitly; compilation alone is never recorded as a device pass. */
 class LocalPtyInstrumentedTest {
     private class Harness(directory: String) : AutoCloseable {
-        val child = AndroidPty(directory) // Also verifies System.loadLibrary + JNI symbols on this ABI.
+        val child = AndroidPty(directory, localShellStartup(File(directory)).absolutePath) // Real startup + JNI on this ABI.
         val executor = Executors.newSingleThreadExecutor()
         private val output = StringBuffer()
         private val reader = executor.submit {
@@ -43,6 +43,7 @@ class LocalPtyInstrumentedTest {
             File(root, "ProjetoTeste/teste.c").writeText("ANDROID_IDE_FILE\n")
             Harness(root.absolutePath).use { t ->
                 t.expect("My-CT> ")
+                t.send("printf 'ENV_LOADED:%s\\n' \"\$PS1\"\n"); t.expect("ENV_LOADED:My-CT> \r\n")
                 t.send("test -t 0 && test -t 1 && test -t 2 && echo REAL_ANDROID_TTY; pwd; echo \$HOME; echo \$TERM; echo \$PATH\n")
                 t.expect("REAL_ANDROID_TTY\r\n"); t.expect(root.absolutePath + "\r\n")
                 t.expect("xterm-256color\r\n"); t.expect("/system/bin:/system/xbin\r\n")
@@ -80,7 +81,7 @@ class LocalPtyInstrumentedTest {
             Harness(root.absolutePath).use { it.child.stop(); it.child.waitForExit() }
             val before = File("/proc/self/fd").list()!!.size
             repeat(8) {
-                try { AndroidPty(File(root, "missing").absolutePath).close(); fail("Expected chdir failure") }
+                try { AndroidPty(File(root, "missing").absolutePath, localShellStartup(root).absolutePath).close(); fail("Expected chdir failure") }
                 catch (_: IOException) { /* JNI reports child setup failure. */ }
             }
             assertEquals(before, File("/proc/self/fd").list()!!.size)

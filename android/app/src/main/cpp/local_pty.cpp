@@ -32,7 +32,7 @@ void closeOtherFds(int keep, long maxFd) {
 }
 }
 
-LocalPty::LocalPty(const std::string& shell, const std::string& cwd) {
+LocalPty::LocalPty(const std::string& shell, const std::string& cwd, const std::string& startupFile) {
     int slave = -1, errorPipe[2] = {-1, -1};
     try {
         winsize size{24, 80, 0, 0};
@@ -60,8 +60,10 @@ LocalPty::LocalPty(const std::string& shell, const std::string& cwd) {
         char term[] = "TERM=xterm-256color";
         char path[] = "PATH=/system/bin:/system/xbin";
         char lang[] = "LANG=C.UTF-8";
-        char prompt[] = "PS1=My-CT> "; // The interactive shell renders each prompt; cwd stays real.
-        char* env[] = {home.data(), term, path, lang, prompt, nullptr};
+        // mksh reads ENV instead of its default mkshrc; our file sources that first.
+        // Prepare storage before fork; only the shell reads/executes the startup file.
+        std::string startup = "ENV=" + startupFile;
+        char* env[] = {home.data(), term, path, lang, startup.data(), nullptr};
         char interactive[] = "-i";
         char* args[] = {const_cast<char*>(shell.c_str()), interactive, nullptr};
         struct sigaction action{};

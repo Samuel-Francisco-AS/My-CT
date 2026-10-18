@@ -22,13 +22,17 @@ void failure(JNIEnv* env, const std::exception& error) {
 }
 }
 
-extern "C" JNIEXPORT jlong JNICALL Java_dev_myct_NativePty_open(JNIEnv* env, jobject, jstring directory) {
+extern "C" JNIEXPORT jlong JNICALL Java_dev_myct_NativePty_open(JNIEnv* env, jobject, jstring directory, jstring startupFile) {
     const char* value = env->GetStringUTFChars(directory, nullptr);
     if (!value) return 0;
     std::string cwd(value);
     env->ReleaseStringUTFChars(directory, value);
+    const char* startupValue = env->GetStringUTFChars(startupFile, nullptr);
+    if (!startupValue) return 0;
+    std::string startup(startupValue);
+    env->ReleaseStringUTFChars(startupFile, startupValue);
     try {
-        auto pty = std::make_shared<LocalPty>("/system/bin/sh", cwd);
+        auto pty = std::make_shared<LocalPty>("/system/bin/sh", cwd, startup);
         std::lock_guard<std::mutex> lock(registryMutex);
         jlong id = nextId++;
         sessions.emplace(id, std::move(pty));
