@@ -381,3 +381,19 @@ segue a URI retornada; pasta com documento descendente aberto exige fechá-lo
 antes. Sem MANAGE_EXTERNAL_STORAGE, tradução URI→POSIX, root, distribuição,
 serviço ou mudança Fedora. Gate real Moto/Termux pendente, sem merge autorizado.
 [Implementação, limites e provas](MYCT-L1D-RELATORIO.md).
+
+## 19/10/2026 — MYCT-C1B-1: pacote inteiro, catálogo complementar e nenhuma exclusão
+
+Recorte solicitado pelo proprietário após aceite/merge C1A (#47): entregar
+archive/restore de torrent completo e preparar seeding, mantendo liberação do
+SSD separada para C1B-2. Escolhido `myct-archive-torrent`, reutilizando funções
+C1A/RPC/Media, com catálogo próprio para não mudar a validação/formato v1 aceito
+de arquivos comuns. Manifesto + `.torrent` original preservam extras e permitem
+reimportar sem a entrada atual do daemon; nada depende apenas de magnet ou da
+lista de vídeos Jellyfin. Sem serviço/banco/dependência nova.
+
+Restauração é nova árvore; recuperação aponta por move:false, verifica os dados
+e exige transição de verificação observada antes de permitir start explícito.
+Não substituir hardlinks nem limpar dados; dados pré-existentes permanecem.
+96 testes simulados aprovados; gate real e auditoria Luna pendentes. Detalhes e
+limitações em [MYCT-C1B-1](MYCT-C1B-1-RELATORIO.md).

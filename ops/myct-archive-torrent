@@ -1,0 +1,750 @@
+#!/usr/bin/python3
+"""Explicit, non-destructive torrent round trips; no cleanup or background work."""
+import base64
+from collections import Counter
+from contextlib import contextmanager
+import fcntl
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import signal
+import stat
+import sys
+import tempfile
+import time
+
+
+def load(name):
+    path = Path(__file__).with_name(name)
+    if not path.is_file() or path.is_symlink():
+        raise RuntimeError('Instale os helpers complementares no mesmo diretório.')
+    loader = importlib.machinery.SourceFileLoader('archive_torrent_' + name.replace('-', '_'), str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+try:
+    common = load('myct-archive')
+    torrent = load('myct-torrent')
+    cleanup = load('myct-media-cleanup')
+except Exception:
+    if __name__ != '__main__':
+        raise
+    print(json.dumps({'ok': False, 'state': 'blocked', 'error': {'code': 'DEPENDENCIES',
+                     'message': 'Instale myct-archive, myct-torrent, myct-media e myct-media-cleanup junto deste helper.'}}))
+    sys.exit(2)
+media = cleanup.core
+Failure = common.Failure
+# Private copy of the C1A module: reuse lock/atomic writes, never its v1 catalog.
+common.state_dir = lambda: Path.home() / '.local/share/myct/archive-torrents'
+MAX_FILES = 1000
+MAX_META = 4 * 1024 * 1024
+FIELDS = list(dict.fromkeys(torrent.FIELDS + [
+    'files', 'file_stats', 'torrent_file', 'have_valid', 'have_unchecked',
+    'percent_complete', 'recheck_progress']))
+
+
+def need(condition, code, message):
+    if not condition:
+        raise Failure(code, message)
+
+
+def hash_key(value):
+    need(isinstance(value, str) and re.fullmatch('[a-fA-F0-9]{40}', value),
+         'HASH', 'Use o infohash v1 completo, com 40 caracteres hexadecimais.')
+    return value.lower()
+
+
+def relative(value):
+    need(isinstance(value, str) and len(value.encode('utf-8')) <= 4096
+         and all(common.component(p) for p in value.split('/')),
+         'UNSAFE_PATH', 'Caminho relativo inválido no pacote.')
+    return value
+
+
+def encoded(value):
+    return json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(',', ':')).encode()
+
+
+def hashes(raw):
+    return {'size': len(raw), 'md5': hashlib.md5(raw, usedforsecurity=False).hexdigest(),
+            'sha256': hashlib.sha256(raw).hexdigest()}
+
+
+def metainfo(raw, key, verify_root=None):
+    """Read bounded bencoded metadata, retaining the exact info bytes for SHA1.
+
+    No peer/tracker protocol, torrent creation or re-encoding of original metadata.
+    Renamed paths, hybrid/v2 and special/padding files are intentionally refused.
+    """
+    need(0 < len(raw) <= MAX_META, 'META', 'Metadados ausentes ou maiores que 4 MiB.')
+    pos, info_span = 0, None
+
+    def parse(depth=0):
+        nonlocal pos, info_span
+        if depth > 32 or pos >= len(raw):
+            raise ValueError()
+        start = pos
+        token = raw[pos:pos + 1]
+        pos += 1
+        if token == b'i':
+            end = raw.index(b'e', pos)
+            value = raw[pos:end]
+            if not re.fullmatch(b'(?:0|-[1-9][0-9]*|[1-9][0-9]*)', value):
+                raise ValueError()
+            pos = end + 1
+            return int(value)
+        if token in (b'l', b'd'):
+            result = [] if token == b'l' else {}
+            while raw[pos:pos + 1] != b'e':
+                if isinstance(result, list):
+                    result.append(parse(depth + 1))
+                else:
+                    name = parse(depth + 1)
+                    if not isinstance(name, bytes) or name in result:
+                        raise ValueError()
+                    begin = pos
+                    result[name] = parse(depth + 1)
+                    if depth == 0 and name == b'info':
+                        info_span = (begin, pos)
+            pos += 1
+            return result
+        colon = raw.index(b':', start)
+        length = raw[start:colon]
+        if not re.fullmatch(b'(?:0|[1-9][0-9]*)', length):
+            raise ValueError()
+        end = colon + 1 + int(length)
+        if end > len(raw):
+            raise ValueError()
+        pos = end
+        return raw[colon + 1:end]
+
+    try:
+        root = parse()
+        if pos != len(raw) or info_span is None:
+            raise ValueError()
+        info = root[b'info']
+        need(hashlib.sha1(raw[slice(*info_span)], usedforsecurity=False).hexdigest() == key,
+             'META', 'O .torrent não corresponde ao infohash solicitado.')
+        if b'meta version' in info or b'attr' in info:
+            raise ValueError()
+        name = info.get(b'name.utf-8', info[b'name']).decode('utf-8')
+        if not common.component(name):
+            raise ValueError()
+        pieces, piece_size = info[b'pieces'], info[b'piece length']
+        if type(piece_size) is not int or piece_size <= 0 or not isinstance(pieces, bytes):
+            raise ValueError()
+        if b'files' in info:
+            files = []
+            for row in info[b'files']:
+                if b'attr' in row or b'symlink path' in row:
+                    raise ValueError()
+                parts = row.get(b'path.utf-8', row[b'path'])
+                if not isinstance(parts, list) or not parts:
+                    raise ValueError()
+                path = [name] + [p.decode('utf-8') for p in parts]
+                if not all(common.component(p) for p in path):
+                    raise ValueError()
+                files.append({'path': relative('/'.join(path)), 'size': row[b'length']})
+        else:
+            files = [{'path': name, 'size': info[b'length']}]
+        if not 1 <= len(files) <= MAX_FILES or any(type(f['size']) is not int or f['size'] < 0 for f in files):
+            raise ValueError()
+        if len({f['path'] for f in files}) != len(files):
+            raise ValueError()
+        total = sum(f['size'] for f in files)
+        if total <= 0 or len(pieces) != 20 * ((total + piece_size - 1) // piece_size):
+            raise ValueError()
+        if verify_root is not None:
+            # Local checksum validation only, not a peer/tracker implementation.
+            digest = hashlib.sha1(usedforsecurity=False)
+            used, index = 0, 0
+            for item in files:
+                path = common.safe_path(verify_root / item['path'])
+                fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+                with os.fdopen(fd, 'rb') as stream:
+                    need(stat.S_ISREG(os.fstat(stream.fileno()).st_mode), 'UNSAFE_PATH', 'Arquivo especial recusado.')
+                    while block := stream.read(min(1024 * 1024, piece_size - used)):
+                        digest.update(block); used += len(block)
+                        if used == piece_size:
+                            need(digest.digest() == pieces[index * 20:(index + 1) * 20], 'PIECES', 'Dados divergem das peças do .torrent.')
+                            index += 1; used = 0; digest = hashlib.sha1(usedforsecurity=False)
+            if used:
+                need(digest.digest() == pieces[index * 20:(index + 1) * 20], 'PIECES', 'Dados divergem das peças do .torrent.')
+                index += 1
+            need(index * 20 == len(pieces), 'PIECES', 'Dados insuficientes para as peças do .torrent.')
+        return files
+    except (ValueError, TypeError, KeyError, IndexError, AttributeError, UnicodeError, RecursionError):
+        raise Failure('META', 'Metadados v1 inválidos, especiais ou incompatíveis com esta etapa.') from None
+
+
+class Rpc:
+    def __init__(self, inner=None):
+        self.inner = inner if inner is not None else torrent.Rpc()
+
+    def call(self, method, params):
+        try:
+            return self.inner.call(method, params)
+        except Exception:
+            raise Failure('RPC', 'Falha no RPC Transmission; consulte o estado antes de repetir.') from None
+
+
+def get_torrent(rpc, key, optional=False):
+    rows = rpc.call('torrent_get', {'ids': [key], 'fields': FIELDS}).get('torrents')
+    need(isinstance(rows, list) and len(rows) <= 1, 'RPC', 'Resposta de torrent ambígua.')
+    if optional and not rows:
+        return None
+    need(len(rows) == 1 and rows[0].get('hash_string', '').lower() == key,
+         'NOT_FOUND', 'Torrent não encontrado pelo infohash.')
+    return rows[0]
+
+
+def tree(root):
+    common.safe_path(root)
+    need(root.is_dir(), 'MISSING', 'Diretório de dados ausente.')
+    files, directories = {}, []
+    for folder, dirs, names in os.walk(root, followlinks=False):
+        for name in dirs + names:
+            path = Path(folder) / name
+            rel = relative(path.relative_to(root).as_posix())
+            common.safe_path(path)
+            mode = path.lstat().st_mode
+            need(stat.S_ISREG(mode) or stat.S_ISDIR(mode), 'UNSAFE_PATH', 'Arquivo especial ou link recusado.')
+            if stat.S_ISDIR(mode):
+                directories.append(rel)
+            else:
+                files[rel] = path
+        need(len(files) <= MAX_FILES and len(directories) <= MAX_FILES,
+             'LIMIT', 'Pacote excede 1000 arquivos ou diretórios.')
+    return dict(sorted(files.items())), sorted(directories)
+
+
+def complete(row):
+    files = row.get('files', [])
+    return (row.get('metadata_percent_complete') == 1 and row.get('percent_complete') == 1
+            and row.get('left_until_done') == 0 and row.get('error') == 0
+            and row.get('have_valid') == row.get('total_size') and row.get('have_unchecked') == 0
+            and bool(files) and all(f.get('bytes_completed') == f.get('length') for f in files))
+
+
+def inspect(key, rpc):
+    row = get_torrent(rpc, key)
+    need(type(row.get('status')) is int and row['status'] in range(7), 'RPC', 'Estado Transmission inválido.')
+    managed = torrent.records(rpc, [key])
+    need(len(managed) == 1 and managed[0]['download_dir'] == row.get('download_dir'),
+         'UNMANAGED', 'Somente diretórios gerenciados pelo My-CT são aceitos nesta etapa.')
+    base = common.safe_path(Path(row['download_dir']))
+    need(base.parent == torrent.destination(), 'UNMANAGED', 'Diretório não isolado do My-CT.')
+    blockers = []
+    files, directories = {}, []
+    try:
+        files, directories = tree(base)
+    except (Failure, OSError):
+        blockers.append('Árvore ausente, insegura, especial ou acima do limite.')
+    expected = row.get('files')
+    stats = row.get('file_stats')
+    need(isinstance(expected, list) and 1 <= len(expected) <= MAX_FILES
+         and isinstance(stats, list) and len(stats) == len(expected), 'RPC', 'Inventário RPC incompleto.')
+    inventory = []
+    for index, (item, fs) in enumerate(zip(expected, stats)):
+        path = relative(item['name'])
+        need(type(item.get('length')) is int and item['length'] >= 0
+             and type(fs.get('wanted')) is bool and fs.get('priority') in (-1, 0, 1), 'RPC', 'Arquivo RPC inválido.')
+        inventory.append({'path': path, 'size': item['length'], 'completed': item.get('bytes_completed'),
+                          'wanted': fs['wanted'], 'priority': fs['priority'], 'index': index})
+        if path not in files or files[path].stat().st_size != item['length']:
+            blockers.append('Arquivo ausente ou com tamanho divergente: ' + path)
+    if not complete(row) or row['status'] in (1, 2, 3, 4):
+        blockers.append('Torrent inteiro ainda não comprovado completo, íntegro e fora de verificação/download.')
+    metadata = {'available': False}
+    try:
+        path = common.safe_path(Path(row['torrent_file']))
+        need(path.parent == Path.home() / '.config/myct-transmission/torrents', 'META', 'Metadados fora do cache dedicado.')
+        need(path.stat().st_size <= MAX_META, 'META', 'Metadados excessivos.')
+        raw = path.read_bytes()
+        layout = metainfo(raw, key)
+        need(layout == [{'path': f['path'], 'size': f['size']} for f in inventory],
+             'META', 'Caminhos renomeados ou estrutura RPC divergente do .torrent original.')
+        metadata = {'available': True, 'path': str(path), **hashes(raw)}
+    except (Failure, OSError, KeyError, TypeError):
+        blockers.append('Sem .torrent v1 recuperável e correspondente à árvore original.')
+    links, outside = [], []
+    try:
+        snapshot = cleanup.snapshot([row], media.load_state())
+        local_counts = Counter((p.stat().st_dev, p.stat().st_ino) for p in files.values())
+        for item in snapshot['files']:
+            if item['eligible'] and item['torrent'] == key:
+                links.append({'source': item['source_id'].split(':', 1)[1], 'path': item['path'], 'managed': item['managed']})
+        for path, file in files.items():
+            st = file.stat()
+            known = sum((media.media_root() / link['path']).stat().st_ino == st.st_ino
+                        and (media.media_root() / link['path']).stat().st_dev == st.st_dev for link in links)
+            count = st.st_nlink - local_counts[(st.st_dev, st.st_ino)] - known
+            if count > 0:
+                outside.append({'source': path, 'possible_external_links': count})
+    except (media.MediaError, OSError, ValueError, KeyError, TypeError):
+        blockers.append('Não foi possível inventariar os vínculos da biblioteca com segurança.')
+    extra = sorted(set(files) - {f['path'] for f in inventory})
+    total_size = sum(p.stat().st_size for p in files.values())
+    minimum = total_size + metadata.get('size', 0)
+    restore_blockers = [] if metadata['available'] else ['Sem metadados recuperáveis.']
+    if base.parent.exists() and shutil.disk_usage(base.parent).free < minimum:
+        restore_blockers.append('SSD insuficiente para uma segunda árvore completa; manifesto/overhead ainda adicionais.')
+    return {'infohash': key, 'name': row['name'], 'status': row['status'], 'paused': row['status'] == 0,
+            'torrent_state': ['paused', 'verify_queued', 'verifying', 'download_queued', 'downloading', 'seed_queued', 'seeding'][row['status']],
+            'download_dir': str(base), 'complete': complete(row), 'torrent_files': inventory,
+            'files': [{'path': path, 'size': p.stat().st_size} for path, p in files.items()],
+            'extra_files': extra, 'directories': directories, 'metainfo': metadata,
+            'library_links': links, 'external_links': outside,
+            'total_size': total_size, 'storage_bytes_minimum': minimum, 'restore_blockers': restore_blockers,
+            'blockers': blockers, 'can_archive': not blockers}
+
+
+def digest_tree(root):
+    paths, directories = tree(root)
+    files, snapshots = [], {}
+    for path, file in paths.items():
+        value, snapshot = common.fingerprint(file)
+        files.append({'path': path, **value})
+        snapshots[path] = snapshot
+    return files, directories, snapshots
+
+
+def archive_id(remote, manifest):
+    return hashlib.sha256(encoded([remote, manifest['infohash'], manifest['files'], manifest['metainfo']])).hexdigest()
+
+
+def validate_manifest(mf):
+    need(isinstance(mf, dict) and mf.get('version') == 1 and mf.get('kind') == 'torrent', 'MANIFEST', 'Manifesto incompatível.')
+    need(hash_key(mf['infohash']) == mf['infohash'], 'MANIFEST', 'Infohash deve estar normalizado.')
+    need(isinstance(mf['name'], str) and Path(mf['original_download_dir']).is_absolute(), 'MANIFEST', 'Origem inválida.')
+    need(mf['original_status'] in range(7) and isinstance(mf['files'], list) and 1 <= len(mf['files']) <= MAX_FILES,
+         'MANIFEST', 'Inventário inválido.')
+    seen = set()
+    for item in mf['files'] + [mf['metainfo']]:
+        need(type(item['size']) is int and item['size'] >= 0
+             and re.fullmatch('[0-9a-f]{32}', item['md5']) and re.fullmatch('[0-9a-f]{64}', item['sha256']),
+             'MANIFEST', 'Hashes/tamanho inválidos.')
+    for item in mf['files']:
+        path = relative(item['path'])
+        need(path not in seen, 'MANIFEST', 'Arquivo duplicado no manifesto.')
+        seen.add(path)
+    for path in seen:
+        need(not any(str(p) in seen for p in Path(path).parents if str(p) != '.'), 'MANIFEST', 'Árvore ambígua.')
+    need(isinstance(mf['directories'], list) and len(mf['directories']) <= MAX_FILES, 'MANIFEST', 'Diretórios inválidos.')
+    for path in mf['directories']:
+        need(relative(path) not in seen and not any(str(p) in seen for p in Path(path).parents),
+             'MANIFEST', 'Diretório conflitante.')
+    need(mf['total_size'] == sum(f['size'] for f in mf['files']), 'MANIFEST', 'Tamanho total inválido.')
+    need(0 < mf['metainfo']['size'] <= MAX_META and isinstance(mf['torrent_files'], list)
+         and 1 <= len(mf['torrent_files']) <= MAX_FILES, 'MANIFEST', 'Metadados de recuperação inválidos.')
+    by_path = {f['path']: f for f in mf['files']}
+    indices = set()
+    for index, item in enumerate(mf['torrent_files']):
+        path = relative(item['path'])
+        need(path in by_path and path not in indices and item['size'] == by_path[path]['size']
+             and item['index'] == index and type(item['wanted']) is bool and item['priority'] in (-1, 0, 1),
+             'MANIFEST', 'Seleção/estrutura de arquivos inválida.')
+        indices.add(path)
+    for link in mf['library_links']:
+        need(relative(link['source']) in seen, 'MANIFEST', 'Link sem origem preservada.')
+        media.safe_relative(link['path'])
+    return mf
+
+
+def load_catalog():
+    path = common.state_dir() / 'catalog.json'
+    if not path.exists() and not path.is_symlink():
+        return {'version': 1, 'entries': {}}
+    common.private_file(path)
+    try:
+        data = json.loads(path.read_text())
+        need(data['version'] == 1 and isinstance(data['entries'], dict), 'CATALOG', 'Catálogo incompatível.')
+        for key, row in data['entries'].items():
+            mf = validate_manifest(row['manifest'])
+            remote = common.remote_name(row['remote'])
+            need(key == row['id'] == archive_id(remote, mf) and type(row['remote_reserved']) is bool
+                 and row['state'] in {'pending', 'verified', 'failed'},
+                 'CATALOG', 'Registro incompatível.')
+        return data
+    except (Failure, ValueError, KeyError, TypeError, AttributeError, media.MediaError):
+        raise Failure('CATALOG', 'Catálogo torrent inválido; preserve os registros.') from None
+
+
+def bundle(row):
+    return common.private_dir(common.state_dir() / 'bundles' / row['id'])
+
+
+def write_once(path, raw):
+    common.safe_path(path)
+    if path.exists():
+        common.private_file(path)
+        need(path.read_bytes() == raw, 'DEST_EXISTS', 'Metadados locais existentes divergem; nenhuma sobrescrita.')
+    else:
+        with path.open('xb') as stream:
+            os.fchmod(stream.fileno(), 0o600)
+            stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+
+
+def remote_folder(row):
+    return row['remote'] + 'My-CT-Archive/torrents/' + row['id']
+
+
+def objects(row):
+    return {**{'data/' + f['path']: f for f in row['manifest']['files']},
+            'original.torrent': row['manifest']['metainfo'], 'manifest.json': hashes(encoded(row['manifest']))}
+
+
+def remote_objects(row, partial=False, new=False):
+    # Parent listing also detects duplicate ID directories allowed by Google Drive.
+    parent = common.remote_json('lsjson', row['remote'] + 'My-CT-Archive/torrents', '--dirs-only')
+    need(isinstance(parent, list) and all(isinstance(p, dict) for p in parent),
+         'REMOTE_COLLISION', 'Pasta remota ambígua.')
+    matches = [p for p in parent if p.get('Name') == row['id'] or p.get('Path') == row['id']]
+    need(len(matches) <= 1 and all(p.get('IsDir') is True and p.get('Path') == row['id'] for p in matches),
+         'REMOTE_COLLISION', 'ID remoto duplicado ou conflitante.')
+    need(not (new and matches), 'REMOTE_COLLISION', 'ID remoto preexistente sem registro local; não será sobrescrito.')
+    rows = common.remote_json('lsjson', remote_folder(row), '--recursive', '--hash') if matches else []
+    expected, found, paths = objects(row), set(), set()
+    allowed_dirs = {str(p) for name in expected for p in Path(name).parents if str(p) != '.'}
+    need(isinstance(rows, list) and len(rows) <= MAX_FILES * 3 + 4, 'REMOTE_COLLISION', 'Listagem remota excessiva/ambígua.')
+    for item in rows:
+        need(isinstance(item, dict), 'REMOTE_COLLISION', 'Objeto remoto inválido.')
+        path = relative(item['Path'])
+        need(path not in paths, 'REMOTE_COLLISION', 'Objetos remotos duplicados.')
+        paths.add(path)
+        if item.get('IsDir') is True:
+            need(path in allowed_dirs, 'REMOTE_COLLISION', 'Diretório remoto inesperado.')
+            continue
+        need(item.get('IsDir') is False and path in expected, 'REMOTE_COLLISION', 'Objeto remoto inesperado.')
+        value = expected[path]
+        need(type(item.get('Size')) is int and item['Size'] == value['size'], 'INTEGRITY', 'Tamanho remoto divergente.')
+        remote_hashes = item.get('Hashes')
+        md5 = remote_hashes.get('md5') if isinstance(remote_hashes, dict) else None
+        need(isinstance(md5, str) and md5, 'VERIFICATION_UNAVAILABLE', 'MD5 remoto ausente; preserve o original.')
+        need(md5.lower() == value['md5'], 'INTEGRITY', 'MD5 remoto divergente.')
+        found.add(path)
+    need(partial or found == set(expected), 'INTEGRITY', 'Arquivamento remoto incompleto.')
+    return found
+
+
+def wait_paused(rpc, key, timeout=15):
+    deadline = time.monotonic() + timeout
+    while True:
+        row = get_torrent(rpc, key)
+        if row['status'] == 0:
+            return row
+        need(time.monotonic() < deadline, 'PAUSE_TIMEOUT', 'Pausa não confirmada; nenhuma cópia autorizada.')
+        time.sleep(0.2)
+
+
+def unchanged(base, files, directories, snapshots):
+    values, dirs, current = digest_tree(base)
+    need((values, dirs, current) == (files, directories, snapshots), 'SOURCE_CHANGED', 'Árvore alterada; operação não confirmada.')
+
+
+@contextmanager
+def media_lock():
+    # Same lock/order as myct-torrent delete-data: naming first, then Media.
+    common.private_dir(media.state_path().parent)
+    path = media.state_path().with_suffix('.lock')
+    fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, 'a') as stream:
+        meta = os.fstat(stream.fileno())
+        need(stat.S_ISREG(meta.st_mode) and meta.st_uid == os.getuid() and meta.st_nlink == 1,
+             'UNSAFE_PATH', 'Lock de mídia inválido.')
+        try:
+            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise Failure('BUSY', 'Outra operação de mídia em andamento; aguarde antes de arquivar/recuperar.') from None
+        yield
+
+
+def archive(key, remote, data, rpc):
+    inventory = inspect(key, rpc)
+    need(inventory['can_archive'], 'BLOCKED', 'Arquivamento bloqueado; consulte inspect para os impedimentos.')
+    base = Path(inventory['download_dir'])
+    files, dirs, snapshots = digest_tree(base)
+    raw = Path(inventory['metainfo']['path']).read_bytes()
+    need(hashes(raw) == {k: inventory['metainfo'][k] for k in ('size', 'md5', 'sha256')}, 'SOURCE_CHANGED', 'Metadados alterados.')
+    metainfo(raw, key, base)
+    mf = {'version': 1, 'kind': 'torrent', 'infohash': key, 'name': inventory['name'],
+          'original_download_dir': str(base), 'original_status': inventory['status'],
+          'torrent_files': inventory['torrent_files'], 'files': files, 'directories': dirs,
+          'metainfo': hashes(raw), 'total_size': inventory['total_size'],
+          'library_links': inventory['library_links'], 'external_links': inventory['external_links']}
+    validate_manifest(mf)
+    identity = archive_id(remote, mf)
+    row = data['entries'].get(identity) or {'id': identity, 'remote': remote, 'manifest': mf,
+                                           'remote_reserved': False, 'created_at': common.now()}
+    # First snapshot is immutable on retries, including its original link inventory.
+    data['entries'][identity] = row
+    row.update(state='pending', error_code=None, previous_status=inventory['status'], pause_confirmed=False)
+    common.save_catalog(data)
+    try:
+        quota = common.remote_json('about', remote, '--json')
+        need(isinstance(quota, dict), 'RCLONE_RESPONSE', 'Resposta de cota inválida.')
+        common.rclone('mkdir', remote + 'My-CT-Archive/torrents')
+        found = remote_objects(row, partial=True, new=not row['remote_reserved'])
+        remaining = sum(value['size'] for path, value in objects(row).items() if path not in found)
+        if 'free' in quota:
+            need(type(quota['free']) is int and quota['free'] >= remaining,
+                 'QUOTA', 'Cota livre insuficiente para o pacote completo.')
+        row['remote_reserved'] = True; common.save_catalog(data)
+        with torrent.naming_lock(key), media_lock():
+            rpc.call('torrent_stop', {'ids': [key]})
+            paused = wait_paused(rpc, key)
+            need(paused['download_dir'] == str(base) and complete(paused), 'SOURCE_CHANGED', 'Torrent mudou antes da cópia.')
+            row['pause_confirmed'] = True; common.save_catalog(data)
+            unchanged(base, files, dirs, snapshots)
+            local = bundle(row)
+            write_once(local / 'original.torrent', raw)
+            write_once(local / 'manifest.json', encoded(row['manifest']))
+            for path in objects(row):
+                if path in found:
+                    continue
+                source = base / path[5:] if path.startswith('data/') else local / path
+                common.safe_path(source)
+                common.copy(str(source), remote_folder(row) + '/' + path)
+            unchanged(base, files, dirs, snapshots)
+            need(get_torrent(rpc, key)['status'] == 0, 'STATE_CHANGED', 'Estado do torrent mudou durante a cópia.')
+            remote_objects(row)
+            current = get_torrent(rpc, key)
+            need(current['status'] == 0 and current['download_dir'] == str(base) and complete(current),
+                 'STATE_CHANGED', 'Estado do torrent mudou durante a conferência remota.')
+        row.update(state='verified', verified_at=common.now())
+        common.save_catalog(data)
+        return {'id': identity, 'state': 'verified', 'original_preserved': True, 'hardlinks_preserved': True,
+                'paused': True, 'resume_local': 'myct-torrent resume ' + key,
+                'remote_verified': ['size', 'md5'], 'sha256_recorded': True,
+                'storage_bytes': sum(value['size'] for value in objects(row).values())}
+    except (Failure, OSError, KeyboardInterrupt) as error:
+        row.update(state='failed', error_code=common.failure_code(error), prior_state_restored=False)
+        # Resume only a previously complete seeder, at the unchanged original location.
+        if inventory['status'] in (5, 6):
+            try:
+                current = get_torrent(rpc, key)
+                unchanged(base, files, dirs, snapshots)
+                need(current['download_dir'] == str(base) and complete(current), 'STATE_CHANGED', 'Estado divergente.')
+                if current['status'] == 0:
+                    rpc.call('torrent_start', {'ids': [key]})
+                row['prior_state_restored'] = get_torrent(rpc, key)['status'] in (5, 6)
+            except (Failure, OSError, KeyboardInterrupt):
+                pass
+        common.save_catalog(data)
+        failure = error if isinstance(error, Failure) else Failure(common.failure_code(error), 'Arquivamento interrompido ou com falha local; consulte o catálogo.')
+        failure.operation = {'infohash': key, 'original_preserved': True,
+                             'prior_state_restored': row['prior_state_restored'],
+                             'inspect': 'myct-archive-torrent inspect ' + key}
+        raise failure
+
+
+def entry(data, identity, remote):
+    need(isinstance(identity, str) and re.fullmatch('[0-9a-f]{64}', identity), 'ID', 'ID de arquivamento inválido.')
+    row = data['entries'].get(identity)
+    need(row is not None and row['remote'] == remote, 'NOT_FOUND', 'ID ausente neste catálogo/remote.')
+    need(row['state'] == 'verified', 'NOT_VERIFIED', 'Arquivamento não verificado.')
+    return row
+
+
+def restored_path(row):
+    return torrent.destination() / ('archive-' + row['id'] + '-' + row['manifest']['infohash'][:8])
+
+
+def local_bundle_verified(row):
+    local = bundle(row)
+    for name in ('manifest.json', 'original.torrent'):
+        common.safe_path(local / name); common.private_file(local / name)
+    need((local / 'manifest.json').read_bytes() == encoded(row['manifest']), 'INTEGRITY', 'Manifesto local divergente.')
+    raw = (local / 'original.torrent').read_bytes()
+    need(hashes(raw) == row['manifest']['metainfo'], 'INTEGRITY', 'Metadados restaurados divergentes.')
+    expected = metainfo(raw, row['manifest']['infohash'])
+    need(expected == [{'path': f['path'], 'size': f['size']} for f in row['manifest']['torrent_files']], 'META', 'Estrutura de recuperação divergente.')
+    return raw
+
+
+def local_data_verified(row):
+    files, dirs, snapshots = digest_tree(restored_path(row))
+    need(files == row['manifest']['files'] and dirs == row['manifest']['directories'],
+         'INTEGRITY', 'Árvore restaurada incompleta ou divergente.')
+    return snapshots
+
+
+def restore(row, data):
+    mf = row['manifest']
+    target = restored_path(row)
+    row['restore'] = {'state': 'pending', 'path': str(target), 'at': common.now()}
+    common.save_catalog(data)
+    try:
+        remote_objects(row)
+        root = common.safe_path(torrent.destination())
+        root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        common.safe_path(target)
+        reused = target.exists()
+        if not reused:
+            required = sum(v['size'] for v in objects(row).values()) + 4096 * (len(mf['files']) + len(mf['directories']) + 4)
+            need(shutil.disk_usage(root).free >= required, 'LOCAL_SPACE', 'SSD sem espaço para o pacote completo e metadados.')
+            target.mkdir(mode=0o700)  # Exclusive reservation, never merge into a prior tree.
+            local = bundle(row)
+            with tempfile.TemporaryDirectory(prefix='.restore-', dir=root) as temp:
+                for path, value in objects(row).items():
+                    staged = Path(temp) / 'object'
+                    common.copy(remote_folder(row) + '/' + path, str(staged))
+                    measured, _ = common.fingerprint(staged)
+                    need(measured == {k: value[k] for k in measured}, 'INTEGRITY', 'Bytes restaurados divergentes do manifesto.')
+                    if path.startswith('data/'):
+                        final = common.safe_path(target / path[5:])
+                        final.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                        common.safe_path(final.parent)
+                        os.chmod(staged, 0o600)
+                        with staged.open('rb') as stream:
+                            os.fsync(stream.fileno())
+                        os.link(staged, final)  # Atomic no-replace, even under destination races.
+                        common.sync_dir(final.parent)
+                    else:
+                        write_once(local / path, staged.read_bytes())
+                    staged.unlink()  # Only this operation's scratch file.
+            for directory in mf['directories']:
+                common.safe_path(target / directory).mkdir(parents=True, exist_ok=True, mode=0o700)
+        local_bundle_verified(row); local_data_verified(row)
+        remote_objects(row)
+        row['restore'].update(state='verified', at=common.now())
+        common.save_catalog(data)
+        return {'id': row['id'], 'state': 'verified', 'path': str(target), 'reused': reused,
+                'verified': ['size', 'md5', 'sha256', 'metainfo_infohash'], 'seeding_ready': False}
+    except (Failure, OSError, KeyboardInterrupt) as error:
+        code = common.failure_code(error)
+        row['restore'].update(state='blocked' if code in {'LOCAL_SPACE', 'DEST_EXISTS', 'UNSAFE_PATH'} else 'failed', error_code=code)
+        common.save_catalog(data)
+        raise
+
+
+def recover(row, data, rpc, resume=False, timeout=600):
+    key, mf = row['manifest']['infohash'], row['manifest']
+    raw = local_bundle_verified(row)
+    before = local_data_verified(row)
+    metainfo(raw, key, restored_path(row))
+    target = str(restored_path(row))
+    row['recovery'] = {'state': 'pending', 'at': common.now(), 'resume_requested': resume}
+    common.save_catalog(data)
+    touched = False
+    try:
+        with torrent.naming_lock(key), media_lock():
+            current = get_torrent(rpc, key, optional=True)
+            if current is None:
+                reply = rpc.call('torrent_add', {'metainfo': base64.b64encode(raw).decode(),
+                                                'download_dir': target, 'paused': True})
+                item = reply.get('torrent_added', reply.get('torrent_duplicate', {}))
+                need(item.get('hash_string', '').lower() == key, 'RPC', 'Reimportação não confirmada pelo infohash.')
+                current = get_torrent(rpc, key)
+            need(current['download_dir'] in (target, mf['original_download_dir']), 'INCOMPATIBLE', 'Entrada existente aponta para outro diretório; revisão manual necessária.')
+            need([{'path': f['name'], 'size': f['length']} for f in current['files']] ==
+                 [{'path': f['path'], 'size': f['size']} for f in mf['torrent_files']],
+                 'INCOMPATIBLE', 'Entrada existente usa outra estrutura.')
+            touched = True
+            rpc.call('torrent_stop', {'ids': [key]}); wait_paused(rpc, key)
+            selection = {'ids': [key]}
+            for field, predicate in (
+                    ('files_wanted', lambda f: f['wanted']), ('files_unwanted', lambda f: not f['wanted']),
+                    ('priority_high', lambda f: f['priority'] == 1), ('priority_low', lambda f: f['priority'] == -1),
+                    ('priority_normal', lambda f: f['priority'] == 0)):
+                indices = [f['index'] for f in mf['torrent_files'] if predicate(f)]
+                if indices:  # An empty RPC array means ALL files, not none.
+                    selection[field] = indices
+            rpc.call('torrent_set', selection)
+            rpc.call('torrent_set_location', {'ids': [key], 'location': target, 'move': False})
+            deadline = time.monotonic() + 15
+            while get_torrent(rpc, key)['download_dir'] != target:
+                need(time.monotonic() < deadline, 'LOCATION_TIMEOUT', 'Localização restaurada não confirmada.')
+                time.sleep(0.2)
+            # The existing completion hook blocks on this same lock, then sees done.
+            torrent.write_naming(key, {'state': 'done', 'target': Path(target).name})
+            rpc.call('torrent_verify', {'ids': [key]})
+            started, observed, deadline = time.monotonic(), False, time.monotonic() + timeout
+            while True:
+                current = get_torrent(rpc, key)
+                need(current['download_dir'] == target and current['status'] in (0, 1, 2),
+                     'STATE_CHANGED', 'Torrent saiu do estado pausado/verificação; retomada bloqueada.')
+                observed = observed or current['status'] in (1, 2)
+                if observed and current['status'] == 0:
+                    break
+                need(time.monotonic() < deadline, 'VERIFY_TIMEOUT', 'Verificação ainda não concluída; mantenha pausado.')
+                need(observed or time.monotonic() - started < 5, 'VERIFY_UNOBSERVED', 'Não foi observada a verificação; aceite RPC isolado não autoriza seeding.')
+                time.sleep(0.2)
+            need(complete(current), 'VERIFY_INCOMPLETE', 'Transmission não comprovou 100% de todo o torrent; não retomar.')
+            need(local_data_verified(row) == before, 'SOURCE_CHANGED', 'Dados mudaram durante a verificação.')
+            if resume:
+                rpc.call('torrent_start', {'ids': [key]})
+            final = get_torrent(rpc, key)
+            need(complete(final) and final['status'] in (0, 5, 6), 'STATE_CHANGED', 'Estado divergente após verificação; retomada bloqueada.')
+            row['recovery'].update(state='verified', at=common.now(), verification_observed=True)
+            common.save_catalog(data)
+            return {'id': row['id'], 'state': 'verified', 'infohash': key, 'seeding_ready': True,
+                    'resume_requested': resume, 'paused': final['status'] == 0, 'rpc_status': final['status'],
+                    'library_links_modified': False,
+                    'message': 'Verificação integral concluída. Consulte o estado real no Transmission.'}
+    except (Failure, OSError, KeyboardInterrupt) as error:
+        try:
+            # Never restore a previous running state on failed recovery: it could redownload.
+            if touched:
+                rpc.call('torrent_stop', {'ids': [key]})
+        except Failure:
+            pass
+        row['recovery'].update(state='failed', error_code=common.failure_code(error))
+        common.save_catalog(data)
+        raise
+
+
+def run(argv, rpc=None):
+    remote = common.remote_name(os.environ.get('MYCT_ARCHIVE_REMOTE', 'myct-gdrive:'))
+    if len(argv) >= 2 and argv[0] == '--remote':
+        remote = common.remote_name(argv[1]); argv = argv[2:]
+    valid = (len(argv) == 1 and argv[0] in ('list', 'status') or len(argv) == 2 and argv[0] in ('inspect', 'archive', 'restore', 'recover')
+             or len(argv) == 3 and argv[0] == 'recover' and argv[2] == '--resume')
+    need(valid, 'USAGE', 'Uso: myct-archive-torrent [--remote NOME:] inspect HASH|archive HASH|list|status|restore ID|recover ID [--resume]')
+    if argv[0] == 'inspect':
+        return inspect(hash_key(argv[1]), rpc or Rpc())  # No catalog/lock/directory writes.
+    with common.catalog_lock():
+        data = load_catalog()
+        if argv[0] == 'list':
+            return {'entries': [r for r in data['entries'].values() if r['remote'] == remote], 'remote_checked': False}
+        if argv[0] == 'status':
+            quota = common.remote_json('about', remote, '--json')
+            need(isinstance(quota, dict) and all(type(v) is int and v >= 0 for v in quota.values()),
+                 'RCLONE_RESPONSE', 'Resposta de cota inválida.')
+            return {'remote': remote, 'quota_bytes': {k: quota[k] for k in ('total', 'used', 'free', 'trashed', 'other') if k in quota}}
+        if argv[0] == 'archive':
+            return archive(hash_key(argv[1]), remote, data, rpc or Rpc())
+        row = entry(data, argv[1], remote)
+        return restore(row, data) if argv[0] == 'restore' else recover(row, data, rpc or Rpc(), len(argv) == 3)
+
+
+def main():
+    os.umask(0o077)
+    signal.signal(signal.SIGTERM, common.interrupted)
+    signal.signal(signal.SIGINT, common.interrupted)
+    try:
+        result = {'ok': True, **run(sys.argv[1:])}
+    except Failure as error:
+        result = {'ok': False, 'state': 'blocked' if error.code in {
+            'HASH', 'ID', 'USAGE', 'BLOCKED', 'NOT_FOUND', 'NOT_VERIFIED', 'UNMANAGED', 'INCOMPATIBLE',
+            'LOCAL_SPACE', 'DEST_EXISTS', 'UNSAFE_PATH', 'CATALOG', 'MANIFEST', 'META', 'BUSY'} else 'failed',
+                  'error': {'code': error.code, 'message': str(error)}}
+        if hasattr(error, 'operation'):
+            result['operation'] = error.operation
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, media.MediaError, torrent.Failure, KeyboardInterrupt):
+        result = {'ok': False, 'state': 'failed', 'error': {'code': 'LOCAL_OR_INTERRUPTED',
+                  'message': 'Operação não confirmada. Preserve os dados e consulte catálogo/Transmission antes de repetir.'}}
+    print(json.dumps(result, ensure_ascii=True))
+    return 0 if result['ok'] else 2
+
+
+if __name__ == '__main__':
+    sys.exit(main())
