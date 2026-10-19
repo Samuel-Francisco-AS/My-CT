@@ -1,5 +1,7 @@
 # My-CT
 
+**MYCT-C1A ACEITA e integrada à main em 19/10/2026:** arquivamento/restauração de arquivo comum por Rclone, Fedora/Google Drive real e 29 testes locais aprovados; fixture de 37 bytes voltou idêntica após conferência MD5/SHA-256 e `cmp`. [PR #47](https://github.com/Samuel-Francisco-AS/My-CT/pull/47) (merge `bbf929886a1c66d2b0927b2ca3f8c46fa25cfe7b`) · [Relatório final](docs/MYCT-C1A-CLI-REPORT.md). **Ainda não há integração torrent, seeding, remoção de dados ou painel Android**; próximas fases C1B/C1C na [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46). A sincronização do Fedora e a limpeza de branches continuam manuais.
+
 **MYCT-L1D candidata — 17/10/2026:** IDE Local com **Projetos privados / Pasta compartilhada**,
 edição direta em árvore SAF autorizada para abrir e compilar os mesmos arquivos
 no Termux. APK **0.7.0-l1d-shared-storage/code 28**, sem compilação embarcada.
