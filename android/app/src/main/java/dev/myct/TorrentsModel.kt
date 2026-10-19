@@ -66,7 +66,14 @@ internal class TorrentsModel internal constructor(
                     is TorrentAction.Control -> {
                         val reply = org.json.JSONObject(result)
                         require(reply.getBoolean("ok") && reply.getString("hash") == action.hash)
-                        if (action.verb == "remove") "Removido da lista; dados preservados no Fedora." else "Comando aceito pelo motor."
+                        when (action.verb) {
+                            "remove" -> "Removido da lista; dados preservados no Fedora."
+                            "delete-data" -> {
+                                require(reply.getBoolean("deleted_data"))
+                                "Torrent e arquivos excluídos. Atualize a biblioteca do Jellyfin se necessário."
+                            }
+                            else -> "Comando aceito pelo motor."
+                        }
                     }
                 }
                 val list = if (action == TorrentAction.List) result else

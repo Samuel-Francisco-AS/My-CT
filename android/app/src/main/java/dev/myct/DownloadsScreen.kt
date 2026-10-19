@@ -23,11 +23,12 @@ fun HttpDownloadsScreen(model: DownloadsModel, filesBusy: Boolean, openFiles: (S
     var url by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
     var cancel by remember(model.connected) { mutableStateOf<ServerDownload?>(null) }
+    var deleteItem by remember(model.connected) { mutableStateOf<ServerDownload?>(null) }
     var visible by remember { mutableStateOf(activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
     DisposableEffect(activity, model) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_START) visible = true
-            if (event == Lifecycle.Event.ON_STOP) { visible = false; model.hide(); cancel = null }
+            if (event == Lifecycle.Event.ON_STOP) { visible = false; model.hide(); cancel = null; deleteItem = null }
         }
         activity.lifecycle.addObserver(observer)
         onDispose { activity.lifecycle.removeObserver(observer); model.hide() }
@@ -84,12 +85,42 @@ fun HttpDownloadsScreen(model: DownloadsModel, filesBusy: Boolean, openFiles: (S
                     MyCtTextButton(onClick = { openFiles(item.directory) }, enabled = model.connected && !filesBusy) { Text("Ver em Arquivos") }
                     if (filesBusy) StatusNotice("Aguarde a operação SFTP para abrir a pasta.")
                 }
+                if (!item.active) {
+                    MyCtTextButton(onClick = { deleteItem = item },
+                        enabled = model.actionsEnabled && !model.stale) {
+                        Text("Excluir arquivo e histórico…")
+                    }
+                }
                 ExpandDetails {
                     DetailValue("Destino", item.path)
                     DataLine("Bytes recebidos", item.bytes.toString())
                 }
             }
         }
+    }
+    deleteItem?.let { item ->
+        AlertDialog(onDismissRequest = { deleteItem = null },
+            title = { Text("Excluir arquivo e histórico?") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    DetailValue("Download", item.name)
+                    Text("Exclui o arquivo concluído ou parcial do Fedora e retira " +
+                        "esta entrada do histórico. A operação não tem desfazer.")
+                    Text("Se a transferência ainda estiver ativa, cancele-a primeiro.")
+                }
+            },
+            confirmButton = {
+                MyCtTextButton(onClick = {
+                    deleteItem = null
+                    model.delete(item.id)
+                }, enabled = model.actionsEnabled && !model.stale) {
+                    Text("Excluir arquivo")
+                }
+            },
+            dismissButton = {
+                MyCtTextButton(onClick = { deleteItem = null }) { Text("Voltar") }
+            }
+        )
     }
     cancel?.let { item ->
         AlertDialog(onDismissRequest = { cancel = null }, title = { Text("Cancelar transferência?") },

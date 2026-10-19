@@ -13,7 +13,7 @@ import socket
 import sys
 import time
 import unicodedata
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote_plus, urlsplit
 
 ENDPOINT_PORT = 19091
 LIMIT = 262144
@@ -36,21 +36,54 @@ def magnet(value):
     if len(value) > 8192 or any(ord(c) < 32 or ord(c) == 127 for c in value):
         raise Failure('Magnet inválido.')
     uri = urlsplit(value)
-    query = parse_qs(uri.query, strict_parsing=True)
+    # Some magnet generators insert repeated or trailing '&' separators.
+    # Ignore only empty segments; keep strict validation for real fields.
+    raw_parts = uri.query.split('&')
+    parts = [part for part in raw_parts if part]
+    query = parse_qs('&'.join(parts), strict_parsing=True)
     if uri.scheme != 'magnet' or uri.netloc or uri.path or uri.fragment:
         raise Failure('Magnet inválido.')
     if set(query) - {'xt', 'dn', 'tr'} or len(query.get('xt', [])) != 1:
         raise Failure('Use magnet com xt, dn e trackers tr; fontes web xs/as/ws não são aceitas.')
     if not re.fullmatch(r'urn:btih:(?:[0-9a-fA-F]{40}|[A-Z2-7a-z]{32})', query['xt'][0]):
         raise Failure('Magnet precisa de infohash BitTorrent v1 válido.')
+    skipped = set()
     for tracker in query.get('tr', []):
         url = urlsplit(tracker)
         if url.scheme not in {'http', 'https', 'udp'} or not url.hostname or url.username or url.password:
             raise Failure('Tracker inválido.')
-        addresses = socket.getaddrinfo(url.hostname, url.port or 80, type=socket.SOCK_DGRAM)
-        if not addresses or any(not ipaddress.ip_address(row[4][0]).is_global for row in addresses):
+        try:
+            literal = ipaddress.ip_address(url.hostname)
+        except ValueError:
+            literal = None
+        if literal is not None and not literal.is_global:
+            # Explicit internal addresses remain invalid even if other trackers work.
             raise Failure('Tracker precisa de endereço público.')
-    return value
+        try:
+            addresses = socket.getaddrinfo(url.hostname, url.port or 80, type=socket.SOCK_DGRAM)
+        except socket.gaierror:
+            # Drop unusable trackers; never send unresolved hosts to the daemon.
+            skipped.add(tracker)
+            continue
+        except OSError as error:
+            raise Failure('Falha de rede ao validar tracker.') from error
+        if not addresses or any(not ipaddress.ip_address(row[4][0]).is_global for row in addresses):
+            # A hostname may resolve to private/reserved IPs or mixed IP families.
+            # Do not forward it, but do not sacrifice otherwise usable trackers.
+            skipped.add(tracker)
+    if not skipped and len(parts) == len(raw_parts):
+        return value
+    # Do not re-encode the query: Transmission 4.1.3 expects the literal
+    # "xt=urn:btih:" prefix. urlencode() turns ':' into '%3A', and the
+    # daemon rejects that otherwise valid magnet as "unrecognized info".
+    # Drop empty separators and invalid trackers, preserving raw values.
+    kept = []
+    for part in parts:
+        raw_key, _, raw_value = part.partition('=')
+        if unquote_plus(raw_key) == 'tr' and unquote_plus(raw_value) in skipped:
+            continue
+        kept.append(part)
+    return uri._replace(query='&'.join(kept)).geturl()
 
 class Rpc:
     def call(self, method, params):
@@ -73,8 +106,18 @@ class Rpc:
                 if len(payload) > LIMIT:
                     raise Failure('Histórico excedeu 256 KiB; consulte pelo Transmission local.')
                 result = json.loads(payload)
-                if result.get('jsonrpc') != '2.0' or result.get('id') != 1 or 'error' in result:
-                    raise Failure('Pedido recusado pelo motor; requer Transmission 4.1+. Atualize antes de repetir.')
+                if not isinstance(result, dict) or result.get('jsonrpc') != '2.0' or result.get('id') != 1:
+                    raise Failure('Resposta RPC inválida ou incompatível.')
+                if 'error' in result:
+                    error = result['error']
+                    if isinstance(error, dict) and isinstance(error.get('code'), int) and isinstance(error.get('message'), str):
+                        # The daemon's short JSON-RPC error message is more useful
+                        # than blaming its version. Never print request params/magnet.
+                        message = re.sub(r'[\x00-\x1f\x7f]+', ' ', error['message']).strip()[:160]
+                        raise Failure(f'Transmission recusou {method}: {message} (código {error["code"]}).')
+                    raise Failure(f'Transmission recusou {method}: erro RPC sem detalhes válidos.')
+                if not isinstance(result.get('result'), dict):
+                    raise Failure('Resposta RPC sem resultado válido.')
                 return result['result']
             finally:
                 conn.close()
@@ -208,6 +251,76 @@ def enable_naming(rpc):
     rpc.call('session_set', {'script_torrent_done_enabled': True, 'script_torrent_done_filename': str(hook)})
     return {'naming': 'enabled-on-completion'}
 
+def refuse_shared_data(folder):
+    """Reject deleting any original with external hardlinks (e.g. Jellyfin)."""
+    if folder.is_symlink() or folder.resolve() != folder:
+        raise Failure('Diretório do torrent redirecionado; exclusão recusada.')
+    if not folder.exists():
+        return
+    if not folder.is_dir():
+        raise Failure('Diretório do torrent inválido.')
+    stack = [folder]
+    checked = 0
+    while stack:
+        current = stack.pop()
+        for entry in current.iterdir():
+            checked += 1
+            if checked > 20000:
+                raise Failure('Torrent excede limite de verificação. Exclusão recusada.')
+            if entry.is_symlink():
+                raise Failure('Torrent contém link simbólico. Exclusão recusada.')
+            if entry.is_dir():
+                stack.append(entry)
+            elif entry.is_file():
+                if entry.stat().st_nlink > 1:
+                    raise Failure('Torrent possui hardlinks em outra biblioteca. ' +
+                                  'Use Mídia → Armazenamento para remover os vínculos primeiro.')
+            else:
+                raise Failure('Torrent contém entrada não regular. Exclusão recusada.')
+
+
+def delete_torrent_data(rpc, key):
+    """Only a dedicated My-CT torrent folder may be deleted by Transmission."""
+    state = Path.home() / '.local/share/myct/media'
+    if state.is_symlink() or state.resolve() != state:
+        raise Failure('Estado Media redirecionado; exclusão recusada.')
+    state.mkdir(parents=True, exist_ok=True, mode=0o700)
+    lock = state / 'state.lock'
+    if lock.is_symlink():
+        raise Failure('Lock de mídia inválido.')
+    with naming_lock(key), lock.open('a') as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        items = records(rpc, [key])
+        if len(items) != 1:
+            raise Failure('Torrent ausente ou fora do diretório My-CT.')
+        row = items[0]
+        folder = Path(row['download_dir'])
+        if folder.parent != destination() or folder.is_symlink():
+            raise Failure('Diretório não gerenciado; operação recusada.')
+        refuse_shared_data(folder)
+        # Check metadata, too: links may have been registered before a source vanished.
+        index = state / 'state.json'
+        if index.exists():
+            if index.is_symlink():
+                raise Failure('Índice de mídia inválido.')
+            data = json.loads(index.read_text())
+            if any(info.get('id', '').startswith(key + ':')
+                   for info in data.get('links', {}).values()):
+                raise Failure('Torrent ainda possui mídia vinculada ao Jellyfin. ' +
+                              'Retire esses hardlinks na aba Armazenamento antes de excluir.')
+        rpc.call('torrent_remove', {'ids': [key], 'delete_local_data': True})
+        # Transmission removes payload; never recurse through the directory ourselves.
+        try:
+            folder.rmdir()
+        except OSError:
+            pass
+        # Allow re-adding the same magnet after deletion.
+        record = naming_file(key)
+        if record.exists() and not record.is_symlink():
+            record.unlink()
+        return {'ok': True, 'hash': key, 'deleted_data': True}
+
+
 def run(args, rpc):
     if args == ['list']:
         return {'torrents': records(rpc)}
@@ -237,6 +350,11 @@ def run(args, rpc):
         return enable_naming(rpc)
     if len(args) == 2 and args[0] == 'organize':
         return organize(rpc, args[1].lower())
+    if len(args) == 2 and args[0] == 'delete-data':
+        key = args[1].lower()
+        if not re.fullmatch('[0-9a-f]{40}', key):
+            raise Failure('Use o hash completo do torrent.')
+        return delete_torrent_data(rpc, key)
     if len(args) == 2 and args[0] in {'pause', 'resume', 'remove', 'status'}:
         key = args[1]
         if not re.fullmatch('[0-9a-fA-F]{40}', key):
@@ -253,7 +371,7 @@ def run(args, rpc):
             params['delete_local_data'] = False
         rpc.call(method, params)
         return {'ok': True, 'hash': key}
-    raise Failure('Uso: myct-torrent list | add MAGNET | status/pause/resume/remove HASH')
+    raise Failure('Uso: myct-torrent list | add MAGNET | status/pause/resume/remove/delete-data HASH')
 
 def main():
     os.umask(0o077)

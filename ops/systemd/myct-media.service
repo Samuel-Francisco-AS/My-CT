@@ -1,0 +1,7 @@
+[Unit]
+Description=My-CT Media - importar links de torrents concluidos para Jellyfin
+After=myct-transmission.service
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/myct-media sync

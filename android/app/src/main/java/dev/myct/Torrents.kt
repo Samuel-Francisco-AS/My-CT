@@ -44,6 +44,7 @@ internal fun parseTorrents(text: String): List<ServerTorrent> {
             optionalTorrentCounter(row, "downloaded_ever"), optionalTorrentCounter(row, "uploaded_ever"),
             (row.opt("upload_ratio") as? Number)?.toDouble()?.takeIf { it.isFinite() && (it >= 0 || it == -1.0 || it == -2.0) })
     }.also { require(it.map { row -> row.hash }.distinct().size == it.size) }
+        .sortedByDescending { it.id }
 }
 internal sealed interface TorrentAction {
     data object List : TorrentAction
@@ -62,17 +63,22 @@ internal fun torrentCommand(action: TorrentAction): String {
             "add ${quote(action.magnet)}"
         }
         is TorrentAction.Control -> {
-            require(action.verb in setOf("pause", "resume", "remove") && torrentHash.matches(action.hash))
+            require(action.verb in setOf("pause", "resume", "remove", "delete-data") && torrentHash.matches(action.hash))
             "${action.verb} ${quote(action.hash)}"
         }
     }
     return "if [ -x \"\$HOME/.local/bin/myct-torrent\" ]; then exec \"\$HOME/.local/bin/myct-torrent\" $args; else exit 127; fi"
 }
 internal fun executeTorrent(action: TorrentAction, open: () -> DownloadExec, timeoutMs: Long = 25000): String =
-    executeSshCommand(torrentCommand(action), open, timeoutMs) { status, _ ->
-        DownloadFailure(when (status) {
-            127 -> "CLI myct-torrent ausente. Consulte a instalação MYCT-5C no Fedora."
-            3 -> "Transmission indisponível. Confira pacote e serviço myct-transmission no Fedora."
+    executeSshCommand(torrentCommand(action), open, timeoutMs) { status, reason ->
+        DownloadFailure(when {
+            status == 127 -> "CLI myct-torrent ausente. Atualize o helper no Fedora."
+            status == 3 -> "Transmission indisponível. Confira o serviço myct-transmission no Fedora."
+            action is TorrentAction.Control && action.verb == "delete-data" &&
+                (reason.contains("hardlinks") || reason.contains("vinculada ao Jellyfin")) ->
+                "Exclusão bloqueada: há hardlinks na biblioteca. Retire-os em Mídia → Armazenamento."
+            action is TorrentAction.Control && action.verb == "delete-data" ->
+                "Não foi possível confirmar a exclusão. Consulte o Transmission antes de tentar novamente."
             else -> "Pedido recusado pelo motor. Confira magnet, diretório e Transmission 4.1+. Atualize antes de repetir."
         })
     }

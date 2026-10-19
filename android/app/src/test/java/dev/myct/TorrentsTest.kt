@@ -37,6 +37,27 @@ class TorrentsTest {
             }
         }
     }
+    @Test fun sortsNewestTorrentFirstByTransmissionId() {
+        val oldest = org.json.JSONObject(record(6)).getJSONArray("torrents").getJSONObject(0)
+        val newer = org.json.JSONObject(oldest.toString()).apply {
+            put("id", 42)
+            put("hash_string", "b".repeat(40))
+            put("name", "recent")
+            put("download_dir", "/home/sam/Downloads/My-CT/Torrents/" + "b".repeat(40))
+        }
+        val rows = org.json.JSONArray().put(oldest).put(newer)
+        val result = parseTorrents(org.json.JSONObject().put("torrents", rows).toString())
+        assertEquals(listOf("recent", "fixture"), result.map { it.name })
+    }
+
+    @Test fun explicitDataDeletionRequiresFullHashAndDistinctVerb() {
+        assertTrue(torrentCommand(TorrentAction.Control("delete-data", hash))
+            .contains("delete-data '$hash'"))
+        assertThrows(IllegalArgumentException::class.java) {
+            torrentCommand(TorrentAction.Control("delete-data", "all"))
+        }
+    }
+
     @Test fun magnetIsSingleQuotedArgumentAndControlsAreClosed() {
         val root = Files.createTempDirectory("myct-torrent-args").toFile()
         try {

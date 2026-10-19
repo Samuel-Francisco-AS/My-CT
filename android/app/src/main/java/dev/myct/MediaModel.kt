@@ -1,0 +1,188 @@
+package dev.myct
+
+import androidx.compose.runtime.*
+import kotlinx.coroutines.*
+
+/** Reuses verified SSH; leaves transmitted mutations untouched when the screen is closed. */
+internal class MediaModel internal constructor(
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+    private val execute: (SshConnection, MediaAction) -> String = { ssh, action -> ssh.media(action) }
+) {
+    private var connection: SshConnection? = null
+    private var generation = 0
+    private var job: Job? = null
+    var connected by mutableStateOf(false)
+        private set
+    var busy by mutableStateOf(false)
+        private set
+    val actionsEnabled get() = connected && !busy && !stale
+    var stale by mutableStateOf(false)
+        private set
+    var preview by mutableStateOf<MediaPreview?>(null)
+        private set
+    var entries by mutableStateOf(emptyList<MediaEntry>())
+        private set
+    var message by mutableStateOf("Conecte ao Fedora pelo Terminal.")
+        private set
+    var sources by mutableStateOf(emptyList<MediaSource>())
+        private set
+    var manualPlan by mutableStateOf<ManualPlan?>(null)
+        private set
+    var plannedSpec by mutableStateOf<ManualBatch?>(null)
+        private set
+    var libraryGroups by mutableStateOf(emptyList<MediaLibraryGroup>())
+        private set
+    var cleanupFiles by mutableStateOf(emptyList<CleanupFile>())
+        private set
+    var cleanupPlan by mutableStateOf<CleanupPlan?>(null)
+        private set
+    var cleanupSelection by mutableStateOf<CleanupSelection?>(null)
+        private set
+
+    fun attach(ssh: SshConnection?) {
+        generation++
+        job?.cancel(); job = null
+        connection = ssh
+        connected = ssh != null
+        busy = false; stale = false
+        preview = null; entries = emptyList(); sources = emptyList()
+        manualPlan = null; plannedSpec = null; libraryGroups = emptyList()
+        cleanupFiles = emptyList(); cleanupPlan = null; cleanupSelection = null
+        message = if (connected) "Consulte a biblioteca do Fedora." else "SSH desconectado."
+    }
+
+    fun refresh() = operate(MediaAction.Scan)
+    fun loadSources() = operate(MediaAction.BulkSources)
+    fun loadLibrary() = operate(MediaAction.LibraryList)
+    fun loadCleanup() = operate(MediaAction.CleanupList)
+    fun previewCleanup(selection: CleanupSelection) = operate(MediaAction.CleanupPreview(selection))
+    fun applyCleanup(selection: CleanupSelection, fingerprint: String) =
+        operate(MediaAction.CleanupApply(selection, fingerprint))
+    fun planManual(spec: ManualBatch) = operate(MediaAction.BulkPlan(spec))
+    fun importManual(spec: ManualBatch) = operate(MediaAction.BulkImport(spec))
+    fun sync() = operate(MediaAction.Sync)
+    fun approveSeries(id: String, title: String, season: Int, episode: Int) =
+        operate(MediaAction.ApproveSeries(id, title, season, episode))
+    fun approveMovie(id: String, title: String, year: Int) =
+        operate(MediaAction.ApproveMovie(id, title, year))
+    fun skip(id: String) = operate(MediaAction.Skip(id))
+    fun remove(path: String) = operate(MediaAction.Remove(path))
+
+    private fun operate(action: MediaAction) {
+        val ssh = connection ?: return
+        if (busy) return
+        val epoch = ++generation
+        busy = true
+        job = scope.launch {
+            try {
+                if (action == MediaAction.CleanupList) {
+                    val files = parseCleanupFiles(
+                        runInterruptible(Dispatchers.IO) { execute(ssh, action) }
+                    )
+                    if (epoch == generation) {
+                        cleanupFiles = files
+                        cleanupPlan = null; cleanupSelection = null
+                        stale = false
+                        message = "${files.size} arquivos encontrados na biblioteca para gerenciamento."
+                    }
+                    return@launch
+                }
+                if (action is MediaAction.CleanupPreview) {
+                    val plan = parseCleanupPlan(
+                        runInterruptible(Dispatchers.IO) { execute(ssh, action) }
+                    )
+                    if (epoch == generation) {
+                        cleanupPlan = plan
+                        cleanupSelection = action.selection
+                        stale = false
+                        message = if (plan.canApply) "Prévia de exclusão pronta. Nada foi removido."
+                            else "Prévia bloqueada. Confira os arquivos relacionados."
+                    }
+                    return@launch
+                }
+                if (action is MediaAction.CleanupApply) {
+                    val summary = org.json.JSONObject(
+                        runInterruptible(Dispatchers.IO) { execute(ssh, action) }
+                    )
+                    val files = parseCleanupFiles(
+                        runInterruptible(Dispatchers.IO) { execute(ssh, MediaAction.CleanupList) }
+                    )
+                    val groups = parseMediaLibrary(
+                        runInterruptible(Dispatchers.IO) { execute(ssh, MediaAction.LibraryList) }
+                    )
+                    val managed = parseMediaEntries(
+                        runInterruptible(Dispatchers.IO) { execute(ssh, MediaAction.List) }
+                    )
+                    if (epoch == generation) {
+                        cleanupFiles = files; cleanupPlan = null; cleanupSelection = null
+                        libraryGroups = groups; entries = managed
+                        stale = false
+                        message = "${summary.getInt("removed_links")} hardlinks retirados; " +
+                            "${summary.getInt("removed_torrents")} torrents excluídos."
+                    }
+                    return@launch
+                }
+                if (action == MediaAction.LibraryList) {
+                    val groups = parseMediaLibrary(
+                        runInterruptible(Dispatchers.IO) { execute(ssh, action) }
+                    )
+                    if (epoch == generation) {
+                        libraryGroups = groups
+                        stale = false
+                        message = "${groups.size} pastas de mídia encontradas no Fedora."
+                    }
+                    return@launch
+                }
+                if (action is MediaAction.BulkSources) {
+                    val fresh = parseMediaSources(runInterruptible(Dispatchers.IO) { execute(ssh, action) })
+                    if (epoch == generation) {
+                        sources = fresh
+                        manualPlan = null; plannedSpec = null
+                        stale = false
+                        message = "${fresh.size} vídeos concluídos disponíveis para seleção."
+                    }
+                    return@launch
+                }
+                if (action is MediaAction.BulkPlan) {
+                    val result = parseManualPlan(runInterruptible(Dispatchers.IO) { execute(ssh, action) })
+                    if (epoch == generation) {
+                        manualPlan = result
+                        plannedSpec = action.spec
+                        stale = false
+                        message = "Prévia manual pronta. Nenhum arquivo foi importado."
+                    }
+                    return@launch
+                }
+                val response = if (action != MediaAction.Scan)
+                    runInterruptible(Dispatchers.IO) { execute(ssh, action) } else null
+                val nextPreview = parseMediaPreview(runInterruptible(Dispatchers.IO) { execute(ssh, MediaAction.Scan) })
+                val nextEntries = parseMediaEntries(runInterruptible(Dispatchers.IO) { execute(ssh, MediaAction.List) })
+                if (epoch == generation) {
+                    preview = nextPreview
+                    entries = nextEntries
+                    stale = false
+                    if (action is MediaAction.BulkImport) {
+                        manualPlan = null; plannedSpec = null
+                        val summary = org.json.JSONObject(checkNotNull(response))
+                        message = "Lote concluído: ${summary.getInt("added")} hardlinks criados, " +
+                            "${summary.getInt("existing")} já existentes."
+                    } else message = when (action) {
+                        MediaAction.Scan -> "Prévia atualizada. Nenhuma importação foi realizada."
+                        MediaAction.Sync -> "Importação solicitada. Confira os resultados e pendências."
+                        else -> "Comando aceito pelo Fedora. Biblioteca consultada novamente."
+                    }
+                }
+            } catch (_: CancellationException) {
+            } catch (e: DownloadFailure) {
+                if (epoch == generation) { stale = true; message = e.safeMessage }
+            } catch (_: Exception) {
+                if (epoch == generation) {
+                    stale = true
+                    message = "Não foi possível confirmar o resultado. Atualize antes de repetir qualquer ação."
+                }
+            } finally {
+                if (epoch == generation) busy = false
+            }
+        }
+    }
+}

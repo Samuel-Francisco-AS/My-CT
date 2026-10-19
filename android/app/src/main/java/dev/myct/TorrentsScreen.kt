@@ -19,7 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 @Composable
-internal fun DownloadsScreen(http: DownloadsModel, torrents: TorrentsModel, filesBusy: Boolean,
+internal fun DownloadsScreen(http: DownloadsModel, torrents: TorrentsModel, media: MediaModel, filesBusy: Boolean,
                              openFiles: (String) -> Unit, modifier: Modifier = Modifier) {
     var section by rememberSaveable { mutableIntStateOf(0) }
     val feedback = rememberNavigationFeedback()
@@ -29,11 +29,15 @@ internal fun DownloadsScreen(http: DownloadsModel, torrents: TorrentsModel, file
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             FilterChip(section == 0, { select(0) }, label = { Text("HTTP/HTTPS") })
             FilterChip(section == 1, { select(1) }, label = { Text("Torrents") })
+            FilterChip(section == 2, { select(2) }, label = { Text("Mídia") })
         }
         Box(Modifier.weight(1f).panelEntrance(section, if (section == 1) 1f else -1f)) {
             panels.SaveableStateProvider(section) {
-                if (section == 0) HttpDownloadsScreen(http, filesBusy, openFiles, Modifier.fillMaxSize())
-                else TorrentsScreen(torrents, filesBusy, openFiles, Modifier.fillMaxSize())
+                when (section) {
+                    0 -> HttpDownloadsScreen(http, filesBusy, openFiles, Modifier.fillMaxSize())
+                    1 -> TorrentsScreen(torrents, filesBusy, openFiles, Modifier.fillMaxSize())
+                    else -> MediaScreen(media, Modifier.fillMaxSize())
+                }
             }
         }
     }
@@ -44,11 +48,13 @@ internal fun TorrentsScreen(model: TorrentsModel, filesBusy: Boolean, openFiles:
     val activity = checkNotNull(LocalActivity.current as? androidx.activity.ComponentActivity)
     var magnet by remember { mutableStateOf("") }
     var remove by remember(model.connected) { mutableStateOf<ServerTorrent?>(null) }
+    var deleteData by remember(model.connected) { mutableStateOf<ServerTorrent?>(null) }
+    val expanded = remember { mutableStateMapOf<String, Boolean>() }
     var visible by remember { mutableStateOf(activity.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
     DisposableEffect(activity, model) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_START) visible = true
-            if (event == Lifecycle.Event.ON_STOP) { visible = false; model.hide(); remove = null }
+            if (event == Lifecycle.Event.ON_STOP) { visible = false; model.hide(); remove = null; deleteData = null }
         }
         activity.lifecycle.addObserver(observer)
         onDispose { activity.lifecycle.removeObserver(observer); model.hide() }
@@ -62,7 +68,14 @@ internal fun TorrentsScreen(model: TorrentsModel, filesBusy: Boolean, openFiles:
     LazyColumn(modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
         item(key = "form") {
             ScreenPanel {
-                ScreenHeading("Novo torrent", "Magnet confiável. O motor continua no Fedora ao fechar o app. Concluídos podem continuar compartilhando (seeding); use Pausar para parar. Pasta por hash durante download, título real ao concluir; legados preservados. Acumulados são por torrent e podem exceder o tamanho atual. Ratio é o upload_ratio informado pelo Transmission (4.1: enviado / tamanho final), não uma divisão das taxas. Dados extras ausentes exigem o adaptador R2B, cuja instalação é manual e separada do Git.")
+                ScreenHeading("Novo torrent",
+                    "Cole um magnet para baixar no Fedora, mesmo com o aplicativo fechado.")
+                ExpandDetails("Como funcionam os torrents") {
+                    Text("Arquivos concluídos podem continuar compartilhando (seeding). " +
+                        "Use Pausar para interromper. Durante o download, o diretório usa o hash; " +
+                        "ao concluir, pode receber um nome legível. Estatísticas acumuladas " +
+                        "são por torrent e o ratio vem do Transmission.")
+                }
                 OutlinedTextField(magnet, { if (it.length <= 8192) magnet = it }, label = { Text("Magnet legal e confiável") },
                     singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = model.formEnabled,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false))
@@ -80,39 +93,84 @@ internal fun TorrentsScreen(model: TorrentsModel, filesBusy: Boolean, openFiles:
         }
         if (model.items.isEmpty()) item(key = "empty") { ScreenPanel { StatusNotice("Nenhum torrent para exibir.") } }
         items(model.items, key = { it.hash }) { item ->
+            val open = expanded[item.hash] == true
             ScreenPanel {
-                DetailValue("Torrent", item.name)
-                if (model.stale || !model.connected) StatusNotice("Dados anteriores · estado atual não confirmado", true)
-                Text(item.state.label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(item.name, style = MaterialTheme.typography.titleSmall)
+                if (model.stale || !model.connected)
+                    StatusNotice("Dados anteriores · estado atual não confirmado", true)
+                Text(item.state.label, style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary)
                 if (item.progress == null) {
-                    StatusNotice("Aguardando metadados · tamanho e progresso indisponíveis")
-                    if (!item.paused && model.connected && !model.stale) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    Text("Aguardando metadados", style = MaterialTheme.typography.bodySmall)
                 } else {
                     LinearProgressIndicator(progress = { item.progress }, modifier = Modifier.fillMaxWidth())
-                    Text("${(item.progress * 100).toInt()} % · ${item.bytes?.let(::formatFileSize) ?: "?"} / ${item.total?.let(::formatFileSize) ?: "?"}")
+                    Text("${(item.progress * 100).toInt()}% · ${item.bytes?.let(::formatFileSize) ?: "?"} / " +
+                        (item.total?.let(::formatFileSize) ?: "?"),
+                        style = MaterialTheme.typography.bodySmall)
                 }
-                DataLine(if (model.stale || !model.connected) "↓ Última taxa" else "↓ Agora", item.down?.let { formatFileSize(it) + "/s" } ?: "Indisponível")
-                DataLine(if (model.stale || !model.connected) "↑ Última taxa" else "↑ Agora", item.up?.let { formatFileSize(it) + "/s" } ?: "Indisponível")
-                DataLine("Peers", item.peers?.toString() ?: "Indisponível")
-                HorizontalDivider()
-                DataLine("Baixado acumulado", item.downloadedEver?.let(::formatFileSize) ?: "Indisponível")
-                DataLine("Enviado acumulado", item.uploadedEver?.let(::formatFileSize) ?: "Indisponível")
-                DataLine("Ratio (Transmission)", torrentRatioLabel(item.ratio))
-                StatusNotice(item.error, true)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MyCtTextButton(onClick = { model.control(if (item.paused) "resume" else "pause", item.hash) },
-                        enabled = model.actionsEnabled && !model.stale) { Text(if (item.paused) "Retomar" else "Pausar") }
-                    MyCtTextButton(onClick = { remove = item }, enabled = model.actionsEnabled && !model.stale) { Text("Remover…") }
-                    MyCtTextButton(onClick = { openFiles(item.directory) }, enabled = model.connected && !filesBusy) { Text("Ver em Arquivos") }
+                    MyCtTextButton(onClick = { expanded[item.hash] = !open }) {
+                        Text(if (open) "Recolher" else "Detalhes")
+                    }
+                    MyCtTextButton(onClick = {
+                        model.control(if (item.paused) "resume" else "pause", item.hash)
+                    }, enabled = model.actionsEnabled && !model.stale) {
+                        Text(if (item.paused) "Retomar" else "Pausar")
+                    }
+                    MyCtTextButton(onClick = { deleteData = item },
+                        enabled = model.actionsEnabled && !model.stale) { Text("Excluir arquivos…") }
                 }
-                if (filesBusy) StatusNotice("Aguarde a operação SFTP para abrir a pasta.")
-                ExpandDetails {
+                if (open) {
+                    HorizontalDivider()
+                    DataLine(if (model.stale || !model.connected) "↓ Última taxa" else "↓ Agora",
+                        item.down?.let { formatFileSize(it) + "/s" } ?: "Indisponível")
+                    DataLine(if (model.stale || !model.connected) "↑ Última taxa" else "↑ Agora",
+                        item.up?.let { formatFileSize(it) + "/s" } ?: "Indisponível")
+                    DataLine("Peers", item.peers?.toString() ?: "Indisponível")
+                    DataLine("Baixado acumulado", item.downloadedEver?.let(::formatFileSize) ?: "Indisponível")
+                    DataLine("Enviado acumulado", item.uploadedEver?.let(::formatFileSize) ?: "Indisponível")
+                    DataLine("Ratio (Transmission)", torrentRatioLabel(item.ratio))
+                    if (item.error.isNotBlank()) StatusNotice(item.error, true)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MyCtTextButton(onClick = { remove = item },
+                            enabled = model.actionsEnabled && !model.stale) {
+                            Text("Remover da lista…")
+                        }
+                        MyCtTextButton(onClick = { openFiles(item.directory) },
+                            enabled = model.connected && !filesBusy) { Text("Ver em Arquivos") }
+                    }
                     DetailValue("Diretório", item.directory)
                     DetailValue("Hash", item.hash, maxLines = 1)
                     DataLine("ID", item.id.toString())
                 }
             }
         }
+    }
+    deleteData?.let { item ->
+        AlertDialog(onDismissRequest = { deleteData = null },
+            title = { Text("Excluir torrent e arquivos?") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    DetailValue("Torrent", item.name)
+                    Text("O Transmission encerrará esta transferência e apagará seus dados, " +
+                        "inclusive arquivos parciais. O seeding será interrompido. " +
+                        "Se houver hardlinks na biblioteca, a operação será recusada: " +
+                        "retire-os primeiro em Mídia → Armazenamento.")
+                    Text("A exclusão de dados é irreversível.")
+                }
+            },
+            confirmButton = {
+                MyCtTextButton(onClick = {
+                    deleteData = null
+                    model.control("delete-data", item.hash)
+                }, enabled = model.actionsEnabled && !model.stale) {
+                    Text("Excluir torrent e arquivos")
+                }
+            },
+            dismissButton = {
+                MyCtTextButton(onClick = { deleteData = null }) { Text("Cancelar") }
+            }
+        )
     }
     remove?.let { item ->
         AlertDialog(onDismissRequest = { remove = null }, title = { Text("Remover torrent da lista?") },

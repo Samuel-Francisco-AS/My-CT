@@ -183,6 +183,49 @@ class Downloads(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('state: completed\n', result.stdout)
 
+    def test_delete_completed_and_canceled_downloads_removes_only_owned_payload(self):
+        for state in ('completed', 'canceled'):
+            ident = str(uuid.uuid4())
+            job = self.home / '.local/share/myct/downloads' / ident
+            job.mkdir(parents=True)
+            (job / 'name').write_text('demo.bin\n')
+            (job / 'state').write_text(state + '\n')
+            folder = self.home / 'Downloads/My-CT' / ident
+            folder.mkdir(parents=True)
+            payload = folder / ('demo.bin' if state == 'completed' else 'demo.bin.part')
+            payload.write_bytes(b'owned')
+            unrelated = folder / 'user-notes.txt'
+            unrelated.write_bytes(b'keep')
+            r = self.cli('delete', ident)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertFalse(payload.exists())
+            self.assertFalse(job.exists())
+            self.assertEqual(unrelated.read_bytes(), b'keep')
+        self.assertNotEqual(self.cli('delete', '../outside').returncode, 0)
+
+    def test_delete_rejects_active_and_externally_linked_or_symlinked_payloads(self):
+        ident = str(uuid.uuid4())
+        job = self.home / '.local/share/myct/downloads' / ident
+        job.mkdir(parents=True)
+        (job / 'name').write_text('demo.bin\n')
+        (job / 'state').write_text('running\n')
+        folder = self.home / 'Downloads/My-CT' / ident
+        folder.mkdir(parents=True)
+        payload = folder / 'demo.bin.part'
+        payload.write_bytes(b'partial')
+        self.assertNotEqual(self.cli('delete', ident).returncode, 0)
+        self.assertTrue(payload.exists())
+        (job / 'state').write_text('canceled\n')
+        linked = self.home / 'outside.bin'
+        os.link(payload, linked)
+        self.assertNotEqual(self.cli('delete', ident).returncode, 0)
+        self.assertTrue(linked.exists())
+        linked.unlink()
+        payload.unlink()
+        payload.symlink_to('/etc/passwd')
+        self.assertNotEqual(self.cli('delete', ident).returncode, 0)
+        self.assertTrue(job.exists())
+
     def test_write_limit(self):
         # Real kernel file-size limit: simulates storage write failure without filling disk.
         ident = str(uuid.uuid4())

@@ -35,7 +35,7 @@ class DownloadsTest {
         try {
             val cli = root.resolve(".local/bin/myct-download")
             checkNotNull(cli.parentFile).mkdirs()
-            cli.writeText("#!/bin/sh\nprintf '%s\\n' \"\$@\"\n")
+            cli.writeText("#!/bin/sh\nprintf '%s\n' \"\$@\"\n")
             assertTrue(cli.setExecutable(true))
             val safeUrl = "https://example.com/a?q=';\$(id)&x=1"
             val name = "x'; touch ${root.path}/injected; echo '"
@@ -67,6 +67,17 @@ class DownloadsTest {
             assertTrue(channel.closed)
         }
     }
+    @Test fun deleteDownloadUsesExactIdAndDistinctCommand() {
+        val cmd = downloadCommand(DownloadAction.Delete(id))
+        assertTrue(cmd.contains("delete '$id'"))
+        assertThrows(IllegalArgumentException::class.java) {
+            downloadCommand(DownloadAction.Delete("../invalid"))
+        }
+        val command = Exec({ out, _ -> out.write(("deleted: " + id + "\n").toByteArray()) })
+        assertEquals("deleted: " + id + "\n",
+            executeDownload(DownloadAction.Delete(id), { command }))
+    }
+
     @Test fun stderrNeverLeaksSensitiveUrlInUiError() {
         val exec = Exec({ _, err -> err.write("https://sensitive.example/token".toByteArray()) }, exitStatus = 1)
         val failure = assertThrows(DownloadFailure::class.java) { executeDownload(DownloadAction.Start("https://example.com", ""), { exec }) }

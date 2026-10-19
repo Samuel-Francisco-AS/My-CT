@@ -40,6 +40,7 @@ class DownloadsModel internal constructor(
         operate(DownloadAction.Start(url.trim(), name.trim()))
     }
     fun cancel(id: String) = operate(DownloadAction.Cancel(id))
+    fun delete(id: String) = operate(DownloadAction.Delete(id))
     // Leaving the tab stops queries. A mutation already sent may have succeeded: never retry it.
     fun hide() {
         if (!busy) return
@@ -69,6 +70,10 @@ class DownloadsModel internal constructor(
                     is DownloadAction.Cancel -> {
                         parseDownloads(result).also { require(it.single().id == action.id) }
                         "Cancelamento consultado. Arquivos parciais são preservados."
+                    }
+                    is DownloadAction.Delete -> {
+                        require(result.trim() == "deleted: " + action.id)
+                        "Arquivo e histórico removidos do Fedora."
                     }
                 }
                 val list = if (action == DownloadAction.List) result else
