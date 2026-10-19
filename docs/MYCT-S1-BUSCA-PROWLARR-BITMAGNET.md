@@ -1,7 +1,7 @@
 # MYCT-S1/S2 — Busca de torrents: Prowlarr primeiro, Bitmagnet depois
 
 **Acordado em:** 19/10/2026  
-**Situação:** S1A-R instalada/atualizada e aprovada no Fedora pelo proprietário; S1B candidata Android `0.8.0-s1b-search-rc1`/code 39; gate físico Moto G06 pendente, PR #44 draft/sem merge
+**Situação:** S1A/S1B aprovadas no Fedora/Moto G06 e incorporadas à `main` pela PR #44 (`265b4e2`); MYCT-S1C planejada (filtros, paginação e diversidade), não implementada; MYCT-S2/Bitmagnet opcional.
 **Issue:** [#43](https://github.com/Samuel-Francisco-AS/My-CT/issues/43)  
 **Base inspecionada:** `main`, após consolidação da PR #42 (commit `99aaa24538`).
 
@@ -496,3 +496,52 @@ instalada e aceita pelo proprietário.
 **Pendências complementares não bloqueantes:** não foram comunicadas verificações físicas específicas de cancelamento/reconexão, duplicata de inclusão e regressão completa nas telas adjacentes; seus cenários passaram nos testes automatizados onde aplicável, mas não devem ser registrados como teste físico PASS. Registrar eventual problema em issue futura sem retroativamente atribuir comprovação. Disponibilidade de peers não é universal: foi confirmada a transferência **do torrent selecionado**, não de todos os resultados do indexador.
 
 A MYCT-S1 está aceita para integração na `main`. MYCT-S2 (Bitmagnet/DHT) continua **opcional e não iniciada**, com issue #43 como referência de avaliação.
+
+## MYCT-S1C — Busca multi-indexador: filtro, paginação e diversidade (planejamento 19/10/2026)
+
+**Situação:** planejamento autorizado pelo proprietário; sem implementação, instalação, APK, alterações em serviço ou merge nesta etapa. **Base:** `main` após PR #44, commit `265b4e22897f7c2f9cdb1c70d6df4daf9eb5da68`. Desenvolver na branch `myct-s1c-search-filters-pagination` **na única pasta local** `/home/sam/Projetos/My-CT`, preservando a versão 0.8.0 aceita. Manter PR de desenvolvimento em draft até teste físico.
+
+### Motivação comprovada
+
+O proprietário cadastrou **12 indexadores torrent habilitados** no Prowlarr 2.6.5.5623. Diagnóstico real pelo Fedora com busca `Ubuntu`: **281 resultados recebidos**, mas somente os **20 primeiros** apresentados pelo `myct-search`/Android, todos provenientes do Knaben. Distribuição na resposta Prowlarr naquela consulta:
+
+| Indexador | Resultados |
+| --- | ---: |
+| The Pirate Bay | 100 |
+| Knaben | 84 |
+| Torrent Downloads | 50 |
+| LimeTorrents | 40 |
+| BigFANGroup | 3 |
+| Tokyo Toshokan | 3 |
+| Nyaa.si | 1 |
+| ACG.RIP, Anime Tosho, Bangumi Moe, BlueRoms, nekoBT | 0 |
+| **Total** | **281** |
+
+Os **5 com zero** não são declarados quebrados: uma consulta Ubuntu pode não corresponder ao conteúdo especializado dessas fontes. Os **20 Knaben** indicam que a seleção atual usa a ordem agregada do Prowlarr e corta a lista, não que os outros indexadores deixaram de ser consultados. A quantidade de resultados pode variar a cada pesquisa.
+
+### Objetivos funcionais (escopo mínimo)
+
+1. **Filtro por indexador:** controle no Android com **Todos** (padrão) e os indexadores torrent **habilitados** retornados pelo `myct-search status` (ID + nome). Consultar explicitamente apenas o indexador escolhido quando houver filtro; nunca confiar em índice fixo, nome como identificador ou ID informado sem validação. Atualizar a lista pelo status em ação manual/entrada controlada, sem polling permanente. Tratar fonte removida/desabilitada e status vazio.
+2. **Paginação sob demanda de 20 em 20:** a primeira consulta mostra até 20; **Carregar mais** acrescenta a página seguinte, mantendo a pesquisa/fonte escolhida. Botão só aparece se há itens adicionais conhecidos; sem duplicação ou repetição das páginas. Limitar memória, quantidade processada, tamanho JSON, chamadas HTTP e tempo de espera. Se houver limite técnico deliberado de segurança (por exemplo, máximo de 500 resultados), mostrá-lo explicitamente — não afirmar que foram carregados todos os existentes.
+3. **Diversidade em Todos:** distribuir/intercalar resultados de diferentes indexadores que **efetivamente retornaram itens**, para que os primeiros 20 não sejam monopolizados por uma fonte. Usar ordem determinística, com critério simples e documentado (p.ex. round-robin por indexador, mantendo ordem relativa de cada fonte). **Filtro específico não intercala fontes.** Não prometer participação de uma fonte que retornou zero.
+4. **Experiência Android:** filtro compacto, contador informativo de exibidos/recebidos e indicador de limite/mais páginas, estados loading/empty/error, botão Carregar mais com bloqueio durante execução, retenção de scroll e de resultados já carregados na adição bem-sucedida, descarte de respostas antigas ao trocar texto/fonte ou desconectar. Não repetir automaticamente inclusão ou pesquisa após reentrada/reconexão. Preservar o layout, navegação, teclado e transições R5.
+5. **Manter downloads como estão:** cada resultado com magnet v1 válido usa `TorrentsModel.add` já existente e inclusão **somente por toque explícito**. Os sem magnet continuam visíveis, com botão desabilitado. Não mudar `myct-torrent`, Transmission, permissões, caminhos, seeding, Jellyfin ou o pipeline de mídia.
+
+### Contrato e decisões técnicas
+
+- Inspecionar **a API real da versão instalada Prowlarr 2.6.5.5623** antes de determinar a estratégia. **Não presumir** que `/api/v1/search` suporta `offset`, `page` ou paginação nativa. Se não suportar, usar agregação limitada com seleção de página no adaptador, aceitando que novas consultas ao vivo podem reordenar resultados; documentar a limitação de snapshot e o comportamento mais simples consistente. Evitar banco, cache persistente ou novo daemon.
+- Manter `myct-search status` e `myct-search search "consulta"` **compatíveis com a versão 0.8.0** (20 primeiros por padrão e envelope JSON v1); adicionar argumentos opcionais bem validados para fonte/página, sem expor API key, passkeys, URLs proxy autenticadas ou outras credenciais. Tornar campos de paginação/filtro **aditivos**, preservando `schema_version`, campos de cada resultado e `magnet_source`.
+- A nova aba Android reutiliza `SshConnection.search`, `executeSshResult`, `SearchModel` e `SearchScreen` atuais; não abre HTTP direto, não faz novo SSH, não interfere no PTY. A lista de indexadores é obtida dinamicamente do helper instalado no Fedora. Respeitar proteção do Cofre.
+- Manter saída por operação SSH limitada e rápida; não devolver os 281 (ou mais) itens integralmente à interface numa só resposta. Se paginação exigisse uma consulta repetida ao Prowlarr a cada página, medir custo e deixar explícito. Ordenação manual por seeders/data é melhoria **opcional futura**, não é gate da S1C.
+- Todas as pesquisas são **somente leitura**. Sem downloads automáticos ou acesso não autorizado a trackers. Nenhuma configuração do Fedora é alterada durante implementação Codex; atualização do helper e APK após validação são manuais pelo proprietário.
+
+### Aceite e validação
+
+- Testes em Python para status dinâmico, filtro por ID válido/inválido, fonte desabilitada, 0/1/20/21/281+ itens, paginação e ausência de repetição, round-robin determinístico, limites, erro/timeout e preservação de segredos/magnets.
+- Testes JVM para seleção da fonte, estado das páginas, anexar resultados, troca de consulta/filtro, cancelamento e resposta tardia, comportamento desconectado, botão sem magnet e inclusão explícita sem repetição. Build/lint e sem regressões nas funcionalidades principais.
+- Diagnóstico real **sem download** no Fedora: pesquisa Ubuntu com índice Todos, comparar contagem e fontes; confirmar que a primeira página apresenta variedade quando há várias fontes com resultados, que página seguinte carrega itens adicionais, e que filtro de uma fonte traz apenas aquela origem. Consulta especializada para uma fonte que antes retornou zero **somente se útil**, não exigir que toda fonte responda.
+- Gerar APK candidato instalável sobre `dev.myct` code 39 (novo versionCode maior; certificado/pacote preservados) e SHA-256/release. **Não desinstalar nem limpar dados.** Gate físico Moto G06: Busca, filtros, Carregar mais, scroll, resultados sem magnet, estados/cancelamento e verificação breve de Downloads → Torrents. Não executar download real automaticamente; somente se proprietário autorizar o teste.
+- Registrar resultados no presente relatório, atualizar PR e manter **draft/sem merge** até o aceite do proprietário. **MYCT-S2/Bitmagnet continua opcional e não iniciada**, sem alterar sua trilha.
+
+**Critério de conclusão:** o usuário pode pesquisar em Todos ou numa fonte específica, navegar pelos resultados por páginas, ver variedade de indexadores em Todos e continuar adicionando manualmente magnets via Transmission, sem perda do comportamento da S1 já aprovado.
+
