@@ -788,3 +788,16 @@ Roteiro Moto G06, gate de aceite antes de merge:
 
 Registrar resultado físico antes de retirar draft/fechar #43; **não houve merge**.
 MYCT-S2/Bitmagnet permanece opcional e não iniciada.
+
+## MYCT-S1C — Resultado físico no Moto G06 (relato do proprietário, 19/10/2026)
+
+Após atualizar manualmente o helper `myct-search` instalado e instalar a candidata Android, o proprietário confirmou diretamente na conversa o teste da Busca no **Moto G06**:
+
+- **Paginação / Carregar mais:** funcionou na utilização real do app.
+- **Filtros por indexador:** funcionaram nas pesquisas realizadas.
+- **Diversificação de fontes:** a primeira página e as seguintes apresentaram resultados de fontes variadas; o proprietário avaliou o comportamento como bom.
+- **Fedora instalado:** no teste manual anterior à validação Android, `myct-search search "Ubuntu" --page 1/2` mostrou 20 resultados por página, `total_count=228`, `has_more=true`, sete fontes na página 1 e quatro na página 2.
+
+**Aceite físico confirmado para as três funcionalidades centrais da MYCT-S1C.** Não foram relatados testes físicos específicos de descarte de resposta atrasada, cancelamento, perda/reconexão SSH, esgotamento da última página, scroll após falha, preservação de downloads, ou novo envio de magnet. Não registrar esses itens como PASS físico; testes automatizados descritos acima permanecem a evidência nesses casos. Não houve relato de falhas nessas funcionalidades.
+
+**Estado do fechamento:** PR #45 mantida **draft, sem merge** enquanto se aguarda autorização explícita do proprietário para consolidação na `main` e limpeza posterior da branch. MYCT-S2/Bitmagnet segue opcional e fora desta etapa.
