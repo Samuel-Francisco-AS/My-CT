@@ -1,0 +1,198 @@
+#!/usr/bin/python3
+"""Read-only, SSH-facing Prowlarr adapter. Python standard library only."""
+import http.client
+import json
+import os
+from pathlib import Path
+import re
+import stat
+import sys
+from urllib.parse import parse_qs, unquote, urlencode, urlsplit
+import xml.etree.ElementTree as ET
+
+PORT = 9696
+RESULT_LIMIT = 20
+RESPONSE_LIMIT = 2 * 1024 * 1024
+OUTPUT_LIMIT = 256 * 1024
+MAGNET_LIMIT = 8192
+
+
+class Failure(Exception):
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
+def api_key():
+    # Reuse the existing private Prowlarr config; never copy or rewrite it.
+    path = Path.home() / '.local/share/myct/prowlarr/config.xml'
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, 'rb') as stream:
+            meta = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != os.getuid()
+                    or meta.st_mode & 0o077 or meta.st_size > 65536):
+                raise Failure('config', 'Configuração Prowlarr deve ser privada e pertencer ao usuário.')
+            key = ET.fromstring(stream.read(65537)).findtext('ApiKey', '').strip()
+        if not re.fullmatch(r'[a-fA-F0-9]{32}', key):
+            raise ValueError
+        return key
+    except (OSError, ET.ParseError, ValueError):
+        raise Failure('config', 'Não foi possível ler a API key na configuração privada do Prowlarr.') from None
+
+
+def text(value, key, limit):
+    if not isinstance(value, str):
+        return None
+    # Whitelist fields and redact the key even if echoed in a title/name.
+    value = re.sub(re.escape(key), '[redacted]', value, flags=re.IGNORECASE)
+    value = ''.join(c if c.isprintable() else ' ' for c in value).strip()
+    return value[:limit] or None
+
+
+def number(value):
+    return value if type(value) is int and 0 <= value <= 2**63 - 1 else None
+
+
+class Api:
+    def __init__(self, key):
+        self.key = key
+
+    def get(self, path, timeout=7):
+        # Fixed loopback; no environment proxy, redirects, URL-based key or retries.
+        conn = http.client.HTTPConnection('127.0.0.1', PORT, timeout=timeout)
+        try:
+            conn.request('GET', path, headers={'X-Api-Key': self.key, 'Accept': 'application/json'})
+            response = conn.getresponse()
+            if response.status in (401, 403):
+                raise Failure('authentication', 'Prowlarr recusou a autenticação; confira a API key local.')
+            if response.status != 200:
+                raise Failure('upstream', 'Prowlarr recusou a consulta. Confira os indexadores na interface local.')
+            payload = response.read(RESPONSE_LIMIT + 1)
+            if len(payload) > RESPONSE_LIMIT:
+                raise Failure('response_limit', 'Resposta Prowlarr excedeu 2 MiB; refine a pesquisa.')
+            return json.loads(payload)
+        except TimeoutError:
+            raise Failure('timeout', 'Prowlarr excedeu o tempo de espera.') from None
+        except (OSError, http.client.HTTPException):
+            raise Failure('connection', 'Prowlarr indisponível em 127.0.0.1:9696.') from None
+        except (ValueError, UnicodeError, RecursionError):
+            raise Failure('invalid_response', 'Resposta JSON inválida do Prowlarr.') from None
+        finally:
+            conn.close()
+
+
+def indexers(api):
+    rows = api.get('/api/v1/indexer')
+    if not isinstance(rows, list):
+        raise Failure('invalid_response', 'Lista de indexadores inválida.')
+    result = []
+    for row in rows:
+        if (isinstance(row, dict) and row.get('enable') is True
+                and row.get('protocol') == 'torrent' and number(row.get('id'))
+                and text(row.get('name'), api.key, 128)):
+            result.append({'id': row['id'], 'name': text(row['name'], api.key, 128)})
+    if not result:
+        raise Failure('no_indexers', 'Nenhum indexador torrent habilitado no Prowlarr.')
+    return result
+
+
+def link(value, key):
+    if (not isinstance(value, str) or not value or len(value) > MAGNET_LIMIT
+            or any(not c.isprintable() or c.isspace() for c in value)):
+        return 'none', None
+    try:
+        uri = urlsplit(value)
+        if uri.scheme in ('http', 'https') and uri.hostname:
+            # Classify only. Do not return URLs, which can contain API keys/passkeys.
+            return ('torrent_url' if uri.path.lower().endswith('.torrent') else 'indirect_url'), None
+        if uri.scheme != 'magnet' or uri.netloc or uri.path or uri.fragment:
+            return 'none', None
+        if key.lower() in unquote(value).lower():
+            return 'none', None
+        query = parse_qs(uri.query)
+        hashes = query.get('xt', [])
+        if not any(re.fullmatch(r'urn:btih:(?:[a-fA-F0-9]{40}|[A-Za-z2-7]{32})', h) for h in hashes):
+            return 'none', None
+        return 'magnet', value
+    except ValueError:
+        return 'none', None
+
+
+def simplify(row, key):
+    if not isinstance(row, dict) or row.get('protocol') != 'torrent':
+        return None
+    title = text(row.get('title'), key, 512)
+    if title is None:
+        return None
+    kind, magnet = 'none', None
+    priority = {'none': 0, 'indirect_url': 1, 'torrent_url': 2, 'magnet': 3}
+    # A field named magnetUrl is not necessarily a magnet (Prowlarr proxies it).
+    for field in ('magnetUrl', 'downloadUrl', 'infoUrl'):
+        candidate, value = link(row.get(field), key)
+        if priority[candidate] > priority[kind]:
+            kind, magnet = candidate, value
+    return {'title': title, 'size_bytes': number(row.get('size')),
+            'source': text(row.get('indexer'), key, 128),
+            'indexer_id': number(row.get('indexerId')),
+            'seeders': number(row.get('seeders')), 'leechers': number(row.get('leechers')),
+            'link_type': kind, 'magnet': magnet}
+
+
+def validate_args(args):
+    if args == ['status']:
+        return None
+    if len(args) == 2 and args[0] == 'search':
+        query = args[1].strip()
+        if 1 <= len(query) <= 200 and all(c.isprintable() for c in args[1]):
+            return query
+    raise Failure('usage', 'Uso: myct-search status | search "consulta" (1–200 caracteres, sem controles).')
+
+
+def run(args, api):
+    query = validate_args(args)
+    if query is None:
+        system = api.get('/api/v1/system/status')
+        if not isinstance(system, dict) or system.get('appName') != 'Prowlarr' or not isinstance(system.get('version'), str):
+            raise Failure('invalid_response', 'Status Prowlarr inválido.')
+        return {'state': 'ready', 'version': text(system['version'], api.key, 64),
+                'indexers': indexers(api), 'result_limit': RESULT_LIMIT}
+    sources = indexers(api)
+    params = [('query', query), ('type', 'search'), ('limit', RESULT_LIMIT)]
+    params.extend(('indexerIds', source['id']) for source in sources)
+    rows = api.get('/api/v1/search?' + urlencode(params), timeout=25)
+    if not isinstance(rows, list):
+        raise Failure('invalid_response', 'Lista de resultados inválida.')
+    results = []
+    valid = 0
+    for row in rows:
+        item = simplify(row, api.key)
+        if item is not None:
+            valid += 1
+            if len(results) < RESULT_LIMIT:
+                results.append(item)
+    if rows and not valid:
+        raise Failure('invalid_response', 'Prowlarr não retornou resultados torrent válidos.')
+    return {'state': 'results' if results else 'empty', 'results': results,
+            'count': len(results), 'received_count': len(rows), 'discarded_count': len(rows) - valid,
+            'truncated': valid > RESULT_LIMIT, 'result_limit': RESULT_LIMIT}
+
+
+def main(args=None):
+    args = sys.argv[1:] if args is None else args
+    try:
+        validate_args(args)
+        result = {'schema_version': 1, 'ok': True, **run(args, Api(api_key()))}
+        output = json.dumps(result, ensure_ascii=True)
+        if len(output.encode()) > OUTPUT_LIMIT:
+            raise Failure('response_limit', 'Saída excedeu 256 KiB; refine a pesquisa.')
+        print(output)
+        return 0
+    except Failure as error:
+        print(json.dumps({'schema_version': 1, 'ok': False, 'state': 'error',
+                          'error': {'code': error.code, 'message': str(error)}}, ensure_ascii=True))
+        return 2 if error.code in ('usage', 'config') else 3
+
+
+if __name__ == '__main__':
+    sys.exit(main())

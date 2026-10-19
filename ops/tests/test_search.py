@@ -1,0 +1,192 @@
+import contextlib
+import http.client
+import importlib.machinery
+import importlib.util
+import io
+import json
+import os
+from pathlib import Path
+import stat
+import unittest
+from unittest.mock import MagicMock, patch
+from urllib.parse import parse_qs, urlsplit
+
+loader = importlib.machinery.SourceFileLoader('search', str(Path(__file__).parents[1] / 'myct-search'))
+spec = importlib.util.spec_from_loader(loader.name, loader)
+search = importlib.util.module_from_spec(spec)
+loader.exec_module(search)
+
+# Synthetic credentials only; never read the real Prowlarr config in unit tests.
+KEY = '0123456789abcdef0123456789abcdef'
+MAGNET = 'magnet:?xt=urn:btih:' + 'a' * 40 + '&dn=Ubuntu'
+PROXY = 'http://127.0.0.1:9696/1/download?apikey=' + KEY + '&link=opaque&file=Ubuntu'
+
+
+def row(**extra):
+    return {'title': 'Ubuntu', 'protocol': 'torrent', 'size': 1234, 'indexer': 'Knaben',
+            'indexerId': 1, 'seeders': 7, 'leechers': 0, 'magnetUrl': PROXY, **extra}
+
+
+class FakeApi:
+    key = KEY
+
+    def __init__(self, rows=None):
+        self.rows = [] if rows is None else rows
+        self.calls = []
+
+    def get(self, path, timeout=7):
+        self.calls.append((path, timeout))
+        if path == '/api/v1/indexer':
+            return [{'id': 1, 'name': 'Knaben', 'enable': True, 'protocol': 'torrent'},
+                    {'id': 2, 'name': 'Disabled', 'enable': False, 'protocol': 'torrent'},
+                    {'id': 3, 'name': 'Usenet', 'enable': True, 'protocol': 'usenet'}]
+        if path == '/api/v1/system/status':
+            return {'appName': 'Prowlarr', 'version': '2.6.5.5623', 'secret': KEY}
+        return self.rows
+
+
+class SearchTest(unittest.TestCase):
+    def test_status_and_get_only_torrent_search(self):
+        api = FakeApi([row()])
+        self.assertEqual('ready', search.run(['status'], api)['state'])
+        result = search.run(['search', ' Ubuntu & Linux '], api)
+        path, timeout = api.calls[-1]
+        self.assertEqual(25, timeout)
+        self.assertEqual('/api/v1/search', urlsplit(path).path)
+        self.assertEqual({'query': ['Ubuntu & Linux'], 'type': ['search'], 'limit': ['20'],
+                          'indexerIds': ['1']}, parse_qs(urlsplit(path).query))
+        self.assertNotIn(KEY, path)
+        self.assertEqual(1, result['count'])
+
+    def test_real_field_shape_preserves_zero_and_omits_secret_urls(self):
+        item = search.simplify(row(downloadUrl=PROXY, infoHash='a' * 40), KEY)
+        self.assertEqual(('Ubuntu', 1234, 'Knaben', 7, 0),
+                         tuple(item[k] for k in ('title', 'size_bytes', 'source', 'seeders', 'leechers')))
+        self.assertEqual('indirect_url', item['link_type'])
+        self.assertIsNone(item['magnet'])
+        self.assertNotIn(KEY, json.dumps(item))
+        self.assertNotIn('infoHash', item)
+
+    def test_direct_magnets_are_not_synthesized_or_resolved(self):
+        for field in ('magnetUrl', 'downloadUrl'):
+            item = search.simplify(row(**{field: MAGNET}), KEY)
+            self.assertEqual(('magnet', MAGNET), (item['link_type'], item['magnet']))
+        item = search.simplify(row(magnetUrl='', infoHash='a' * 40), KEY)
+        self.assertEqual(('none', None), (item['link_type'], item['magnet']))
+
+    def test_torrent_url_page_and_malformed_links(self):
+        self.assertEqual('torrent_url', search.link('https://example.org/ubuntu.torrent?x=1', KEY)[0])
+        self.assertEqual('indirect_url', search.link('https://example.org/details/ubuntu', KEY)[0])
+        for value in ('magnet:?xt=invalid', 'https://[', 'file:///tmp/test.torrent',
+                      MAGNET + '\n', MAGNET + '&dn=' + KEY, 'magnet:?xt=urn:btih:' + 'a' * 39):
+            self.assertEqual(('none', None), search.link(value, KEY))
+
+    def test_missing_numeric_fields_are_null_not_zero(self):
+        item = search.simplify(row(size=-1, seeders=True, leechers='5'), KEY)
+        for field in ('size_bytes', 'seeders', 'leechers'):
+            self.assertIsNone(item[field])
+        self.assertIsNone(search.simplify({'protocol': 'torrent'}, KEY))
+        self.assertIsNone(search.simplify(None, KEY))
+
+    def test_empty_malformed_and_bounded_results(self):
+        self.assertEqual('empty', search.run(['search', 'Ubuntu'], FakeApi())['state'])
+        for rows in ({'error': KEY}, [None, {}, row(title='')]):
+            with self.assertRaises(search.Failure) as caught:
+                search.run(['search', 'Ubuntu'], FakeApi(rows))
+            self.assertEqual('invalid_response', caught.exception.code)
+        result = search.run(['search', 'Ubuntu'], FakeApi([None] + [row()] * 25))
+        self.assertEqual((20, 26, 1, True),
+                         tuple(result[k] for k in ('count', 'received_count', 'discarded_count', 'truncated')))
+
+    def test_query_validation_before_credentials_or_network(self):
+        for args in ([], ['search'], ['search', ''], ['search', 'a' * 201],
+                     ['search', 'Ubuntu\n'], ['search', 'one', 'two'], ['download', MAGNET]):
+            with patch.object(search, 'api_key') as key, contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(2, search.main(args))
+                key.assert_not_called()
+                self.assertEqual('usage', json.loads(out.getvalue())['error']['code'])
+
+    def test_private_config_and_key_not_in_diagnostics(self):
+        xml = ('<Config><ApiKey>' + KEY + '</ApiKey></Config>').encode()
+        for mode, uid, payload, expected in [
+                (0o600, os.getuid(), xml, True), (0o644, os.getuid(), xml, False),
+                (0o600, os.getuid() + 1, xml, False), (0o600, os.getuid(), b'<bad', False),
+                (0o600, os.getuid(), b'<Config/>', False)]:
+            meta = MagicMock(st_mode=stat.S_IFREG | mode, st_uid=uid, st_size=len(payload))
+            stream = MagicMock()
+            stream.__enter__.return_value = stream
+            stream.fileno.return_value = 99
+            stream.read.return_value = payload
+            with patch.object(search.os, 'open', return_value=99), \
+                    patch.object(search.os, 'fdopen', return_value=stream), \
+                    patch.object(search.os, 'fstat', return_value=meta):
+                if expected:
+                    self.assertEqual(KEY, search.api_key())
+                else:
+                    with self.assertRaises(search.Failure) as caught:
+                        search.api_key()
+                    self.assertNotIn(KEY, str(caught.exception))
+
+    def test_http_errors_timeout_and_size_are_sanitized_and_closed(self):
+        cases = [(401, b'', 'authentication'), (403, b'', 'authentication'),
+                 (302, b'', 'upstream'), (500, KEY.encode(), 'upstream'),
+                 (200, KEY.encode(), 'invalid_response'),
+                 (200, b'x' * (search.RESPONSE_LIMIT + 1), 'response_limit')]
+        for status, payload, code in cases:
+            conn = MagicMock()
+            response = conn.getresponse.return_value
+            response.status = status
+            response.read.return_value = payload
+            with patch.object(search.http.client, 'HTTPConnection', return_value=conn) as factory:
+                with self.assertRaises(search.Failure) as caught:
+                    search.Api(KEY).get('/api/v1/search?query=Ubuntu')
+                self.assertEqual(code, caught.exception.code)
+                self.assertNotIn(KEY, str(caught.exception))
+                factory.assert_called_once_with('127.0.0.1', 9696, timeout=7)
+                conn.close.assert_called_once()
+        for error, code in [(TimeoutError(KEY), 'timeout'), (ConnectionRefusedError(KEY), 'connection'),
+                            (http.client.IncompleteRead(b'secret'), 'connection')]:
+            conn = MagicMock()
+            conn.request.side_effect = error
+            with patch.object(search.http.client, 'HTTPConnection', return_value=conn):
+                with self.assertRaises(search.Failure) as caught:
+                    search.Api(KEY).get('/api/v1/indexer')
+                self.assertEqual(code, caught.exception.code)
+                self.assertNotIn(KEY, str(caught.exception))
+                conn.close.assert_called_once()
+
+    def test_auth_header_and_no_redirect_or_retry(self):
+        conn = MagicMock()
+        conn.getresponse.return_value.status = 200
+        conn.getresponse.return_value.read.return_value = b'[]'
+        with patch.object(search.http.client, 'HTTPConnection', return_value=conn):
+            self.assertEqual([], search.Api(KEY).get('/api/v1/search?query=Ubuntu'))
+        conn.request.assert_called_once_with('GET', '/api/v1/search?query=Ubuntu',
+                                             headers={'X-Api-Key': KEY, 'Accept': 'application/json'})
+        conn.getresponse.return_value.read.assert_called_once_with(search.RESPONSE_LIMIT + 1)
+
+    def test_json_envelope_and_redaction(self):
+        api = FakeApi([row(title='Ubuntu ' + KEY, indexer=KEY)])
+        with patch.object(search, 'api_key', return_value=KEY), patch.object(search, 'Api', return_value=api), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(0, search.main(['search', 'Ubuntu']))
+        payload = out.getvalue()
+        self.assertNotIn(KEY, payload)
+        self.assertEqual(1, json.loads(payload)['schema_version'])
+        self.assertIn('[redacted]', payload)
+        with patch.object(search, 'api_key', return_value=KEY), \
+                patch.object(search, 'run', side_effect=search.Failure('timeout', 'Tempo excedido.')), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(3, search.main(['status']))
+            self.assertFalse(json.loads(out.getvalue())['ok'])
+
+    def test_no_enabled_torrent_indexer(self):
+        api = FakeApi()
+        with patch.object(api, 'get', return_value=[{'enable': False, 'protocol': 'torrent', 'id': 1}]):
+            with self.assertRaises(search.Failure) as caught:
+                search.run(['search', 'Ubuntu'], api)
+        self.assertEqual('no_indexers', caught.exception.code)
+
+
+if __name__ == '__main__':
+    unittest.main()
