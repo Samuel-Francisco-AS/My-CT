@@ -484,3 +484,15 @@ instalada e aceita pelo proprietário.
 6. Conferir regressões rápidas: Terminal, IDE, SFTP, navegação Downloads/HTTP/Mídia,
    Saúde e proteção do Cofre. Registrar o resultado físico antes de aceite/merge;
    não repetir automaticamente testes de serviços já aprovados.
+
+## Fechamento MYCT-S1 — aceite físico do proprietário (19/10/2026)
+
+**Aceite concedido pelo proprietário no Moto G06 para a candidata `0.8.0-s1b-search-rc1` (versionCode 39).** Evidência comunicada diretamente na conversa, após a publicação do commit `aa20d3a`:
+
+- APK instalado como atualização e seção **Busca** aberta no Moto G06; capturas mostraram serviço Prowlarr 2.6.5.5623 disponível, pesquisa `ubuntu` com 20 resultados, metadados legíveis, aviso de limite e ações desabilitadas nos resultados sem magnet.
+- O proprietário tocou **Adicionar aos downloads** em um resultado da Busca, abriu **Downloads → Torrents** e confirmou que a operação havia começado e o torrent **estava baixando no Transmission**. Isso valida o fluxo real Android → SSH → `myct-search`/infohash magnet → `TorrentsModel`/`myct-torrent` → Transmission, além do aceite de inclusão.
+- O proprietário declarou explicitamente a etapa aprovada. Não houve intervenção remota da assistente nos arquivos baixados, nem solicitação de parada do download.
+
+**Pendências complementares não bloqueantes:** não foram comunicadas verificações físicas específicas de cancelamento/reconexão, duplicata de inclusão e regressão completa nas telas adjacentes; seus cenários passaram nos testes automatizados onde aplicável, mas não devem ser registrados como teste físico PASS. Registrar eventual problema em issue futura sem retroativamente atribuir comprovação. Disponibilidade de peers não é universal: foi confirmada a transferência **do torrent selecionado**, não de todos os resultados do indexador.
+
+A MYCT-S1 está aceita para integração na `main`. MYCT-S2 (Bitmagnet/DHT) continua **opcional e não iniciada**, com issue #43 como referência de avaliação.
