@@ -1,7 +1,7 @@
 # MYCT-S1/S2 — Busca de torrents: Prowlarr primeiro, Bitmagnet depois
 
 **Acordado em:** 19/10/2026  
-**Situação:** S1A/S1B aprovadas e incorporadas à `main` pela PR #44 (`265b4e2`); MYCT-S1C implementada em 0.8.1/code 40, validada no Fedora e aceita fisicamente no Moto G06; o proprietário autorizou o fechamento/merge da PR #45 em 19/10/2026; MYCT-S2/Bitmagnet opcional, não iniciada.
+**Situação:** S1A/S1B concluídas (PR #44); **MYCT-S1C concluída, validada no Fedora/Moto G06 e incorporada à `main` via PR #45 (merge `7ea3735f89234ca5d74fa3c7e1ae9f6f9a3f2752`, em 19/10/2026)**. Versão Android validada: 0.8.1-s1c-rc1/code 40; MYCT-S2/Bitmagnet opcional, não iniciada.
 **Issue:** [#43](https://github.com/Samuel-Francisco-AS/My-CT/issues/43)  
 **Base inspecionada:** `main`, após consolidação da PR #42 (commit `99aaa24538`).
 
@@ -800,4 +800,17 @@ Após atualizar manualmente o helper `myct-search` instalado e instalar a candid
 
 **Aceite físico confirmado para as três funcionalidades centrais da MYCT-S1C.** Não foram relatados testes físicos específicos de descarte de resposta atrasada, cancelamento, perda/reconexão SSH, esgotamento da última página, scroll após falha, preservação de downloads, ou novo envio de magnet. Não registrar esses itens como PASS físico; testes automatizados descritos acima permanecem a evidência nesses casos. Não houve relato de falhas nessas funcionalidades.
 
-**Estado do fechamento:** em 19/10/2026, após o aceite físico das três funcionalidades, o proprietário **autorizou expressamente o fechamento e a integração da PR #45 na `main`**. Este registro precede a execução do merge. A limpeza da branch local e remota deverá ocorrer apenas após sincronização e verificação do commit integrado. MYCT-S2/Bitmagnet continua opcional e fora desta etapa.
+**Estado do fechamento:** após o aceite físico das três funcionalidades, o proprietário autorizou o fechamento. A **PR #45 foi integrada à `main` com sucesso** em 19/10/2026, commit de merge `7ea3735f89234ca5d74fa3c7e1ae9f6f9a3f2752`. A limpeza da branch local e remota ocorrerá pelo bloco Git entregue ao proprietário, somente após sincronização e verificação do commit integrado. MYCT-S2/Bitmagnet permanece opcional e não iniciada.
+
+
+## Fechamento final MYCT-S1C — 19/10/2026
+
+**Concluída e incorporada ao repositório remoto.** O GitHub confirmou a integração da [PR #45](https://github.com/Samuel-Francisco-AS/My-CT/pull/45) na `main` com merge commit `7ea3735f89234ca5d74fa3c7e1ae9f6f9a3f2752` (PR fechada/merged). Branch de trabalho `myct-s1c-search-filters-pagination` continua disponível até a sincronização e limpeza autorizada no Fedora.
+
+**Escopo aprovado fisicamente:** filtros de indexador, paginação/Carregar mais e variedade de fontes nas páginas sucessivas. **Comprovação Fedora:** 281 resultados brutos, 228 únicos, sete fontes na página 1, 20 resultados nas páginas 1 e 2. Validação automatizada: 21 testes Python, 270 testes JVM aprovados (2 opt-in ignorados), build e lint aprovados. O proprietário não relatou regressões nessas três funcionalidades.
+
+**Escopo não revalidado fisicamente nesta etapa:** cancelamento, perda/reconexão, fim da última página, erro intermediário, scroll após erro, regressão completa dos downloads e novo magnet. Permanecem evidência automatizada e/ou aceite anterior da S1B, não testes físicos adicionais fictícios.
+
+**Implantação:** proprietário confirmou atualização do helper Fedora e APK candidato 0.8.1/code 40. Não houve modificação de configuração ou restart de Transmission, Jellyfin, Prowlarr, PostgreSQL ou SSH no fechamento. A sincronização do checkout local `main` e remoção da branch devem ser feitas por procedimento Git seguro, com árvore limpa e verificação de ancestralidade do commit de merge.
+
+**Próxima trilha:** MYCT-S2/Bitmagnet é **opcional, não iniciada e não é requisito de conclusão da S1C**. Issue #43 preservada em aberto para a decisão futura sobre S2.
