@@ -1,6 +1,8 @@
 # MYCT-C1A — CLI de arquivamento de arquivos comuns
 
-**19/10/2026 — candidata para revisão da Luna; aceite real pendente.**
+**FECHAMENTO — 19/10/2026: C1A ACEITA funcionalmente no Fedora e Google Drive; [PR #47](https://github.com/Samuel-Francisco-AS/My-CT/pull/47) incorporada à `main` (merge `bbf929886a1c66d2b0927b2ca3f8c46fa25cfe7b`).** Testes da CLI (29 PASS), conexão OAuth real e ida/volta de fixture de 37 bytes com MD5/SHA-256 e `cmp` idênticos. Sem exclusões, alterações em serviços nem mudança na função de seeding. Próxima fase: C1B, não iniciada.
+
+> As seções abaixo registram também a situação histórica anterior ao aceite; a conclusão real está detalhada em "Aceite real no Fedora / Google Drive" ao final.
 Implementação da [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46)
 na branch `myct-c1a-google-drive-archive`, conforme as
 [instruções de execução](https://github.com/Samuel-Francisco-AS/My-CT/issues/46#issuecomment-6277599705).
@@ -206,4 +208,4 @@ timers, Transmission/Jellyfin, Android ou PostgreSQL. Nenhum merge.
 
 **Resultado da auditoria:** fluxos básicos de cópia e recuperação foram comprovados usando Drive real, sem perda de bytes. A operação não incluiu apagar conteúdo local/remoto, modificar Transmission/Jellyfin nem retomar seeding. Regressões extras de mídia e torrent (42 testes) foram relatadas pelo executor Codex; não foram reexecutadas nessa etapa física. Limitações registradas (backup do catálogo, transporte no SSH, tratamento de cópias divergentes, ausência de gerenciamento de torrent) continuam como dívidas/etapas posteriores.
 
-**Próximos passos:** integrar a PR #47 à `main` **após autorização do proprietário** e sincronizar o Fedora; C1B tratará torrent completo, metadados e hardlinks, em outra branch. Manter a fixture e os arquivos remotos até decisão posterior sobre limpeza manual.
+**Fechamento remoto:** PR #47 integrada à `main` em `bbf929886a1c66d2b0927b2ca3f8c46fa25cfe7b`; merge confirmado no GitHub. Sincronização e limpeza de branch no Fedora ficam com o proprietário. A issue #46 permanece aberta para C1B (torrent completo, metadados, hardlinks e seeding) e C1C (Android). A branch `gh-pages` do site OAuth é independente e deve ser preservada. Manter a fixture e os objetos no Drive até autorização separada de limpeza; nenhum objeto foi excluído neste fechamento.
