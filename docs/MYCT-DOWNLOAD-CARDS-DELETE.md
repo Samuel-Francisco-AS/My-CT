@@ -25,6 +25,18 @@ Branch: myct-download-cards-cleanup (empilhada sobre MYCT Media PR #41, sem merg
 - Remove somente o payload do download (arquivo final ou `.part`) e seu registro de histórico. Preserva arquivos adicionais no mesmo diretório (não usa `rm -rf` no diretório de payload).
 - Para não prejudicar uma biblioteca externa ou falsear espaço livre, recusa arquivos com mais de um hardlink.
 
+## Hotfixes herdados (evitar regressão do PR #34)
+
+O PR #34 `fix/torrent-dns-trackers` permaneceu draft sem merge e **não estava presente na main** quando a presente candidata empilhada nasceu. Uma atualização via `install` do helper desse worktree sobrescreveu o binário corrigido instalado no Fedora com uma versão antiga; um link magnet voltou a mostrar incorretamente `Transmission indisponível` quando um tracker falhou no DNS.
+
+Nesta branch, os commits `8c193a2` e `642b69c` consolidaram as correções e regressões do PR #34, em conjunto com a nova ação `delete-data`:
+- tolerar falha DNS de tracker individual removendo esse tracker da URI encaminhada ao daemon;
+- rejeitar endereços IP literais privados, filtrar resultados DNS não públicos;
+- aceitar separadores vazios repetidos `&&` e preservar `xt=urn:btih:` literal ao editar a URI para Transmission;
+- diagnosticar mensagens/ códigos do RPC sem vazar URI magnet.
+
+**Processo obrigatório antes de distribuir helpers:** conferir que nenhuma correção pendente em branch/PR anterior se perdeu; executar testes de regressão `test_torrent.py` sobre a branch exata a instalar; nunca comparar só o versionCode Android quando o helper Python também muda.
+
 ## Instalação / testes antes de alterar Fedora
 
 Criar worktree separado:
