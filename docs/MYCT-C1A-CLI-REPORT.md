@@ -186,3 +186,24 @@ timers, Transmission/Jellyfin, Android ou PostgreSQL. Nenhum merge.
   timeouts e logs.
 - [Drive: client ID próprio](https://rclone.org/drive/#making-your-own-client-id):
   orientação para configuração privada pelo proprietário.
+
+---
+
+## Aceite real no Fedora / Google Drive — 19/10/2026
+
+**Estado atualizado: C1A aprovada funcionalmente pelo proprietário no Fedora 44, com fluxo real de upload e restauração concluído.** Este aceite complementa a seção histórica acima sobre testes simulados; a PR de implementação permanece **draft, sem merge**, até autorização de integração.
+
+**Evidência fornecida pelo proprietário (sem credenciais OAuth):**
+
+- `rclone about myct-gdrive:`: conta autenticada e acessível, cota total 400 GiB, livre cerca de 399,3 GiB.
+- `python3 -m unittest discover -s ops/tests -p 'test_archive.py' -v`: **29 testes PASS** em **8,279 s** no Fedora do proprietário.
+- `./ops/myct-archive status`: `ok:true`, `remote_accessible:true`, `catalog_entries:0` antes do teste; cota reportada em bytes.
+- Arquivo de teste temporário **37 bytes**, criado em `/home/sam/myct-c1a-teste.xq9m5Y`, enviado para o remote `myct-gdrive:`, pasta `My-CT-Archive/`, com retorno `state:verified`, tamanho **37**, MD5 remoto compatível **08e09e7276204d54935b61fd75dccc55**, `original_preserved:true`.
+- `restore` retornou `ok:true`, `state:restored` com comparações `size`, `md5`, `sha256` realizadas; destino isolado em `~/Downloads/My-CT/Restored/`.
+- `sha256sum` do original e do restaurado coincidiram exatamente:
+  `548fe656fef4e83aeb4205b5916ab57b06153c8ff268c835678b14b8cfd3a7cb`.
+- `cmp` concluiu sem divergência e o script do proprietário imprimiu **`PASS: arquivo restaurado identico ao original!`**.
+
+**Resultado da auditoria:** fluxos básicos de cópia e recuperação foram comprovados usando Drive real, sem perda de bytes. A operação não incluiu apagar conteúdo local/remoto, modificar Transmission/Jellyfin nem retomar seeding. Regressões extras de mídia e torrent (42 testes) foram relatadas pelo executor Codex; não foram reexecutadas nessa etapa física. Limitações registradas (backup do catálogo, transporte no SSH, tratamento de cópias divergentes, ausência de gerenciamento de torrent) continuam como dívidas/etapas posteriores.
+
+**Próximos passos:** integrar a PR #47 à `main` **após autorização do proprietário** e sincronizar o Fedora; C1B tratará torrent completo, metadados e hardlinks, em outra branch. Manter a fixture e os arquivos remotos até decisão posterior sobre limpeza manual.
