@@ -1,9 +1,16 @@
 # MYCT-C1 — Arquivamento em nuvem e restauração de seeding
 
 **Decisão:** 19/10/2026  
-**Estado:** PLANEJADA; somente documentação, sem código/serviço implantado.  
+**Estado:** C1A candidata em branch/PR draft; testes simulados, aceite Drive real pendente. Nenhum serviço implantado.
+
 **Acompanhamento:** [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46).  
 **Proprietário:** 400 GB de armazenamento Google por aproximadamente um ano; espaço disponível e data exata de término **a consultar no início da implementação**, nunca presumir 400 GB livres.
+
+**Incremento C1A (19/10/2026):** helper `ops/myct-archive` para arquivos comuns,
+sem exclusão de originais/remotos, com `status`, catálogo `list`, `archive` e
+`restore`. [Contrato, testes e intervenção humana](MYCT-C1A-CLI-REPORT.md).
+Instalação, OAuth, cota e upload/restore reais cabem ao proprietário após
+revisão da Luna. Torrent/hardlinks (C1B) e Android (C1C) permanecem planejados.
 
 ## 1. Necessidade real
 
