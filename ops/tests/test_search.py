@@ -62,17 +62,59 @@ class SearchTest(unittest.TestCase):
         item = search.simplify(row(downloadUrl=PROXY, infoHash='a' * 40), KEY)
         self.assertEqual(('Ubuntu', 1234, 'Knaben', 7, 0),
                          tuple(item[k] for k in ('title', 'size_bytes', 'source', 'seeders', 'leechers')))
-        self.assertEqual('indirect_url', item['link_type'])
-        self.assertIsNone(item['magnet'])
+        self.assertEqual('magnet', item['link_type'])
+        self.assertEqual('magnet:?xt=urn:btih:' + 'a' * 40, item['magnet'])
+        self.assertEqual('infohash', item['magnet_source'])
         self.assertNotIn(KEY, json.dumps(item))
         self.assertNotIn('infoHash', item)
 
-    def test_direct_magnets_are_not_synthesized_or_resolved(self):
+    def test_direct_magnets_are_preserved_and_prioritized(self):
         for field in ('magnetUrl', 'downloadUrl'):
-            item = search.simplify(row(**{field: MAGNET}), KEY)
+            item = search.simplify(row(infoHash='b' * 40, **{field: MAGNET}), KEY)
             self.assertEqual(('magnet', MAGNET), (item['link_type'], item['magnet']))
-        item = search.simplify(row(magnetUrl='', infoHash='a' * 40), KEY)
-        self.assertEqual(('none', None), (item['link_type'], item['magnet']))
+            self.assertEqual('direct', item['magnet_source'])
+
+    def test_infohash_accepts_only_complete_v1_hex_or_base32(self):
+        valid = ['0123abcd' * 5, 'ABCDEF01' * 5,
+                 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567', 'abcdefghijklmnopqrstuvwxyz234567']
+        for infohash in valid:
+            for direct in ('', PROXY, 'magnet:?xt=invalid'):
+                with self.subTest(infohash=infohash, direct=direct):
+                    item = search.simplify(row(magnetUrl=direct, infoHash=infohash), KEY)
+                    self.assertEqual('magnet', item['link_type'])
+                    self.assertEqual('infohash', item['magnet_source'])
+                    self.assertEqual('magnet:?xt=urn:btih:' + infohash, item['magnet'])
+                    self.assertEqual({'xt': ['urn:btih:' + infohash]}, parse_qs(urlsplit(item['magnet']).query))
+        for infohash in [None, 123, [], {}, '', 'g' * 40, 'a' * 39, 'a' * 41,
+                         'A' * 31, 'A' * 33, '0' * 32, '1' * 32, '8' * 32,
+                         'A' * 31 + '=', ' ' + 'a' * 40, 'a' * 40 + '\n',
+                         'urn:btih:' + 'a' * 40, 'a' * 40 + '&tr=https://example.org']:
+            with self.subTest(infohash=infohash):
+                item = search.simplify(row(infoHash=infohash), KEY)
+                self.assertEqual('indirect_url', item['link_type'])
+                self.assertIsNone(item['magnet'])
+                self.assertIsNone(item['magnet_source'])
+
+    def test_no_hash_keeps_null_magnet_and_existing_link_classification(self):
+        for value, kind in [('', 'none'), (PROXY, 'indirect_url'),
+                            ('https://example.org/ubuntu.torrent', 'torrent_url')]:
+            item = search.simplify(row(magnetUrl=value), KEY)
+            self.assertEqual(kind, item['link_type'])
+            self.assertIsNone(item['magnet'])
+            self.assertIsNone(item['magnet_source'])
+
+    def test_infohash_fallback_does_not_echo_secrets_or_http_urls(self):
+        for infohash in ('b' * 40, KEY + '12345678'):
+            api = FakeApi([row(infoHash=infohash, downloadUrl=PROXY, infoUrl=PROXY)])
+            with patch.object(search, 'api_key', return_value=KEY), patch.object(search, 'Api', return_value=api), \
+                    contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(0, search.main(['search', 'Ubuntu']))
+            payload = out.getvalue()
+            self.assertNotIn(KEY, payload)
+            self.assertNotIn('http', payload)
+            self.assertNotIn('apikey', payload)
+            self.assertEqual(1, json.loads(payload)['schema_version'])
+        self.assertIsNone(search.simplify(row(infoHash=KEY + '12345678'), KEY)['magnet'])
 
     def test_torrent_url_page_and_malformed_links(self):
         self.assertEqual('torrent_url', search.link('https://example.org/ubuntu.torrent?x=1', KEY)[0])

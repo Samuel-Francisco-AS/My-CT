@@ -1,7 +1,7 @@
 # MYCT-S1/S2 — Busca de torrents: Prowlarr primeiro, Bitmagnet depois
 
 **Acordado em:** 19/10/2026  
-**Situação:** S1A implementada e testada na CLI Fedora em 19/10/2026; helper ainda não instalado; S1B/Android pendente
+**Situação:** S1A instalada e aprovada pelo proprietário; S1A-R adiciona fallback por infoHash, validado no Fedora; atualização manual do helper e S1B/Android pendentes
 **Issue:** [#43](https://github.com/Samuel-Francisco-AS/My-CT/issues/43)  
 **Base inspecionada:** `main`, após consolidação da PR #42 (commit `99aaa24538`).
 
@@ -96,8 +96,9 @@ Implementado `ops/myct-search`, Python 3 + biblioteca padrão, com somente
 `status` e `search "consulta"`. Critérios definidos antes da implementação:
 status autenticado, pesquisa Ubuntu no Knaben, JSON limitado com metadados,
 distinção entre magnet e link indireto, vazio e erros sanitizados. Esses
-critérios foram verificados no próprio Fedora. **Aceite do proprietário pela
-CLI via SSH do My-CT e instalação em `~/.local/bin` permanecem pendentes.**
+critérios foram verificados no próprio Fedora. **Após a entrega original
+`371c925`, o proprietário confirmou instalação em `~/.local/bin` e aprovação
+da pesquisa real.** A revisão S1A-R está registrada ao final deste relatório.
 Nenhuma alteração Android nesta etapa.
 
 Ponto de partida confirmado: `/home/sam/Projetos/My-CT`, branch existente
@@ -142,7 +143,7 @@ uso/configuração inválidos e 3 em falha da API/indexadores.
 `result_limit: 20`. Ready significa API autenticada e pelo menos um indexador
 torrent habilitado; não garante que cada fonte esteja saudável naquele momento.
 
-Exemplo real convertido, com envelope reduzido aqui para leitura:
+Exemplo real da S1A original, antes da revisão S1A-R, com envelope reduzido:
 
 ```json
 {
@@ -180,13 +181,16 @@ lista não vazia sem nenhuma entrada válida gera `invalid_response`.
 
 | Valor | Significado |
 | --- | --- |
-| `magnet` | URI `magnet:` efetivamente fornecida em `magnetUrl` ou `downloadUrl`, com `xt` BitTorrent v1 sintaticamente válido; `magnet` contém a URI original |
+| `magnet` | URI direta com `xt` BitTorrent v1 válido (preservada), ou magnet mínimo gerado de `infoHash` v1 válido na S1A-R |
 | `torrent_url` | URL HTTP(S) cujo caminho termina em `.torrent`; é uma indicação pela extensão, sem baixar/verificar o conteúdo |
 | `indirect_url` | URL HTTP(S) intermediária, proxy ou página; jamais tratada como magnet |
 | `none` | Nenhum link reconhecido/aceito |
 
-URLs HTTP não são devolvidas, pois podem carregar API keys/passkeys. Sem
-magnet direto, `magnet` é `null`. Hashes não são usados para fabricar magnets.
+URLs HTTP não são devolvidas, pois podem carregar API keys/passkeys. Na S1A-R,
+o magnet direto tem prioridade; sem ele, `infoHash` válido gera um magnet mínimo
+sem trackers. Sem ambos, `magnet` é `null` e a classificação HTTP/none é preservada.
+O campo adicional `magnet_source` é `"direct"`, `"infohash"` ou `null`.
+Os campos anteriores e `schema_version: 1` são preservados para o futuro Android.
 Essa checagem sintática não substitui a validação do helper `myct-torrent`
 antes de qualquer futura inclusão explícita. Magnets somente v2 não estão
 habilitados neste contrato, acompanhando o fluxo v1 existente.
@@ -201,7 +205,7 @@ Falhas retornam `ok: false`, `state: "error"` e
 por exemplo. Códigos: `usage`, `config`, `authentication`, `connection`,
 `timeout`, `upstream`, `invalid_response`, `response_limit`, `no_indexers`.
 
-### Limitação real de magnets — não confundir o nome do campo com o protocolo
+### Diagnóstico inicial de magnets — não confundir o nome do campo com o protocolo
 
 A resposta real inicial de Ubuntu continha 84 itens. Foram observados
 `title`, `size`, `indexer`, `indexerId`, `seeders`, `leechers`, `protocol`,
@@ -217,12 +221,10 @@ converte também `MagnetUrl` em proxy, e
 [DownloadMappingService v2.6.5.5623](https://github.com/Prowlarr/Prowlarr/blob/v2.6.5.5623/src/NzbDrone.Core/Download/DownloadMappingService.cs)
 protege o destino antes de compor o URL autenticado.
 
-Por isso os 20 resultados entregues no teste têm `link_type: "indirect_url"`
-e `magnet: null`. **Pesquisa real está funcional; envio de um magnet real a
-Downloads não está comprovado nem habilitado por esta entrega.** Suporte a
-magnet direto foi validado com fixtures sintéticas. Resolver o proxy exigirá
-uma microetapa explícita, preservando a credencial e avaliando redirects sem
-disparar downloads. Não houve tentativa de decifrar ou seguir esses links.
+Por isso os 20 resultados da **S1A original** tinham `link_type: "indirect_url"`
+e `magnet: null`. A S1A-R supera essa limitação quando há `infoHash` válido,
+sem resolver o proxy. **Envio de um magnet real a Downloads continua sem teste
+nesta etapa.** Não houve tentativa de decifrar ou seguir os links HTTP.
 
 ### Testes e consumo observado
 
@@ -268,7 +270,8 @@ Jellyfin nem feita prova no Moto; não há afirmação de ausência de impacto s
 
 ### Instalação manual do helper e retomada
 
-**Não executada nesta entrega.** No Fedora, como `sam`, sem sudo:
+O proprietário instalou e aprovou a S1A original. **A atualização para S1A-R
+não foi instalada pelo agente.** Para atualizar no Fedora, como `sam`, sem sudo:
 
 ```bash
 cd /home/sam/Projetos/My-CT
@@ -289,16 +292,73 @@ necessários novo serviço, restart, porta pública ou alteração do Transmissi
 
 ### Pendências S1B
 
-- Instalar manualmente o helper e confirmar a consulta pelo SSH do My-CT.
+- Atualizar manualmente o helper para S1A-R e confirmar a consulta pelo SSH do My-CT.
 - Criar a seção Busca usando o contrato v1 por SSH, sem polling e com estados
   ready/results/empty/error, limite visível e cancelamento/descarte de respostas antigas.
-- Exibir links indiretos sem ação automática de download. A amostra real não
-  fornece magnet direto: resolver essa limitação antes de prometer o gate de
-  inclusão real em Downloads, ou encontrar fonte que efetivamente o forneça.
+- Usar `magnet` para inclusão explícita, tanto `direct` como `infohash`.
+  Resultados sem magnet continuam sem ação automática de download.
 - Testar qualquer inclusão somente por ação explícita via `myct-torrent`
   existente; verificar duplicata, Downloads e regressões no Moto G06.
 - Manter PR #44 draft/sem merge e issue #43 aberta. S2/Bitmagnet não iniciado.
 
-**Próxima ação:** instalação manual e aceite CLI pelo proprietário; depois
-S1B com a limitação de links acima explícita. Android, Transmission, Jellyfin,
+**Próxima ação:** atualização manual para S1A-R; depois
+S1B com o contrato abaixo. Android, Transmission, Jellyfin,
 PostgreSQL e Core permaneceram sem alterações nesta implementação.
+
+## MYCT-S1A-R — fallback por infoHash (19/10/2026)
+
+Microcorreção solicitada após instalação/aceite da S1A original pelo proprietário.
+Base `371c925`, na mesma branch `myct-s1-search-plan`, limpa e sincronizada
+com `origin` antes das alterações. O diagnóstico adicional do proprietário
+identificou 80 hashes v1 válidos nos 84 itens Knaben, permitindo gerar magnets
+sem tocar nos proxies autenticados.
+
+Alteração restrita à conversão de resultados em `ops/myct-search`, com testes
+e documentação: magnet direto válido permanece intacto e prioritário. Como
+fallback, `infoHash` deve ser uma string completa com **40 caracteres hexadecimais**
+ou **32 caracteres Base32 (`A–Z`, `a–z`, `2–7`)**. Rejeita prefixos, espaços,
+controles, padding, tamanhos incorretos e caracteres fora desses alfabetos.
+Também suprime qualquer candidato que contenha a API key local.
+
+O resultado gerado é somente `magnet:?xt=urn:btih:<infoHash>`, preservando a
+grafia do hash. Sem nome, trackers, URLs HTTP ou parâmetros extras. Exemplo
+**sintético** dos campos de link:
+
+```json
+{
+  "link_type": "magnet",
+  "magnet": "magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "magnet_source": "infohash"
+}
+```
+
+`magnet_source: "direct"` identifica URI direta; sem magnet é `null`.
+A extensão é aditiva ao JSON v1, mantendo envelope, nomes/tipos anteriores,
+estados, erros, limite de 20 e ordem dos resultados. O futuro Android pode
+usar `magnet` como antes e, opcionalmente, mostrar a origem. Não houve alteração
+Android ou dependências novas.
+
+Validação executada:
+
+- `python3 -m unittest discover -s ops/tests -p test_search.py -v`:
+  **15 testes aprovados**, incluindo hashes hex/Base32 em ambas as caixas,
+  inválidos/ausentes, prioridade direta, ausência de trackers, preservação das
+  classificações sem hash e não exposição de credencial/URLs na saída JSON.
+- **Uma pesquisa real Ubuntu pelo Knaben**, executando `main` com observação
+  em memória da resposta da API: 84 recebidos, nenhum descartado; **80 magnets
+  gerados e 4 sem magnet** no conjunto completo. Não houve magnet direto.
+- Na saída limitada aos primeiros 20: **17 magnets `infohash` e 3 `null`**,
+  `truncated: true`, JSON de **6.189 bytes**, exit 0, em **1,490 s** nesta
+  medição pontual do processo de validação. Sem nova medição de pico RSS;
+  as medições da S1A original acima permanecem históricas.
+- Verificação em memória confirmou ausência da chave real e de URLs HTTP
+  nos resultados convertidos. Todos os 80 magnets gerados foram aceitos por
+  `myct-torrent.magnet`, apenas a função de validação existente: **sem RPC,
+  inclusão no Transmission ou download**.
+- `git diff --check` aprovado. Nenhum serviço reiniciado, configuração ativa
+  alterada ou dado Fedora manipulado pelo helper; atualização instalada segue manual.
+
+Limite do aceite: validade sintática do hash e compatibilidade com o validador
+não comprovam disponibilidade de peers ou conteúdo. Sem trackers acrescentados,
+a descoberta dependerá dos recursos já existentes do cliente BitTorrent.
+Inclusão real e prova no Moto G06 pertencem à S1B, por ação explícita.

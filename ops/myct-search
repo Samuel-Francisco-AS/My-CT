@@ -132,11 +132,19 @@ def simplify(row, key):
         candidate, value = link(row.get(field), key)
         if priority[candidate] > priority[kind]:
             kind, magnet = candidate, value
+    magnet_source = 'direct' if magnet is not None else None
+    infohash = row.get('infoHash')
+    if (magnet is None and isinstance(infohash, str)
+            and re.fullmatch(r'(?:[a-fA-F0-9]{40}|[A-Za-z2-7]{32})', infohash)
+            and key.lower() not in infohash.lower()):
+        # Minimal trackerless v1 magnet; never resolve an authenticated HTTP proxy.
+        kind, magnet = 'magnet', 'magnet:?xt=urn:btih:' + infohash
+        magnet_source = 'infohash'
     return {'title': title, 'size_bytes': number(row.get('size')),
             'source': text(row.get('indexer'), key, 128),
             'indexer_id': number(row.get('indexerId')),
             'seeders': number(row.get('seeders')), 'leechers': number(row.get('leechers')),
-            'link_type': kind, 'magnet': magnet}
+            'link_type': kind, 'magnet': magnet, 'magnet_source': magnet_source}
 
 
 def validate_args(args):
