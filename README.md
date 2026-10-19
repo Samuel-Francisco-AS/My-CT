@@ -83,6 +83,7 @@ As escolhas específicas de bibliotecas, contratos e divisão de entregas são *
 | [Downloads MYCT-5A](docs/MYCT-5A-DOWNLOADS-REPORT.md) | CLI HTTP/HTTPS, testes Fedora, uso e aceite real SSH/Moto |
 | [Android MYCT-5B](docs/MYCT-5B-ANDROID-DOWNLOADS-REPORT.md) | Quinta aba Downloads, APK 0.5.2, aceite parcial e validações futuras |
 | [Fechamento MYCT-5C](docs/MYCT-5C-BITTORRENT-REPORT.md) | BitTorrent, aceite físico, nomeação e pendências |
+| [Próxima fase MYCT-C1 — Arquivamento na nuvem](docs/MYCT-C1-ARQUIVAMENTO-NUVEM.md) | Google Drive, restauração e retomada de seeding; somente planejamento |
 | [Próxima fase MYCT-5D](docs/MYCT-5D-PLANEJAMENTO-VERIFICACAO-ARQUIVOS.md) | Inspeção de arquivos e antivírus sob demanda planejados |
 | [Guia de retomada](docs/10-RETOMADA-PROJETO.md) | Estado atual do Core systemd, Cofre Android e continuidade |
 | [Core/PostgreSQL MYCT-3B](docs/MYCT-3B-POSTGRES-REPORT.md) | Evidência Fedora: build, banco, isolamento, consumo e recuperação |
@@ -101,6 +102,7 @@ As escolhas específicas de bibliotecas, contratos e divisão de entregas são *
 - [#3 — Marco B: APK com SSH real e SFTP](https://github.com/Samuel-Francisco-AS/My-CT/issues/3)
 - [#4 — Marco C: downloads e primeira automação](https://github.com/Samuel-Francisco-AS/My-CT/issues/4)
 - [#18 — MYCT-5D: verificação de arquivos](https://github.com/Samuel-Francisco-AS/My-CT/issues/18)
+- [#46 — MYCT-C1: arquivo na nuvem e seeding restaurável](https://github.com/Samuel-Francisco-AS/My-CT/issues/46)
 - [#9 — Refinamento Android adiado](https://github.com/Samuel-Francisco-AS/My-CT/issues/9)
 
 Estas issues são pontos de acompanhamento **revisáveis**, não marcos com datas imutáveis.
