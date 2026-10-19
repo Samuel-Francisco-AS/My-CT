@@ -1,7 +1,7 @@
 # MYCT-C1 — Arquivamento em nuvem e restauração de seeding
 
 **Decisão:** 19/10/2026  
-**Estado:** C1A candidata em branch/PR draft; testes simulados, aceite Drive real pendente. Nenhum serviço implantado.
+**Estado atual (19/10/2026): MYCT-C1A aceita e integrada à `main` via [PR #47](https://github.com/Samuel-Francisco-AS/My-CT/pull/47), merge `bbf929886a1c66d2b0927b2ca3f8c46fa25cfe7b`. Rclone configurado no Fedora pelo proprietário, OAuth próprio com acesso Google Drive; 29 testes locais PASS e arquivo de 37 bytes arquivado/restaurado com bytes idênticos. MYCT-C1B (torrents/hardlinks/seeding) e C1C (Android) continuam planejadas, **não implementadas**. Nenhum serviço extra ou exclusão realizados.
 
 **Acompanhamento:** [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46).  
 **Proprietário:** 400 GB de armazenamento Google por aproximadamente um ano; espaço disponível e data exata de término **a consultar no início da implementação**, nunca presumir 400 GB livres.
@@ -9,8 +9,8 @@
 **Incremento C1A (19/10/2026):** helper `ops/myct-archive` para arquivos comuns,
 sem exclusão de originais/remotos, com `status`, catálogo `list`, `archive` e
 `restore`. [Contrato, testes e intervenção humana](MYCT-C1A-CLI-REPORT.md).
-Instalação, OAuth, cota e upload/restore reais cabem ao proprietário após
-revisão da Luna. Torrent/hardlinks (C1B) e Android (C1C) permanecem planejados.
+Instalação do Rclone, OAuth, consulta de cota e upload/restore reais foram
+executados pelo proprietário e aprovados. Torrent/hardlinks (C1B) e Android (C1C) permanecem planejados.
 
 ## 1. Necessidade real
 
