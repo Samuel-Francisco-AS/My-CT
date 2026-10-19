@@ -47,6 +47,8 @@ class SshConnection {
 
     internal fun torrents(action: TorrentAction): String = executeTorrent(action, { openDownloadExec() })
 
+    internal fun search(action: SearchAction): SearchReply = executeSearch(action, { openDownloadExec() })
+
     internal fun media(action: MediaAction): String = executeMedia(action, { openDownloadExec() })
 
     internal fun inspectFile(path: String): FileInspection = executeInspection(path) { openDownloadExec(true) }
