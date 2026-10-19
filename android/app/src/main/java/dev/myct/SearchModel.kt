@@ -18,7 +18,26 @@ internal class SearchModel(
         private set
     var state by mutableStateOf(SearchState.Disconnected)
         private set
-    val busy get() = state == SearchState.Loading
+    val busy get() = state == SearchState.Loading || loadingMore
+    var loadingMore by mutableStateOf(false)
+        private set
+    var pageError by mutableStateOf<String?>(null)
+        private set
+    var indexers by mutableStateOf(emptyList<SearchIndexer>())
+        private set
+    var selectedIndexer by mutableStateOf<Int?>(null)
+        private set
+    var hasMore by mutableStateOf(false)
+        private set
+    var total by mutableStateOf(0)
+        private set
+    var received by mutableStateOf(0)
+        private set
+    var limited by mutableStateOf(false)
+        private set
+    var paginated by mutableStateOf(false)
+        private set
+    private var page = 0
     var items by mutableStateOf(emptyList<SearchResult>())
         private set
     var truncated by mutableStateOf(false)
@@ -32,12 +51,22 @@ internal class SearchModel(
     fun attach(value: SshConnection?) {
         cancel()
         connection = value
+        indexers = emptyList(); selectedIndexer = null
         clearResults()
         state = if (connected) SearchState.Idle else SearchState.Disconnected
         message = if (connected) "Digite uma consulta e toque em Pesquisar." else "SSH desconectado. Conecte pela aba Terminal."
     }
-    private fun cancel() { generation++; job?.cancel(); job = null }
-    private fun clearResults() { items = emptyList(); truncated = false; additionMagnet = null }
+    private fun cancel() { generation++; job?.cancel(); job = null; loadingMore = false }
+    private fun clearResults() {
+        items = emptyList(); truncated = false; additionMagnet = null
+        page = 0; hasMore = false; total = 0; received = 0; limited = false; paginated = false; pageError = null
+    }
+    fun selectIndexer(id: Int?) {
+        if (id == selectedIndexer || (id != null && indexers.none { it.id == id && it.available })) return
+        cancel(); selectedIndexer = id; clearResults()
+        state = if (connected) SearchState.Idle else SearchState.Disconnected
+        message = "Fonte alterada. Toque em Pesquisar."
+    }
     fun edit(value: String) {
         if (value == query) return
         cancel(); query = value; clearResults()
@@ -46,9 +75,15 @@ internal class SearchModel(
     }
     fun hide() {
         if (!busy) return
-        cancel(); clearResults()
-        state = if (connected) SearchState.Idle else SearchState.Disconnected
-        message = "Consulta encerrada. Pesquise novamente quando desejar."
+        val keepResults = loadingMore
+        cancel()
+        if (keepResults) {
+            state = SearchState.Results; pageError = "Carregamento cancelado. Você pode tentar novamente."
+        } else {
+            clearResults()
+            state = if (connected) SearchState.Idle else SearchState.Disconnected
+            message = "Consulta encerrada. Pesquise novamente quando desejar."
+        }
     }
     fun checkStatus() = request(SearchAction.Status)
     fun search() {
@@ -57,36 +92,55 @@ internal class SearchModel(
             message = "Use uma consulta de 1 a 200 caracteres, sem quebras de linha."
             return
         }
-        request(SearchAction.Query(query))
+        request(SearchAction.Query(query, indexerId = selectedIndexer))
     }
-    private fun request(action: SearchAction) {
+    fun loadMore() {
+        if (busy || !hasMore || page !in 1..24 || state != SearchState.Results) return
+        request(SearchAction.Query(query, page + 1, selectedIndexer), append = true)
+    }
+    private fun request(action: SearchAction, append: Boolean = false) {
         val ssh = connection ?: return
         if (busy) return
-        cancel(); clearResults()
+        cancel()
+        if (!append) clearResults()
         val epoch = generation
-        state = SearchState.Loading
-        message = if (action == SearchAction.Status) "Verificando serviço…" else "Pesquisando…"
+        pageError = null
+        if (append) loadingMore = true else state = SearchState.Loading
+        if (!append) message = if (action == SearchAction.Status) "Verificando serviço…" else "Pesquisando…"
         job = scope.launch {
             try {
                 val reply = runInterruptible(Dispatchers.IO) { execute(ssh, action) }
                 if (epoch != generation) return@launch
                 when (reply) {
-                    is SearchReply.Ready -> { state = SearchState.Ready; message = "Prowlarr ${reply.version} disponível. Toque em Pesquisar." }
+                    is SearchReply.Ready -> {
+                        indexers = reply.indexers
+                        if (selectedIndexer != null && indexers.none { it.id == selectedIndexer && it.available }) selectedIndexer = null
+                        state = SearchState.Ready
+                        message = "Prowlarr ${reply.version} disponível. Selecione uma fonte e toque em Pesquisar."
+                    }
                     is SearchReply.Results -> {
-                        items = reply.items; truncated = reply.truncated
+                        items = (if (append) items + reply.items else reply.items).distinctBy { it.identity() }
+                        page = reply.page; hasMore = reply.hasMore; total = reply.total; received = reply.received
+                        limited = reply.limited; paginated = reply.paginated; truncated = reply.truncated
                         state = if (items.isEmpty()) SearchState.Empty else SearchState.Results
-                        message = if (items.isEmpty()) "Nenhum resultado. Tente outros termos." else "${items.size} resultados."
+                        message = if (items.isEmpty()) "Nenhum resultado. Tente outros termos." else "${items.size} carregados · ${total} disponíveis nesta consulta · ${received} recebidos das fontes."
                     }
                 }
             } catch (_: CancellationException) {
             } catch (failure: SearchFailure) {
-                if (epoch == generation) { state = SearchState.Error; message = failure.safeMessage }
+                if (epoch == generation) fail(failure.safeMessage, append)
             } catch (_: DownloadFailure) {
-                if (epoch == generation) { state = SearchState.Error; message = "Canal SSH indisponível, excedeu o limite ou o tempo de espera. Confira a conexão e tente manualmente." }
+                if (epoch == generation) fail("Canal SSH indisponível, excedeu o limite ou o tempo de espera. Confira a conexão e tente manualmente.", append)
             } catch (_: Exception) {
-                if (epoch == generation) { state = SearchState.Error; message = "Falha no SSH ou resposta de pesquisa inválida. Confira a conexão e o helper no Fedora." }
+                if (epoch == generation) fail("Falha no SSH ou resposta de pesquisa inválida. Confira a conexão e o helper no Fedora.", append)
+            } finally {
+                if (epoch == generation) loadingMore = false
             }
         }
+    }
+    private fun fail(safeMessage: String, append: Boolean) {
+        if (append) { state = SearchState.Results; pageError = safeMessage }
+        else { state = SearchState.Error; message = safeMessage }
     }
     fun canAdd(item: SearchResult): Boolean = connected && state == SearchState.Results &&
         item in items && item.magnet != null && torrents.connected && torrents.actionsEnabled && !torrents.busy

@@ -5,14 +5,20 @@ import java.net.URI
 import java.net.URLDecoder
 
 internal data class SearchResult(val title: String, val size: Long?, val source: String?,
-    val seeders: Long?, val leechers: Long?, val magnet: String?, val magnetSource: String?)
+    val seeders: Long?, val leechers: Long?, val magnet: String?, val magnetSource: String?,
+    val id: String? = null, val indexerId: Int? = null)
+internal data class SearchIndexer(val id: Int, val name: String, val available: Boolean = true)
+internal fun SearchResult.identity(): String = id ?: (magnet?.substringAfter("xt=")?.substringBefore('&')?.lowercase()
+    ?: "metadata:$title:$size")
 internal sealed interface SearchReply {
-    data class Ready(val version: String) : SearchReply
-    data class Results(val items: List<SearchResult>, val truncated: Boolean, val received: Int) : SearchReply
+    data class Ready(val version: String, val indexers: List<SearchIndexer> = emptyList()) : SearchReply
+    data class Results(val items: List<SearchResult>, val truncated: Boolean, val received: Int,
+        val page: Int = 1, val indexerId: Int? = null, val hasMore: Boolean = false,
+        val total: Int = items.size, val limited: Boolean = false, val paginated: Boolean = false) : SearchReply
 }
 internal sealed interface SearchAction {
     data object Status : SearchAction
-    data class Query(val text: String) : SearchAction
+    data class Query(val text: String, val page: Int = 1, val indexerId: Int? = null) : SearchAction
 }
 internal class SearchFailure(val safeMessage: String) : Exception(safeMessage)
 
@@ -25,7 +31,10 @@ internal fun searchCommand(action: SearchAction): String {
         SearchAction.Status -> "status"
         is SearchAction.Query -> {
             require(validSearchQuery(action.text))
-            "search '" + action.text.trim(' ').replace("'", "'\"'\"'") + "'"
+            require(action.page in 1..25 && (action.indexerId == null || action.indexerId > 0))
+            "search '" + action.text.trim(' ').replace("'", "'\"'\"'") + "'" +
+                (if (action.page > 1) " --page ${action.page}" else "") +
+                (action.indexerId?.let { " --indexer $it" } ?: "")
         }
     }
     return "if [ -x \"\$HOME/.local/bin/myct-search\" ]; then exec \"\$HOME/.local/bin/myct-search\" $args; else exit 127; fi"
@@ -57,6 +66,8 @@ internal fun parseSearchReply(output: String): SearchReply {
             "connection" -> "Prowlarr indisponível no Fedora."
             "timeout" -> "Tempo limite da pesquisa. Tente novamente por ação manual."
             "no_indexers" -> "Nenhum indexador torrent habilitado no Prowlarr."
+            "invalid_indexer" -> "Indexador removido ou desabilitado. Atualize as fontes. Sua pesquisa não será repetida automaticamente."
+            "indexer_unavailable" -> "Indexador temporariamente indisponível. Escolha outra fonte ou tente mais tarde."
             "response_limit" -> "Resposta excessiva. Refine a pesquisa."
             "usage" -> "Use uma consulta de 1 a 200 caracteres, sem quebras de linha."
             else -> "Falha na pesquisa do Fedora. Confira o Prowlarr e os indexadores."
@@ -67,7 +78,16 @@ internal fun parseSearchReply(output: String): SearchReply {
     if (root.getString("state") == "ready") {
         val version = root.getString("version")
         require(version.length <= 64 && version.none { it.isISOControl() })
-        return SearchReply.Ready(version)
+        val sources = root.optJSONArray("indexers")
+        require(sources == null || sources.length() <= 512)
+        val indexers = (0 until (sources?.length() ?: 0)).map { index ->
+            val source = checkNotNull(sources).getJSONObject(index)
+            val id = source.getInt("id").also { require(it > 0) }
+            val name = source.getString("name").also { require(it.isNotBlank() && it.length <= 256 && it.none(Char::isISOControl)) }
+            SearchIndexer(id, name, if (source.has("available")) source.getBoolean("available") else true)
+        }
+        require(indexers.map { it.id }.distinct().size == indexers.size)
+        return SearchReply.Ready(version, indexers)
     }
     val state = root.getString("state")
     require(state in setOf("results", "empty") && root.getInt("result_limit") == 20)
@@ -92,9 +112,23 @@ internal fun parseSearchReply(output: String): SearchReply {
         val origin = text("magnet_source", 16)
         require(origin == null || origin in setOf("direct", "infohash"))
         SearchResult(title, number("size_bytes"), text("source", 256), number("seeders"), number("leechers"),
-            magnet, origin.takeIf { magnet != null })
+            magnet, origin.takeIf { magnet != null }, text("id", 64)?.also { require(Regex("[a-f0-9]{64}").matches(it)) },
+            number("indexer_id")?.also { require(it in 1..Int.MAX_VALUE.toLong()) }?.toInt())
     }
-    return SearchReply.Results(items, root.getBoolean("truncated"), received)
+    val paginated = root.has("page")
+    val page = if (paginated) root.getInt("page").also { require(it in 1..25) } else 1
+    val indexerId = if (root.isNull("indexer_id")) null else root.getInt("indexer_id").also { require(it > 0) }
+    val hasMore = paginated && root.getBoolean("has_more")
+    val total = if (paginated) root.getInt("total_count").also { require(it in items.size..500 && it <= received) } else items.size
+    val limited = if (paginated) root.getBoolean("limited") else root.getBoolean("truncated")
+    if (paginated) {
+        require(root.getInt("total_limit") == 500)
+        require(items.all { it.id != null } && items.map { it.id }.distinct().size == items.size)
+        require(items.size == (total - (page - 1) * 20).coerceIn(0, 20))
+        require(hasMore == (page * 20 < total))
+        require(indexerId == null || items.all { it.indexerId == indexerId })
+    }
+    return SearchReply.Results(items, root.getBoolean("truncated"), received, page, indexerId, hasMore, total, limited, paginated)
 }
 
 internal fun executeSearch(action: SearchAction, open: () -> DownloadExec, timeoutMs: Long = 45000): SearchReply {
@@ -103,5 +137,8 @@ internal fun executeSearch(action: SearchAction, open: () -> DownloadExec, timeo
     val reply = parseSearchReply(result.output)
     require(result.status == 0)
     require((action == SearchAction.Status) == (reply is SearchReply.Ready))
+    if (action is SearchAction.Query && reply is SearchReply.Results) {
+        require(reply.page == action.page && reply.indexerId == action.indexerId)
+    }
     return reply
 }

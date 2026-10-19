@@ -59,7 +59,7 @@ class SearchTest {
         assertEquals(base32, usableSearchMagnet(base32))
     }
     @Test fun errorMessagesAreMappedWithoutEchoingSecrets() {
-        for (code in listOf("config", "authentication", "connection", "timeout", "no_indexers", "response_limit", "unknown")) {
+        for (code in listOf("config", "authentication", "connection", "timeout", "no_indexers", "invalid_indexer", "indexer_unavailable", "response_limit", "unknown")) {
             val text = """{"schema_version":1,"ok":false,"state":"error","error":{"code":"$code","message":"apikey=synthetic-secret"}}"""
             val failure = assertThrows(SearchFailure::class.java) { parseSearchReply(text) }
             assertFalse(failure.safeMessage.contains("synthetic-secret"))
@@ -83,6 +83,30 @@ class SearchTest {
             assertEquals(0, process.waitFor())
             assertFalse(root.resolve("injected").exists())
         } finally { root.deleteRecursively() }
+    }
+    @Test fun dynamicSourceListAndPaginationContractAreValidated() {
+        val status = """{"schema_version":1,"ok":true,"state":"ready","version":"2.6.5","indexers":[{"id":17,"name":"Nyaa.si","available":true},{"id":4,"name":"Unavailable","available":false}]}"""
+        val ready = parseSearchReply(status) as SearchReply.Ready
+        assertEquals(listOf(SearchIndexer(17, "Nyaa.si"), SearchIndexer(4, "Unavailable", false)), ready.indexers)
+        assertThrows(Exception::class.java) { parseSearchReply(status.replace("\"id\":4", "\"id\":17")) }
+        val last = reply(JSONArray().put(row().put("id", "a".repeat(64)).put("indexer_id", 17)))
+            .put("page", 2).put("indexer_id", 17).put("total_count", 21).put("received_count", 21)
+            .put("total_limit", 500).put("has_more", false).put("limited", false)
+        val parsed = parseSearchReply(last.toString()) as SearchReply.Results
+        assertEquals(2, parsed.page); assertEquals(17, parsed.indexerId)
+        assertTrue(parsed.paginated); assertFalse(parsed.hasMore); assertEquals(21, parsed.total)
+        for (bad in listOf(JSONObject(last.toString()).put("has_more", true), JSONObject(last.toString()).put("page", 26),
+            JSONObject(last.toString()).put("total_count", 501), JSONObject(last.toString()).put("indexer_id", 8),
+            JSONObject(last.toString()).put("page", 1))) {
+            assertThrows(Exception::class.java) { parseSearchReply(bad.toString()) }
+        }
+        assertTrue(searchCommand(SearchAction.Query("Ubuntu", 2, 17)).contains("search 'Ubuntu' --page 2 --indexer 17"))
+        for (action in listOf(SearchAction.Query("Ubuntu", 0), SearchAction.Query("Ubuntu", 26), SearchAction.Query("Ubuntu", indexerId = -1))) {
+            assertThrows(IllegalArgumentException::class.java) { searchCommand(action) }
+        }
+        val wrongPage = Exec({ out, _ -> out.write(last.toString().toByteArray()) })
+        assertThrows(Exception::class.java) { executeSearch(SearchAction.Query("Ubuntu", 1, 17), { wrongPage }) }
+        assertTrue(wrongPage.closed)
     }
     private class Exec(val emit: (OutputStream, OutputStream) -> Unit, override val exitStatus: Int = 0,
                        override val done: Boolean = true) : DownloadExec {

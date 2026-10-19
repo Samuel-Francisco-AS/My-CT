@@ -75,6 +75,102 @@ class SearchModelTest {
             } finally { release.countDown(); scope.cancel() }
         }
     }
+    private fun numbered(number: Int) = item().copy(title = "Ubuntu $number", id = number.toString(16).padStart(64, '0'))
+    private fun page(number: Int, items: List<SearchResult>, more: Boolean = true, indexer: Int? = null) =
+        SearchReply.Results(items, true, 60, number, indexer, more, 60, paginated = true)
+
+    @Test fun appendsDeduplicatesRetriesSamePageAndStopsWithoutAutomaticTorrentActions() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val calls = ConcurrentLinkedQueue<SearchAction>()
+        var failure: Exception? = null
+        val entered = CountDownLatch(1); val release = CountDownLatch(1)
+        val model = SearchModel(TorrentsModel(scope) { _, _ -> error("No torrent action allowed") }, scope) { _, action ->
+            calls.add(action)
+            val query = action as SearchAction.Query
+            when (query.page) {
+                1 -> page(1, (1..20).map(::numbered))
+                2 -> {
+                    entered.countDown(); release.await()
+                    failure?.let { throw it }
+                    page(2, (20..39).map(::numbered)) // Live response shifted one result.
+                }
+                else -> page(3, listOf(numbered(40)), more = false)
+            }
+        }
+        try {
+            model.attach(SshConnection()); model.edit("Ubuntu"); model.search(); await { !model.busy }
+            val original = model.items
+            failure = DownloadFailure("SSH timeout")
+            model.loadMore(); assertTrue(entered.await(2, TimeUnit.SECONDS))
+            model.loadMore(); model.search(); assertEquals(2, calls.size)
+            assertEquals(original, model.items); assertTrue(model.loadingMore)
+            release.countDown(); await { !model.busy }
+            assertEquals(original, model.items); assertNotNull(model.pageError); assertTrue(model.hasMore)
+            failure = null; model.loadMore(); await { !model.busy }
+            assertEquals(39, model.items.size); assertEquals(original, model.items.take(20)); assertNull(model.pageError)
+            model.loadMore(); await { !model.busy }
+            assertEquals(40, model.items.size); assertFalse(model.hasMore)
+            model.loadMore(); assertEquals(listOf(1, 2, 2, 3), calls.map { (it as SearchAction.Query).page })
+        } finally { release.countDown(); scope.cancel() }
+    }
+    @Test fun filterChangesInvalidateResultsAndRequireExplicitSearchWithDynamicId() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val calls = ConcurrentLinkedQueue<SearchAction>()
+        val model = SearchModel(TorrentsModel(scope), scope) { _, action ->
+            calls.add(action)
+            if (action == SearchAction.Status) SearchReply.Ready("2.6.5", listOf(SearchIndexer(17, "Dynamic"), SearchIndexer(6, "Blocked", false)))
+            else page(1, listOf(numbered(1)), indexer = (action as SearchAction.Query).indexerId)
+        }
+        try {
+            model.attach(SshConnection()); model.checkStatus(); await { !model.busy }
+            model.edit("Ubuntu"); model.search(); await { !model.busy }
+            assertEquals(1, model.items.size)
+            model.selectIndexer(6); assertNull(model.selectedIndexer)
+            model.selectIndexer(999); assertNull(model.selectedIndexer)
+            model.selectIndexer(17); assertEquals(17, model.selectedIndexer)
+            assertTrue(model.items.isEmpty()); assertFalse(model.hasMore); assertEquals(2, calls.size)
+            model.search(); await { !model.busy }
+            assertEquals(SearchAction.Query("Ubuntu", indexerId = 17), calls.last())
+            model.selectIndexer(null); assertTrue(model.items.isEmpty()); assertEquals(3, calls.size)
+            model.search(); await { !model.busy }
+            assertEquals(SearchAction.Query("Ubuntu"), calls.last())
+            model.attach(null); assertTrue(model.indexers.isEmpty()); assertNull(model.selectedIndexer)
+        } finally { scope.cancel() }
+    }
+    @Test fun latePageAfterQueryFilterCancelOrDisconnectCannotMixResults() {
+        for (change in listOf("query", "filter", "cancel", "disconnect")) {
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+            val entered = CountDownLatch(1); val release = CountDownLatch(1); val finished = CountDownLatch(1)
+            val calls = ConcurrentLinkedQueue<SearchAction>()
+            val model = SearchModel(TorrentsModel(scope), scope) { _, action ->
+                calls.add(action)
+                if (action == SearchAction.Status) SearchReply.Ready("2.6.5", listOf(SearchIndexer(17, "Dynamic")))
+                else if ((action as SearchAction.Query).page == 1) page(1, listOf(numbered(1)), indexer = action.indexerId)
+                else {
+                    entered.countDown()
+                    while (true) { try { release.await(); break } catch (_: InterruptedException) { } }
+                    finished.countDown(); page(2, listOf(numbered(2)))
+                }
+            }
+            try {
+                model.attach(SshConnection()); model.checkStatus(); await { !model.busy }
+                model.edit("Ubuntu"); model.search(); await { !model.busy }
+                model.loadMore(); assertTrue(entered.await(2, TimeUnit.SECONDS))
+                when (change) {
+                    "query" -> model.edit("Fedora")
+                    "filter" -> model.selectIndexer(17)
+                    "cancel" -> model.hide()
+                    else -> model.attach(null)
+                }
+                release.countDown(); assertTrue(finished.await(2, TimeUnit.SECONDS))
+                runBlocking { delay(40) }
+                assertFalse(model.busy)
+                if (change == "cancel") { assertEquals(listOf(numbered(1)), model.items); assertTrue(model.hasMore) }
+                else { assertTrue(model.items.isEmpty()); assertFalse(model.hasMore) }
+                assertEquals(3, calls.size)
+            } finally { release.countDown(); scope.cancel() }
+        }
+    }
     @Test fun explicitAdditionUsesExistingTorrentActionOnceAndReportsAcceptOrDuplicate() {
         for (outcome in listOf("accepted", "duplicate", "failure")) {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)

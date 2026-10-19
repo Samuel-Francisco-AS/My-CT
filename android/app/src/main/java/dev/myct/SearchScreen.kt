@@ -3,7 +3,7 @@ package dev.myct
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -31,6 +31,7 @@ internal fun SearchScreen(model: SearchModel, torrents: TorrentsModel, openDownl
         activity.lifecycle.addObserver(observer)
         onDispose { activity.lifecycle.removeObserver(observer); model.hide() }
     }
+    var choosingSource by remember { mutableStateOf(false) }
     val canSearch = visible && model.connected && !model.busy
     fun submit() {
         if (!canSearch) return
@@ -48,18 +49,35 @@ internal fun SearchScreen(model: SearchModel, torrents: TorrentsModel, openDownl
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { submit() }))
+                Box {
+                    MyCtTextButton(onClick = { choosingSource = true }, enabled = visible && model.connected) {
+                        Text("Fonte: " + (model.indexers.firstOrNull { it.id == model.selectedIndexer }?.name ?: "Todos"))
+                    }
+                    DropdownMenu(expanded = choosingSource, onDismissRequest = { choosingSource = false }) {
+                        DropdownMenuItem(text = { Text("Todos") }, onClick = { model.selectIndexer(null); choosingSource = false })
+                        model.indexers.forEach { source ->
+                            DropdownMenuItem(text = { Text(source.name + if (source.available) "" else " (indisponível)") },
+                                enabled = source.available, onClick = { model.selectIndexer(source.id); choosingSource = false })
+                        }
+                    }
+                }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     MyCtButton(onClick = { submit() }, enabled = canSearch && model.query.isNotBlank()) { Text("Pesquisar") }
                     if (model.busy) MyCtTextButton(onClick = { model.hide() }) { Text("Cancelar") }
-                    else MyCtTextButton(onClick = { model.checkStatus() }, enabled = canSearch) { Text("Verificar serviço") }
+                    else MyCtTextButton(onClick = { model.checkStatus() }, enabled = canSearch) { Text("Atualizar fontes") }
                 }
                 if (model.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 StatusNotice(model.message, model.state == SearchState.Error)
-                if (model.truncated) StatusNotice("Listagem limitada a 20 resultados. Refine a consulta para encontrar outros.")
+                if (model.limited) StatusNotice(if (model.paginated)
+                    "Limite técnico de 500 resultados únicos. Refine a pesquisa para encontrar outros."
+                    else "Helper antigo: listagem limitada a 20. Atualize myct-search no Fedora para carregar mais.")
+                if (model.paginated && model.items.isNotEmpty())
+                    Text("Páginas consultadas ao vivo; a ordem e a quantidade podem mudar. Repetições são ocultadas.",
+                        style = MaterialTheme.typography.bodySmall)
                 MyCtTextButton(onClick = openDownloads) { Text("Ver em Downloads") }
             }
         }
-        itemsIndexed(model.items, key = { index, _ -> "result-$index" }) { _, item ->
+        items(model.items, key = { it.identity() }) { item ->
             ScreenPanel {
                 Text(item.title, style = MaterialTheme.typography.titleSmall)
                 Text(listOfNotNull(item.size?.let(::formatFileSize), item.source).joinToString(" · ")
@@ -76,6 +94,19 @@ internal fun SearchScreen(model: SearchModel, torrents: TorrentsModel, openDownl
                         StatusNotice("Enviando pedido ao Fedora…")
                     } else StatusNotice(torrents.message, torrents.stale)
                     MyCtTextButton(onClick = openDownloads) { Text("Ver em Downloads → Torrents") }
+                }
+            }
+        }
+        if (model.items.isNotEmpty()) item(key = "pagination") {
+            ScreenPanel {
+                Text("${model.items.size} resultados carregados", style = MaterialTheme.typography.bodySmall)
+                model.pageError?.let { StatusNotice(it, true) }
+                if (model.hasMore) MyCtButton(onClick = { model.loadMore() }, enabled = visible && model.connected && !model.busy) {
+                    Text(if (model.loadingMore) "Carregando…" else "Carregar mais")
+                }
+                if (model.loadingMore) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                    MyCtTextButton(onClick = { model.hide() }) { Text("Cancelar") }
                 }
             }
         }
