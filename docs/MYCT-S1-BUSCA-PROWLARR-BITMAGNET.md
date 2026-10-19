@@ -1,7 +1,7 @@
 # MYCT-S1/S2 — Busca de torrents: Prowlarr primeiro, Bitmagnet depois
 
 **Acordado em:** 19/10/2026  
-**Situação:** S1A instalada e aprovada pelo proprietário; S1A-R adiciona fallback por infoHash, validado no Fedora; atualização manual do helper e S1B/Android pendentes
+**Situação:** S1A-R instalada/atualizada e aprovada no Fedora pelo proprietário; S1B candidata Android `0.8.0-s1b-search-rc1`/code 39; gate físico Moto G06 pendente, PR #44 draft/sem merge
 **Issue:** [#43](https://github.com/Samuel-Francisco-AS/My-CT/issues/43)  
 **Base inspecionada:** `main`, após consolidação da PR #42 (commit `99aaa24538`).
 
@@ -270,8 +270,8 @@ Jellyfin nem feita prova no Moto; não há afirmação de ausência de impacto s
 
 ### Instalação manual do helper e retomada
 
-O proprietário instalou e aprovou a S1A original. **A atualização para S1A-R
-não foi instalada pelo agente.** Para atualizar no Fedora, como `sam`, sem sudo:
+O proprietário instalou, atualizou e aprovou a S1A-R. O agente não reinstalou
+helpers na etapa Android. Para uma futura atualização no Fedora, como `sam`, sem sudo:
 
 ```bash
 cd /home/sam/Projetos/My-CT
@@ -292,18 +292,15 @@ necessários novo serviço, restart, porta pública ou alteração do Transmissi
 
 ### Pendências S1B
 
-- Atualizar manualmente o helper para S1A-R e confirmar a consulta pelo SSH do My-CT.
-- Criar a seção Busca usando o contrato v1 por SSH, sem polling e com estados
-  ready/results/empty/error, limite visível e cancelamento/descarte de respostas antigas.
+- Instalar a candidata S1B e validar a seção Busca pelo SSH existente no Moto G06.
 - Usar `magnet` para inclusão explícita, tanto `direct` como `infohash`.
   Resultados sem magnet continuam sem ação automática de download.
 - Testar qualquer inclusão somente por ação explícita via `myct-torrent`
   existente; verificar duplicata, Downloads e regressões no Moto G06.
 - Manter PR #44 draft/sem merge e issue #43 aberta. S2/Bitmagnet não iniciado.
 
-**Próxima ação:** atualização manual para S1A-R; depois
-S1B com o contrato abaixo. Android, Transmission, Jellyfin,
-PostgreSQL e Core permaneceram sem alterações nesta implementação.
+**Próxima ação:** gate físico S1B descrito ao final. Nas etapas S1A/S1A-R,
+Android, Transmission, Jellyfin, PostgreSQL e Core permaneceram sem alterações.
 
 ## MYCT-S1A-R — fallback por infoHash (19/10/2026)
 
@@ -362,3 +359,128 @@ Limite do aceite: validade sintática do hash e compatibilidade com o validador
 não comprovam disponibilidade de peers ou conteúdo. Sem trackers acrescentados,
 a descoberta dependerá dos recursos já existentes do cliente BitTorrent.
 Inclusão real e prova no Moto G06 pertencem à S1B, por ação explícita.
+
+## MYCT-S1B — seção Busca Android (19/10/2026)
+
+### Estado, escopo e aceite
+
+O proprietário confirmou a S1A-R instalada/atualizada e aprovada no Fedora:
+84 itens Ubuntu, 20 retornados, 17 magnets por infohash e 3 sem magnet nessa
+listagem, sem downloads. A implementação Android partiu de `a9b4725`, na branch
+existente `myct-s1-search-plan`, com árvore limpa e `0/0` após fetch.
+
+Critérios antes de codificar: pesquisa somente por ação explícita via SSH exec,
+estados previsíveis, limite visível, resultados sem magnet preservados, cancelamento
+e descarte de respostas antigas, inclusão pelo fluxo TorrentAction.Add existente
+e bloqueio de repetição enquanto ocupado. **A candidata não equivale ao aceite
+físico:** pesquisa pelo Android, inclusão pública/autorizada, duplicata, fluidez,
+teclado e regressões no Moto G06 ainda exigem o roteiro abaixo.
+
+### Implementação
+
+- `AppSection.Search`/Busca no drawer com lupa vetorial de traço coerente.
+  Usa o host único, SaveableStateHolder e transições R5 existentes. As regras
+  de proteção de capturas, incluindo Cofre, permanecem no mesmo fluxo.
+- `SearchScreen.kt`: formulário compacto em LazyColumn, campo de linha única,
+  IME Pesquisar e botão; teclado recolhido ao pesquisar. Formulário e resultados
+  compartilham a rolagem para não ocupar permanentemente a tela do Moto.
+  Cards mostram título, tamanho legível, indexador, seeders/leechers conhecidos.
+  Truncamento informa o limite de 20; vazio, erro, desconexão e carregamento
+  têm mensagens. Sem magnet, o botão permanece desabilitado e explica o motivo.
+- `Search.kt`: comandos `myct-search status` e `search 'consulta'` com quoting
+  de argumento único, validação de 1–200 caracteres imprimíveis e parser JSON v1
+  limitado a 20 itens/256 KiB. `magnet_source` é preservado. Só magnets v1
+  utilizáveis habilitam a ação; HTTP/arquivos torrent não viram comandos.
+- `SshConnection.search` reutiliza `openDownloadExec`/`executeSshResult`, com
+  canal exec independente do PTY, timeout de 45 s e fechamento em cancelamento,
+  erro ou conclusão. Sem HTTP Android para Prowlarr, nova sessão de autenticação,
+  transporte/persistência de API key ou impressão de conteúdo remoto em logs.
+  Erros JSON são mapeados por código; mensagem arbitrária/stderr não vão à UI.
+- `SearchModel`: rede em Dispatchers.IO, geração por consulta, cancelamento ao
+  editar, abandonar a tela, parar a Activity ou desconectar. Reconexão limpa os
+  resultados e aguarda novo toque; abrir a tela não pesquisa nem verifica serviço
+  automaticamente. Verificar serviço também é ação manual. Sem polling.
+- Inclusão chama `TorrentsModel.add` → `TorrentAction.Add` → `myct-torrent`.
+  Enquanto esse modelo está ocupado, nenhum resultado pode disparar outro Add.
+  Aceite/duplicata/falha e progresso aparecem junto ao resultado escolhido,
+  com acesso a Downloads. Aceite não é apresentado como confirmação de download
+  ativo. Uma inclusão já enviada pode terminar pelo fluxo existente mesmo após
+  sair de Busca; não há retentativa automática nem cancelamento prometido no servidor.
+
+Arquivos de implementação: `Search.kt`, `SearchModel.kt`, `SearchScreen.kt`,
+`AppSection.kt`, `AppShell.kt`, `MainActivity.kt`, `SshConnection.kt`,
+`TerminalModel.kt` e `app/build.gradle.kts`; testes novos `SearchTest.kt` e
+`SearchModelTest.kt`. Nenhum helper, motor ou serviço Fedora alterado na S1B.
+
+### Validação automatizada e candidata
+
+```bash
+cd /home/sam/Projetos/My-CT/android
+./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --offline --console=plain
+```
+
+Java 21, SDK 36, Gradle 8.14.3, dependências já existentes/caches offline.
+Testes verificam parser, vazio/nulos/zero, origens de magnet, mensagens sem
+segredos, JSON malformado/excessivo, consulta malformada, quoting com tentativas
+de shell injection, timeout/fechamento de canal, cancelamento e resposta tardia,
+reconexão sem replay, ausência de Add na pesquisa e prioridade da ação explícita
+com aceite/duplicata/falha simulados no TorrentsModel real. **Nenhum torrent real
+foi adicionado durante a implementação.** Sem aparelho conectado ao ADB para
+instrumentação; testes de UI/fluidez e fluxo SSH do Android não são declarados PASS.
+
+Resultado final: **BUILD SUCCESSFUL**, 268 testes JVM (266 aprovados, 2 opt-in
+ignorados: FedoraHandshakeTest e IdeFedoraSftpTest), **lint sem erros/avisos**.
+São 10 testes novos de Busca; a suíte existente também passou. Verificação
+`python3 terminal/upstream/verify.py`: 21 arquivos upstream/3 patches documentados
+preservados. `git diff --check` aprovado. Logs locais ignorados pelo Git em
+`artifacts/myct-s1b-build-final.log` e `artifacts/myct-s1b-build-time.txt`.
+
+Build final offline: 167,26 s, CPU usuário/sistema 784,75/10,59 s em vários
+núcleos, pico RSS medido pelo `/usr/bin/time` de 2.465.464 KiB (~2,35 GiB).
+Gradle avisou que o daemon expiraria por metaspace ao final; o build terminou
+com sucesso, sem alterar heap/metaspace do projeto. Não foi medido consumo ou
+fluidez Android no aparelho. APK de **18.803.354 bytes**; sem novas dependências
+ou processos permanentes no Fedora.
+
+SHA-256 do APK:
+`529f42f749e2d3e27fa565f74fa7344e2c876613b6719fbcee110b08665d7e2f`.
+
+APK **`dev.myct`, `0.8.0-s1b-search-rc1`, versionCode 39**, acima do code 38
+da base, minSdk 26/target 36. Assinatura debug existente, certificado SHA-256
+`b788958be4c919889fc30813f13f1aceb5b6b69670514c82e16288f4b60b83b3`,
+conferido por apksigner contra o APK R5 local anterior; sem nova keystore.
+
+[Pré-release candidata](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-s1b-v0.8.0-rc1)
+· [APK](https://github.com/Samuel-Francisco-AS/My-CT/releases/download/myct-s1b-v0.8.0-rc1/myct-s1b-0.8.0-debug.apk)
+· [SHA256SUMS](https://github.com/Samuel-Francisco-AS/My-CT/releases/download/myct-s1b-v0.8.0-rc1/myct-s1b-SHA256SUMS.txt).
+PR #44 permanece draft/sem merge; issue #43 aberta para o gate S1B.
+
+### Atualização e roteiro físico supervisionado
+
+Baixar APK e checksum da pré-release autenticado no GitHub. Conferir SHA-256,
+transferir ao Moto por USB/MTP ou SFTP existente e abrir como **atualização**.
+Não desinstalar, limpar dados ou substituir a keystore. Mesmos pacote/certificado
+e code maior preservam os dados instalados; projetos, pins e sessão devem ser
+conferidos no aparelho. Não instalar sobre uma eventual versão com code maior.
+Não é necessário atualizar helpers/serviços para esta candidata: a S1A-R já foi
+instalada e aceita pelo proprietário.
+
+1. Conectar ao Fedora pelo Terminal e abrir drawer → Busca. Verificar espaço,
+   teclado, rolagem e transições; sem pesquisar automaticamente. Tocar Verificar
+   serviço e confirmar disponibilidade.
+2. Pesquisar Ubuntu explicitamente: conferir metadados e aviso do limite de 20.
+   Localizar resultado sem magnet e confirmar botão indisponível. Contagens podem
+   variar com a fonte; nenhuma ação nessa etapa deve adicionar torrents.
+3. Editar consulta durante pesquisa, cancelar ou sair/voltar à tela. Confirmar
+   que resposta antiga não reaparece. Desconectar/reconectar SSH: resultados
+   anteriores somem e nenhuma consulta/inclusão é repetida automaticamente.
+4. **Somente sob supervisão/autorização do proprietário**, escolher um torrent
+   público e permitido, conferir o título e tocar Adicionar aos downloads uma
+   vez. Conferir bloqueio enquanto envia e mensagem de aceite ou falha. Não
+   presumir que está baixando apenas pela mensagem de aceite.
+5. Abrir Downloads → Torrents e conferir o estado real do item. Após concluir
+   a operação de inclusão, repetir manualmente o mesmo magnet e conferir aviso
+   de duplicata sem nova entrada. Não excluir dados para preparar este teste.
+6. Conferir regressões rápidas: Terminal, IDE, SFTP, navegação Downloads/HTTP/Mídia,
+   Saúde e proteção do Cofre. Registrar o resultado físico antes de aceite/merge;
+   não repetir automaticamente testes de serviços já aprovados.

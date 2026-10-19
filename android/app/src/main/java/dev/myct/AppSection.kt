@@ -15,7 +15,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 
 internal enum class AppSection(val label: String) {
-    Home("Início"), Terminal("Terminal"), Files("Arquivos"), Ide("IDE"), Health("Saúde"), Vault("Cofre"), Downloads("Downloads")
+    Home("Início"), Terminal("Terminal"), Files("Arquivos"), Ide("IDE"), Health("Saúde"), Vault("Cofre"), Search("Busca"), Downloads("Downloads")
 }
 
 /** Opening navigation or options must never override the vault's unconditional protection. */
