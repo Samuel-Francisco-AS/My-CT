@@ -1,7 +1,7 @@
 # MYCT-S1/S2 — Busca de torrents: Prowlarr primeiro, Bitmagnet depois
 
 **Acordado em:** 19/10/2026  
-**Situação:** S1A/S1B aprovadas no Fedora/Moto G06 e incorporadas à `main` pela PR #44 (`265b4e2`); MYCT-S1C implementada em candidata (filtros, paginação e diversidade), aguardando aceite físico; MYCT-S2/Bitmagnet opcional.
+**Situação:** S1A/S1B aprovadas e incorporadas à `main` pela PR #44 (`265b4e2`); MYCT-S1C implementada em 0.8.1/code 40, validada no Fedora e aceita fisicamente no Moto G06; o proprietário autorizou o fechamento/merge da PR #45 em 19/10/2026; MYCT-S2/Bitmagnet opcional, não iniciada.
 **Issue:** [#43](https://github.com/Samuel-Francisco-AS/My-CT/issues/43)  
 **Base inspecionada:** `main`, após consolidação da PR #42 (commit `99aaa24538`).
 
@@ -786,7 +786,7 @@ Roteiro Moto G06, gate de aceite antes de merge:
    repetir esse fluxo já aceito; não é disparada pelo teste de busca. Não remover
    dados nem alterar seeding. Verificar brevemente Terminal/SFTP e navegação.
 
-Registrar resultado físico antes de retirar draft/fechar #43; **não houve merge**.
+O proprietário validou filtros, paginação e diversidade no Moto G06 e, em 19/10/2026, autorizou o fechamento e merge da PR #45. Esses resultados estão registrados abaixo.
 MYCT-S2/Bitmagnet permanece opcional e não iniciada.
 
 ## MYCT-S1C — Resultado físico no Moto G06 (relato do proprietário, 19/10/2026)
@@ -800,4 +800,4 @@ Após atualizar manualmente o helper `myct-search` instalado e instalar a candid
 
 **Aceite físico confirmado para as três funcionalidades centrais da MYCT-S1C.** Não foram relatados testes físicos específicos de descarte de resposta atrasada, cancelamento, perda/reconexão SSH, esgotamento da última página, scroll após falha, preservação de downloads, ou novo envio de magnet. Não registrar esses itens como PASS físico; testes automatizados descritos acima permanecem a evidência nesses casos. Não houve relato de falhas nessas funcionalidades.
 
-**Estado do fechamento:** PR #45 mantida **draft, sem merge** enquanto se aguarda autorização explícita do proprietário para consolidação na `main` e limpeza posterior da branch. MYCT-S2/Bitmagnet segue opcional e fora desta etapa.
+**Estado do fechamento:** em 19/10/2026, após o aceite físico das três funcionalidades, o proprietário **autorizou expressamente o fechamento e a integração da PR #45 na `main`**. Este registro precede a execução do merge. A limpeza da branch local e remota deverá ocorrer apenas após sincronização e verificação do commit integrado. MYCT-S2/Bitmagnet continua opcional e fora desta etapa.
