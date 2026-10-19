@@ -13,7 +13,7 @@ import socket
 import sys
 import time
 import unicodedata
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote_plus, urlsplit
 
 ENDPOINT_PORT = 19091
 LIMIT = 262144
@@ -36,35 +36,54 @@ def magnet(value):
     if len(value) > 8192 or any(ord(c) < 32 or ord(c) == 127 for c in value):
         raise Failure('Magnet inválido.')
     uri = urlsplit(value)
-    query = parse_qs(uri.query, strict_parsing=True)
+    # Some magnet generators insert repeated or trailing '&' separators.
+    # Ignore only empty segments; keep strict validation for real fields.
+    raw_parts = uri.query.split('&')
+    parts = [part for part in raw_parts if part]
+    query = parse_qs('&'.join(parts), strict_parsing=True)
     if uri.scheme != 'magnet' or uri.netloc or uri.path or uri.fragment:
         raise Failure('Magnet inválido.')
     if set(query) - {'xt', 'dn', 'tr'} or len(query.get('xt', [])) != 1:
         raise Failure('Use magnet com xt, dn e trackers tr; fontes web xs/as/ws não são aceitas.')
     if not re.fullmatch(r'urn:btih:(?:[0-9a-fA-F]{40}|[A-Z2-7a-z]{32})', query['xt'][0]):
         raise Failure('Magnet precisa de infohash BitTorrent v1 válido.')
+    skipped = set()
     for tracker in query.get('tr', []):
         url = urlsplit(tracker)
         if url.scheme not in {'http', 'https', 'udp'} or not url.hostname or url.username or url.password:
             raise Failure('Tracker inválido.')
-        # A magnet may contain many trackers. DNS failure for any one tracker
-        # must not make the whole magnet look like a Transmission outage.
-        # Transmission can resolve a public hostname when it contacts the tracker.
         try:
             literal = ipaddress.ip_address(url.hostname)
         except ValueError:
             literal = None
         if literal is not None and not literal.is_global:
+            # Explicit internal addresses remain invalid even if other trackers work.
             raise Failure('Tracker precisa de endereço público.')
         try:
             addresses = socket.getaddrinfo(url.hostname, url.port or 80, type=socket.SOCK_DGRAM)
         except socket.gaierror:
-            if literal is not None:
-                raise Failure('Tracker inválido.')
-            continue  # One offline hostname must not block usable trackers or the infohash.
+            # Drop unusable trackers; never send unresolved hosts to the daemon.
+            skipped.add(tracker)
+            continue
+        except OSError as error:
+            raise Failure('Falha de rede ao validar tracker.') from error
         if not addresses or any(not ipaddress.ip_address(row[4][0]).is_global for row in addresses):
-            raise Failure('Tracker precisa de endereço público.')
-    return value
+            # A hostname may resolve to private/reserved IPs or mixed IP families.
+            # Do not forward it, but do not sacrifice otherwise usable trackers.
+            skipped.add(tracker)
+    if not skipped and len(parts) == len(raw_parts):
+        return value
+    # Do not re-encode the query: Transmission 4.1.3 expects the literal
+    # "xt=urn:btih:" prefix. urlencode() turns ':' into '%3A', and the
+    # daemon rejects that otherwise valid magnet as "unrecognized info".
+    # Drop empty separators and invalid trackers, preserving raw values.
+    kept = []
+    for part in parts:
+        raw_key, _, raw_value = part.partition('=')
+        if unquote_plus(raw_key) == 'tr' and unquote_plus(raw_value) in skipped:
+            continue
+        kept.append(part)
+    return uri._replace(query='&'.join(kept)).geturl()
 
 class Rpc:
     def call(self, method, params):
@@ -87,8 +106,18 @@ class Rpc:
                 if len(payload) > LIMIT:
                     raise Failure('Histórico excedeu 256 KiB; consulte pelo Transmission local.')
                 result = json.loads(payload)
-                if result.get('jsonrpc') != '2.0' or result.get('id') != 1 or 'error' in result:
-                    raise Failure('Pedido recusado pelo motor; requer Transmission 4.1+. Atualize antes de repetir.')
+                if not isinstance(result, dict) or result.get('jsonrpc') != '2.0' or result.get('id') != 1:
+                    raise Failure('Resposta RPC inválida ou incompatível.')
+                if 'error' in result:
+                    error = result['error']
+                    if isinstance(error, dict) and isinstance(error.get('code'), int) and isinstance(error.get('message'), str):
+                        # The daemon's short JSON-RPC error message is more useful
+                        # than blaming its version. Never print request params/magnet.
+                        message = re.sub(r'[\x00-\x1f\x7f]+', ' ', error['message']).strip()[:160]
+                        raise Failure(f'Transmission recusou {method}: {message} (código {error["code"]}).')
+                    raise Failure(f'Transmission recusou {method}: erro RPC sem detalhes válidos.')
+                if not isinstance(result.get('result'), dict):
+                    raise Failure('Resposta RPC sem resultado válido.')
                 return result['result']
             finally:
                 conn.close()
