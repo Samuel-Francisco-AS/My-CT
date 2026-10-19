@@ -59,6 +59,26 @@ class TorrentTest(unittest.TestCase):
             self.assertTrue(rpc.calls[0][1]['paused'])
             self.assertFalse(any(method == 'torrent_start' for method, _ in rpc.calls))
 
+    def test_offline_public_tracker_does_not_block_magnet(self):
+        import socket
+        from unittest.mock import patch
+        good = MAGNET + '&tr=udp%3A%2F%2Ftracker.example.org%3A1337%2Fannounce'
+        with patch.object(torrent.socket, 'getaddrinfo',
+                          side_effect=socket.gaierror(socket.EAI_AGAIN, 'Temporary failure')):
+            self.assertEqual(good, torrent.magnet(good))
+            with self.assertRaises(torrent.Failure):
+                torrent.magnet(MAGNET + '&tr=udp%3A%2F%2F127.0.0.1%3A1337%2Fannounce')
+            with self.assertRaises(torrent.Failure):
+                torrent.magnet(MAGNET + '&tr=udp%3A%2F%2F192.168.0.1%3A1337%2Fannounce')
+
+    def test_private_resolved_tracker_still_rejected(self):
+        import socket
+        candidate = MAGNET + '&tr=https%3A%2F%2Ftracker.example.net%2Fannounce'
+        with patch.object(torrent.socket, 'getaddrinfo', return_value=[
+                (socket.AF_INET, socket.SOCK_DGRAM, 17, '', ('127.0.0.1', 443))]):
+            with self.assertRaises(torrent.Failure):
+                torrent.magnet(candidate)
+
     def test_controls_exact_hash_and_preserve_data(self):
         rpc = FakeRpc(torrent.destination())
         for verb, method in [('pause', 'torrent_stop'), ('resume', 'torrent_start'), ('remove', 'torrent_remove')]:
