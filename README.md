@@ -83,7 +83,8 @@ As escolhas específicas de bibliotecas, contratos e divisão de entregas são *
 | [Downloads MYCT-5A](docs/MYCT-5A-DOWNLOADS-REPORT.md) | CLI HTTP/HTTPS, testes Fedora, uso e aceite real SSH/Moto |
 | [Android MYCT-5B](docs/MYCT-5B-ANDROID-DOWNLOADS-REPORT.md) | Quinta aba Downloads, APK 0.5.2, aceite parcial e validações futuras |
 | [Fechamento MYCT-5C](docs/MYCT-5C-BITTORRENT-REPORT.md) | BitTorrent, aceite físico, nomeação e pendências |
-| [Próxima fase MYCT-C1 — Arquivamento na nuvem](docs/MYCT-C1-ARQUIVAMENTO-NUVEM.md) | Google Drive, restauração e retomada de seeding; somente planejamento |
+| [MYCT-C1 — Arquivamento na nuvem](docs/MYCT-C1-ARQUIVAMENTO-NUVEM.md) | Google Drive, restauração e retomada de seeding por fases; sem implantação |
+| [CLI MYCT-C1A — candidata](docs/MYCT-C1A-CLI-REPORT.md) | Arquivos comuns via Rclone, catálogo privado, testes simulados; revisão Luna e aceite Drive real pendentes |
 | [Próxima fase MYCT-5D](docs/MYCT-5D-PLANEJAMENTO-VERIFICACAO-ARQUIVOS.md) | Inspeção de arquivos e antivírus sob demanda planejados |
 | [Guia de retomada](docs/10-RETOMADA-PROJETO.md) | Estado atual do Core systemd, Cofre Android e continuidade |
 | [Core/PostgreSQL MYCT-3B](docs/MYCT-3B-POSTGRES-REPORT.md) | Evidência Fedora: build, banco, isolamento, consumo e recuperação |

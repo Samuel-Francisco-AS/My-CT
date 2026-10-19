@@ -1,0 +1,355 @@
+#!/usr/bin/python3
+"""Manual, non-destructive file archive via externally configured Rclone."""
+from contextlib import contextmanager
+from datetime import datetime, timezone
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import signal
+import stat
+import subprocess
+import sys
+import tempfile
+
+
+class Failure(Exception):
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
+def now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def remote_name(value):
+    if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]*:', value):
+        raise Failure('INVALID_REMOTE', 'Use somente o nome de um remote configurado, como myct-gdrive:.')
+    return value
+
+
+def safe_path(path):
+    if not path.is_absolute() or path.resolve() != path:
+        raise Failure('UNSAFE_PATH', 'Caminho relativo, com traversal ou link simbólico recusado.')
+    return path
+
+
+def private_dir(path):
+    safe_path(path)
+    path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    info = path.stat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+        raise Failure('UNSAFE_PATH', 'Diretório gerenciado deve pertencer ao usuário e ter permissão 0700.')
+    return path
+
+
+def state_dir():
+    return Path.home() / '.local/share/myct/archive'
+
+
+def restore_root():
+    return Path.home() / 'Downloads/My-CT/Restored'
+
+
+def private_file(path):
+    info = path.lstat()
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+            or info.st_mode & 0o077 or info.st_nlink != 1):
+        raise Failure('UNSAFE_PATH', 'Registro privado inválido; revise tipo, proprietário e permissão 0600.')
+
+
+@contextmanager
+def catalog_lock():
+    root = private_dir(state_dir())
+    fd = os.open(root / 'catalog.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, 'r+') as stream:
+        private_file(root / 'catalog.lock')
+        try:
+            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise Failure('BUSY', 'Outra operação myct-archive está em execução.') from error
+        yield
+
+
+def component(value):
+    return (isinstance(value, str) and value not in {'', '.', '..'}
+            and '/' not in value and '\\' not in value
+            and not any(ord(c) < 32 or ord(c) == 127 for c in value))
+
+
+def identity(remote, source, sha256):
+    return hashlib.sha256(json.dumps([remote, source, sha256], ensure_ascii=True).encode()).hexdigest()
+
+
+def load_catalog():
+    path = state_dir() / 'catalog.json'
+    if not path.exists() and not path.is_symlink():
+        return {'version': 1, 'entries': {}}
+    private_file(path)
+    try:
+        data = json.loads(path.read_text())
+        if not isinstance(data, dict) or data.get('version') != 1 or not isinstance(data.get('entries'), dict):
+            raise ValueError()
+        for key, row in data['entries'].items():
+            if (not isinstance(row, dict) or not re.fullmatch('[0-9a-f]{64}', key)
+                    or row.get('id') != key or row.get('kind') != 'file'
+                    or row.get('state') not in {'pending', 'verified', 'failed', 'unverified'}
+                    or not component(row.get('name'))
+                    or not isinstance(row.get('source'), str) or not Path(row['source']).is_absolute()
+                    or Path(row['source']).name != row['name']
+                    or type(row.get('size')) is not int or row['size'] < 0
+                    or not isinstance(row.get('md5'), str) or not re.fullmatch('[0-9a-f]{32}', row['md5'])
+                    or not isinstance(row.get('sha256'), str) or not re.fullmatch('[0-9a-f]{64}', row['sha256'])
+                    or not isinstance(row.get('created_at'), str)
+                    or row.get('remote_path') != f'My-CT-Archive/{key}/{row["name"]}'):
+                raise ValueError()
+            remote_name(row.get('remote'))
+            if key != identity(row['remote'], row['source'], row['sha256']):
+                raise ValueError()
+        return data
+    except (ValueError, TypeError, KeyError, Failure) as error:
+        raise Failure('CATALOG_CORRUPT', 'Catálogo inválido; preserve o registro e recupere uma cópia privada.') from error
+
+
+def save_catalog(data):
+    root = state_dir()
+    fd, name = tempfile.mkstemp(prefix='.catalog-', dir=root)
+    try:
+        with os.fdopen(fd, 'w') as stream:
+            json.dump(data, stream, ensure_ascii=True, sort_keys=True)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(name, root / 'catalog.json')
+        sync_dir(root)
+    finally:
+        Path(name).unlink(missing_ok=True)  # Only this operation's temporary catalog.
+
+
+def sync_dir(path):
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def rclone(*args):
+    # Do not inherit debug/logging/backend overrides capable of logging secrets or
+    # changing copy semantics. An encrypted existing config may still be unlocked.
+    env = {k: v for k, v in os.environ.items()
+           if not k.startswith('RCLONE_') or k in {'RCLONE_CONFIG', 'RCLONE_CONFIG_PASS'}}
+    try:
+        process = subprocess.Popen(['rclone', *args, '--stats', '0', '--log-level', 'ERROR',
+                                    '--retries', '1', '--contimeout', '15s', '--timeout', '60s'],
+                                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, env=env, start_new_session=True)
+    except FileNotFoundError as error:
+        raise Failure('RCLONE_NOT_FOUND', 'Rclone ausente; instalação e configuração são tarefas do proprietário.') from error
+    try:
+        output, errors = process.communicate()
+    except BaseException:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass  # The child may have exited at the same instant as the signal.
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
+        raise
+    if process.returncode:
+        # Classify privately; never return Rclone's raw stdout/stderr or OAuth URLs.
+        detail = errors.lower()
+        if any(s in detail for s in (b'storagequotaexceeded', b'quota exceeded', b'quotaexceeded')):
+            code, message = 'QUOTA', 'Cota remota excedida; confira o espaço disponível.'
+        elif any(s in detail for s in (b'invalid_grant', b'unauthorized', b'authenticate', b'401', b'token expired')):
+            code, message = 'AUTH', 'Autenticação recusada; o proprietário deve revisar o OAuth em contexto privado.'
+        elif any(s in detail for s in (b'timeout', b'connection', b'network', b'no such host')):
+            code, message = 'NETWORK', 'Falha de rede; repita a operação após conferir a conexão.'
+        elif process.returncode < 0:
+            code, message = 'INTERRUPTED', 'Rclone interrompido; a operação não foi confirmada.'
+        else:
+            code, message = 'RCLONE_ERROR', 'Rclone falhou; confira remote, acesso e conectividade em contexto privado.'
+        raise Failure(code, message)
+    return output
+
+
+def remote_json(*args):
+    try:
+        return json.loads(rclone(*args))
+    except (ValueError, UnicodeError) as error:
+        raise Failure('RCLONE_RESPONSE', 'Resposta JSON inválida do Rclone.') from error
+
+
+def fingerprint(path):
+    safe_path(path)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    before = os.fstat(fd)
+    if not stat.S_ISREG(before.st_mode):
+        os.close(fd)
+        raise Failure('INVALID_FILE', 'Selecione um arquivo comum; diretórios e arquivos especiais não são aceitos.')
+    with os.fdopen(fd, 'rb') as stream:
+        md5 = hashlib.md5(usedforsecurity=False)
+        sha256 = hashlib.sha256()
+        while block := stream.read(1024 * 1024):
+            md5.update(block)
+            sha256.update(block)
+        after = os.fstat(stream.fileno())
+    snapshot = lambda s: (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns, s.st_ctime_ns)
+    if snapshot(before) != snapshot(after) or snapshot(after) != snapshot(path.stat()):
+        raise Failure('SOURCE_CHANGED', 'Arquivo alterado durante a leitura; mantenha a origem estável e repita.')
+    return {'size': after.st_size, 'md5': md5.hexdigest(), 'sha256': sha256.hexdigest()}, snapshot(after)
+
+
+def verify_remote(row):
+    # List the ID directory instead of --stat: Drive allows duplicate names.
+    # Exactly one file must match, and no sibling may be silently selected.
+    rows = remote_json('lsjson', row['remote'] + f'My-CT-Archive/{row["id"]}', '--hash')
+    if (not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict)
+            or rows[0].get('Name') != row['name'] or rows[0].get('Path') != row['name']
+            or rows[0].get('IsDir') is not False):
+        raise Failure('REMOTE_COLLISION', 'Objeto remoto ausente, duplicado ou ambíguo; revisão manual necessária.')
+    item = rows[0]
+    if type(item.get('Size')) is not int or item['Size'] != row['size']:
+        raise Failure('INTEGRITY', 'Tamanho remoto diferente; a cópia não foi validada.')
+    hashes = item.get('Hashes')
+    md5 = hashes.get('md5') if isinstance(hashes, dict) else None
+    if not md5:
+        raise Failure('VERIFICATION_UNAVAILABLE', 'MD5 remoto indisponível; cópia não verificada, preserve o original.')
+    if not isinstance(md5, str) or md5.lower() != row['md5']:
+        raise Failure('INTEGRITY', 'MD5 remoto diferente; a cópia não foi validada.')
+
+
+def copy(source, target):
+    rclone('copyto', source, target, '--ignore-existing', '--checksum',
+           '--transfers', '1', '--checkers', '1', '--multi-thread-streams', '0')
+
+
+def archive(source, remote, data):
+    path = safe_path(Path(source).expanduser().absolute())
+    if not component(path.name):
+        raise Failure('INVALID_FILE', 'Nome de arquivo inválido.')
+    hashes, snapshot = fingerprint(path)
+    key = identity(remote, str(path), hashes['sha256'])
+    row = data['entries'].get(key)
+    if row is None:
+        row = {'id': key, 'kind': 'file', 'name': path.name, 'source': str(path),
+               'remote': remote, 'remote_path': f'My-CT-Archive/{key}/{path.name}',
+               'created_at': now(), **hashes}
+        data['entries'][key] = row
+    row.update(state='pending', error_code=None)
+    save_catalog(data)  # Persist intent before any remote mutation; retries reuse this ID.
+    try:
+        copy(str(path), remote + row['remote_path'])
+        after_hashes, after_snapshot = fingerprint(path)
+        if after_hashes != hashes or snapshot != after_snapshot:
+            raise Failure('SOURCE_CHANGED', 'Origem alterada durante a cópia; arquivamento não confirmado.')
+        verify_remote(row)
+    except (Failure, OSError, KeyboardInterrupt) as error:
+        code = failure_code(error)
+        row.update(state='unverified' if code == 'VERIFICATION_UNAVAILABLE' else 'failed', error_code=code)
+        save_catalog(data)
+        raise
+    row.update(state='verified', verified_at=now())
+    save_catalog(data)
+    return {'entry': row, 'original_preserved': True}
+
+
+def restore(key, remote, data):
+    row = data['entries'].get(key)
+    if row is None or row['remote'] != remote:
+        raise Failure('NOT_FOUND', 'ID não encontrado no catálogo deste remote.')
+    if row['state'] != 'verified':
+        raise Failure('NOT_VERIFIED', 'Somente cópias verificadas podem ser restauradas; revise/revalide o arquivamento.')
+    root = private_dir(restore_root())
+    folder = private_dir(root / key)
+    target = safe_path(folder / row['name'])
+    if target.exists() or target.is_symlink():
+        raise Failure('DEST_EXISTS', 'Destino já existe; nenhuma sobrescrita é permitida.')
+    if shutil.disk_usage(root).free < row['size']:
+        raise Failure('LOCAL_SPACE', 'Espaço local insuficiente para a restauração.')
+    row['restore'] = {'state': 'pending', 'path': str(target), 'at': now()}
+    save_catalog(data)
+    try:
+        verify_remote(row)
+        with tempfile.TemporaryDirectory(prefix='.restore-', dir=root) as temp:
+            staged = Path(temp) / row['name']
+            copy(row['remote'] + row['remote_path'], str(staged))
+            hashes, _ = fingerprint(staged)
+            if any(hashes[k] != row[k] for k in hashes):
+                raise Failure('INTEGRITY', 'Conteúdo restaurado divergente; arquivo final não publicado.')
+            os.chmod(staged, 0o600)
+            with staged.open('rb') as stream:
+                os.fsync(stream.fileno())
+            safe_path(target)
+            os.link(staged, target)  # Atomic no-replace publication, even if a destination appears now.
+            sync_dir(folder)
+    except (Failure, OSError, KeyboardInterrupt) as error:
+        code = failure_code(error)
+        row['restore'].update(state='failed', error_code=code)
+        save_catalog(data)
+        raise
+    row['restore'].update(state='restored', at=now())
+    save_catalog(data)
+    return {'id': key, 'state': 'restored', 'path': str(target), 'verified': ['size', 'md5', 'sha256']}
+
+
+def failure_code(error):
+    if isinstance(error, Failure):
+        return error.code
+    return 'INTERRUPTED' if isinstance(error, KeyboardInterrupt) else 'LOCAL_IO'
+
+
+def run(argv):
+    remote = remote_name(os.environ.get('MYCT_ARCHIVE_REMOTE', 'myct-gdrive:'))
+    if len(argv) >= 2 and argv[0] == '--remote':
+        remote = remote_name(argv[1])
+        argv = argv[2:]
+    if not argv or not ((argv[0] in {'status', 'list'} and len(argv) == 1)
+                        or (argv[0] in {'archive', 'restore'} and len(argv) == 2)):
+        raise Failure('USAGE', 'Uso: myct-archive [--remote NOME:] status|list|archive ARQUIVO|restore ID')
+    with catalog_lock():
+        data = load_catalog()
+        if argv[0] == 'list':
+            return {'entries': [row for row in data['entries'].values() if row['remote'] == remote],
+                    'remote_checked': False, 'catalog': str(state_dir() / 'catalog.json')}
+        if argv[0] == 'status':
+            quota = remote_json('about', remote, '--json')
+            if not isinstance(quota, dict) or any(type(v) is not int or v < 0 for v in quota.values()):
+                raise Failure('RCLONE_RESPONSE', 'Resposta de cota inválida.')
+            return {'remote': remote, 'archive_folder': 'My-CT-Archive/', 'remote_accessible': True,
+                    'quota_bytes': {k: quota[k] for k in ('total', 'used', 'free', 'trashed', 'other') if k in quota},
+                    'catalog_entries': sum(row['remote'] == remote for row in data['entries'].values()),
+                    'restore_root': str(restore_root())}
+        if argv[0] == 'archive':
+            return archive(argv[1], remote, data)
+        return restore(argv[1], remote, data)
+
+
+def interrupted(signum, frame):
+    raise KeyboardInterrupt()
+
+
+def main():
+    os.umask(0o077)
+    signal.signal(signal.SIGTERM, interrupted)
+    signal.signal(signal.SIGINT, interrupted)
+    try:
+        result = {'ok': True, **run(sys.argv[1:])}
+    except Failure as error:
+        result = {'ok': False, 'error': {'code': error.code, 'message': str(error)}}
+    except KeyboardInterrupt:
+        result = {'ok': False, 'error': {'code': 'INTERRUPTED', 'message': 'Operação interrompida; consulte o catálogo antes de repetir.'}}
+    except (OSError, ValueError, UnicodeError):
+        result = {'ok': False, 'error': {'code': 'LOCAL_IO', 'message': 'Falha local; confira caminhos, permissões e espaço. Nenhuma operação foi confirmada.'}}
+    print(json.dumps(result, ensure_ascii=True))
+    return 0 if result['ok'] else 2
+
+
+if __name__ == '__main__':
+    sys.exit(main())
