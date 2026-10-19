@@ -47,7 +47,21 @@ def magnet(value):
         url = urlsplit(tracker)
         if url.scheme not in {'http', 'https', 'udp'} or not url.hostname or url.username or url.password:
             raise Failure('Tracker inválido.')
-        addresses = socket.getaddrinfo(url.hostname, url.port or 80, type=socket.SOCK_DGRAM)
+        # A magnet may contain many trackers. DNS failure for any one tracker
+        # must not make the whole magnet look like a Transmission outage.
+        # Transmission can resolve a public hostname when it contacts the tracker.
+        try:
+            literal = ipaddress.ip_address(url.hostname)
+        except ValueError:
+            literal = None
+        if literal is not None and not literal.is_global:
+            raise Failure('Tracker precisa de endereço público.')
+        try:
+            addresses = socket.getaddrinfo(url.hostname, url.port or 80, type=socket.SOCK_DGRAM)
+        except socket.gaierror:
+            if literal is not None:
+                raise Failure('Tracker inválido.')
+            continue  # One offline hostname must not block usable trackers or the infohash.
         if not addresses or any(not ipaddress.ip_address(row[4][0]).is_global for row in addresses):
             raise Failure('Tracker precisa de endereço público.')
     return value
