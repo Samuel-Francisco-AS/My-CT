@@ -30,13 +30,19 @@ def row(**extra):
 class FakeApi:
     key = KEY
 
-    def __init__(self, rows=None):
+    def __init__(self, rows=None, sources=None, unavailable=None):
         self.rows = [] if rows is None else rows
         self.calls = []
+        self.sources = sources
+        self.unavailable = unavailable or []
 
     def get(self, path, timeout=7):
         self.calls.append((path, timeout))
+        if path == '/api/v1/indexerstatus':
+            return self.unavailable
         if path == '/api/v1/indexer':
+            if self.sources is not None:
+                return self.sources
             return [{'id': 1, 'name': 'Knaben', 'enable': True, 'protocol': 'torrent'},
                     {'id': 2, 'name': 'Disabled', 'enable': False, 'protocol': 'torrent'},
                     {'id': 3, 'name': 'Usenet', 'enable': True, 'protocol': 'usenet'}]
@@ -53,7 +59,7 @@ class SearchTest(unittest.TestCase):
         path, timeout = api.calls[-1]
         self.assertEqual(25, timeout)
         self.assertEqual('/api/v1/search', urlsplit(path).path)
-        self.assertEqual({'query': ['Ubuntu & Linux'], 'type': ['search'], 'limit': ['20'],
+        self.assertEqual({'query': ['Ubuntu & Linux'], 'type': ['search'],
                           'indexerIds': ['1']}, parse_qs(urlsplit(path).query))
         self.assertNotIn(KEY, path)
         self.assertEqual(1, result['count'])
@@ -136,9 +142,83 @@ class SearchTest(unittest.TestCase):
             with self.assertRaises(search.Failure) as caught:
                 search.run(['search', 'Ubuntu'], FakeApi(rows))
             self.assertEqual('invalid_response', caught.exception.code)
-        result = search.run(['search', 'Ubuntu'], FakeApi([None] + [row()] * 25))
+        result = search.run(['search', 'Ubuntu'], FakeApi([None] + [row(title=f'Ubuntu {i}') for i in range(25)]))
         self.assertEqual((20, 26, 1, True),
                          tuple(result[k] for k in ('count', 'received_count', 'discarded_count', 'truncated')))
+
+    def test_dynamic_sources_availability_and_id_validation(self):
+        sources = [{'id': i, 'name': f'Source {i}', 'enable': True, 'protocol': 'torrent'} for i in (9, 1, 17)]
+        api = FakeApi([row(indexerId=17)], sources, [{'indexerId': 9, 'disabledTill': '2999-01-01T00:00:00Z'}])
+        status = search.run(['status'], api)
+        self.assertEqual([9, 1, 17], [s['id'] for s in status['indexers']])
+        self.assertEqual([False, True, True], [s['available'] for s in status['indexers']])
+        search.run(['search', 'Ubuntu', '--indexer', '17'], api)
+        self.assertEqual(['17'], parse_qs(urlsplit(api.calls[-1][0]).query)['indexerIds'])
+        for source_id, code in [(2, 'invalid_indexer'), (9, 'indexer_unavailable'), (999, 'invalid_indexer')]:
+            before = len([c for c in api.calls if c[0].startswith('/api/v1/search?')])
+            with self.assertRaises(search.Failure) as caught:
+                search.run(['search', 'Ubuntu', '--indexer', str(source_id)], api)
+            self.assertEqual(code, caught.exception.code)
+            self.assertEqual(before, len([c for c in api.calls if c[0].startswith('/api/v1/search?')]))
+        with self.assertRaises(search.Failure) as caught:
+            search.run(['status'], FakeApi(sources=[]))
+        self.assertEqual('no_indexers', caught.exception.code)
+
+    def test_pages_zero_twenty_twenty_one_281_and_limit(self):
+        for count in (0, 1, 20, 21, 281, 501, 620):
+            api = FakeApi([row(title=f'Ubuntu {i}') for i in range(count)])
+            first = search.run(['search', 'Ubuntu'], api)
+            self.assertEqual(min(count, 500), first['total_count'])
+            self.assertEqual(count > 500, first['limited'])
+            collected = []
+            for page in range(1, max(1, (min(count, 500) + 19) // 20) + 1):
+                result = search.run(['search', 'Ubuntu', '--page', str(page)], api)
+                self.assertLessEqual(result['count'], 20)
+                self.assertEqual(page * 20 < min(count, 500), result['has_more'])
+                collected.extend(item['id'] for item in result['results'])
+            self.assertEqual(min(count, 500), len(collected))
+            self.assertEqual(len(collected), len(set(collected)))
+        result = search.run(['search', 'Ubuntu', '--page', '25'], FakeApi([row()]))
+        self.assertEqual(('empty', False), (result['state'], result['has_more']))
+
+    def test_round_robin_deterministic_preserves_source_order_and_skips_zero(self):
+        sources = [{'id': i, 'name': f'Source {i}', 'enable': True, 'protocol': 'torrent'} for i in (9, 1, 3, 5)]
+        rows = [row(title=f'{i}-{n}', indexerId=i, indexer=f'Source {i}') for i, count in [(9, 3), (1, 30), (3, 4)] for n in range(count)]
+        api = FakeApi(rows, sources)
+        result = search.run(['search', 'Ubuntu'], api)
+        self.assertEqual([1, 3, 9, 1, 3, 9, 1, 3, 9, 1, 3], [r['indexer_id'] for r in result['results'][:11]])
+        self.assertEqual(result, search.run(['search', 'Ubuntu'], api))
+        full = result['results'] + search.run(['search', 'Ubuntu', '--page', '2'], api)['results']
+        self.assertEqual([f'1-{n}' for n in range(30)], [r['title'] for r in full if r['indexer_id'] == 1])
+        filtered = search.run(['search', 'Ubuntu', '--indexer', '9'], api)
+        self.assertEqual([9, 9, 9], [r['indexer_id'] for r in filtered['results']])
+        self.assertEqual(34, filtered['discarded_count'])
+
+    def test_duplicates_normalized_hashes_metadata_and_changing_peers(self):
+        direct = row(title='Direct', magnetUrl='magnet:?xt=urn:btih:' + 'A' * 40)
+        same = row(title='Another title', infoHash='a' * 40, seeders=999)
+        base32 = row(infoHash='VKVKVKVKVKVKVKVKVKVKVKVKVKVKVKVK')
+        result = search.run(['search', 'Ubuntu'], FakeApi([direct, same, base32, row(title='No hash'), row(title='No hash', seeders=500)]))
+        self.assertEqual(2, result['count'])
+        self.assertEqual(3, result['duplicate_count'])
+        self.assertEqual('Direct', result['results'][0]['title'])
+
+    def test_invalid_pagination_options_fail_before_credentials(self):
+        for options in [ ['--page', '0'], ['--page', '-1'], ['--page', '26'], ['--indexer', '0'],
+                         ['--indexer', '2147483648'], ['--page', '1;id'], ['--page', '1', '--page', '2'],
+                         ['--offset', '20'], ['--indexer'], ['--page', '01'] ]:
+            with patch.object(search, 'api_key') as key, contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(2, search.main(['search', 'Ubuntu'] + options))
+                key.assert_not_called()
+        self.assertEqual(('Ubuntu', 2, 1), search.validate_args(['search', 'Ubuntu', '--indexer', '1', '--page', '2']))
+
+    def test_direct_magnets_do_not_expose_tracker_credentials_or_http_in_metadata(self):
+        item = search.simplify(row(title='Ubuntu https://site.invalid/passkey', magnetUrl=MAGNET + '&tr=https://tracker.invalid/PASSKEY/announce&xs=http://user:password@host/private'), KEY)
+        output = json.dumps(item)
+        for secret in ('https://', 'http://', 'PASSKEY', 'password'):
+            self.assertNotIn(secret, output)
+        self.assertEqual('direct', item['magnet_source'])
+        self.assertEqual(MAGNET, item['magnet'])
 
     def test_query_validation_before_credentials_or_network(self):
         for args in ([], ['search'], ['search', ''], ['search', 'a' * 201],

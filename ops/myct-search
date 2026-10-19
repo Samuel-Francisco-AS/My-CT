@@ -1,5 +1,9 @@
 #!/usr/bin/python3
 """Read-only, SSH-facing Prowlarr adapter. Python standard library only."""
+import base64
+from collections import deque
+from datetime import datetime, timezone
+import hashlib
 import http.client
 import json
 import os
@@ -12,6 +16,8 @@ import xml.etree.ElementTree as ET
 
 PORT = 9696
 RESULT_LIMIT = 20
+TOTAL_LIMIT = 500
+MAX_PAGE = TOTAL_LIMIT // RESULT_LIMIT
 RESPONSE_LIMIT = 2 * 1024 * 1024
 OUTPUT_LIMIT = 256 * 1024
 MAGNET_LIMIT = 8192
@@ -46,6 +52,7 @@ def text(value, key, limit):
         return None
     # Whitelist fields and redact the key even if echoed in a title/name.
     value = re.sub(re.escape(key), '[redacted]', value, flags=re.IGNORECASE)
+    value = re.sub(r'https?://\S+', '[link omitido]', value, flags=re.IGNORECASE)
     value = ''.join(c if c.isprintable() else ' ' for c in value).strip()
     return value[:limit] or None
 
@@ -92,6 +99,21 @@ def indexers(api):
                 and row.get('protocol') == 'torrent' and number(row.get('id'))
                 and text(row.get('name'), api.key, 128)):
             result.append({'id': row['id'], 'name': text(row['name'], api.key, 128)})
+    unavailable = api.get('/api/v1/indexerstatus')
+    if not isinstance(unavailable, list):
+        raise Failure('invalid_response', 'Estado dos indexadores inválido.')
+    blocked = set()
+    for row in unavailable:
+        if not isinstance(row, dict) or not row.get('disabledTill'):
+            continue
+        try:
+            until = datetime.fromisoformat(row['disabledTill'].replace('Z', '+00:00'))
+            if until > datetime.now(timezone.utc):
+                blocked.add(row.get('indexerId'))
+        except (ValueError, TypeError, AttributeError):
+            raise Failure('invalid_response', 'Disponibilidade de indexador inválida.') from None
+    for source in result:
+        source['available'] = source['id'] not in blocked
     if not result:
         raise Failure('no_indexers', 'Nenhum indexador torrent habilitado no Prowlarr.')
     return result
@@ -114,6 +136,12 @@ def link(value, key):
         hashes = query.get('xt', [])
         if not any(re.fullmatch(r'urn:btih:(?:[a-fA-F0-9]{40}|[A-Za-z2-7]{32})', h) for h in hashes):
             return 'none', None
+        # Keep direct v1 magnets, but never forward tracker URLs/passkeys or extras.
+        value = 'magnet:?xt=' + next(h for h in hashes if re.fullmatch(
+            r'urn:btih:(?:[a-fA-F0-9]{40}|[A-Za-z2-7]{32})', h))
+        name = text(query.get('dn', [None])[0], key, 512)
+        if name:
+            value += '&' + urlencode({'dn': name})
         return 'magnet', value
     except ValueError:
         return 'none', None
@@ -150,40 +178,87 @@ def simplify(row, key):
 def validate_args(args):
     if args == ['status']:
         return None
-    if len(args) == 2 and args[0] == 'search':
+    if len(args) in (2, 4, 6) and args[0] == 'search':
         query = args[1].strip()
-        if 1 <= len(query) <= 200 and all(c.isprintable() for c in args[1]):
-            return query
-    raise Failure('usage', 'Uso: myct-search status | search "consulta" (1–200 caracteres, sem controles).')
+        page, indexer_id = 1, None
+        seen = set()
+        for flag, value in zip(args[2::2], args[3::2]):
+            if flag not in ('--page', '--indexer') or flag in seen or not re.fullmatch(r'[1-9][0-9]{0,9}', value):
+                break
+            seen.add(flag)
+            if flag == '--page':
+                page = int(value)
+            else:
+                indexer_id = int(value)
+        else:
+            if (1 <= len(query) <= 200 and all(c.isprintable() for c in args[1])
+                    and 1 <= page <= MAX_PAGE and (indexer_id is None or indexer_id <= 2**31 - 1)):
+                return query, page, indexer_id
+    raise Failure('usage', 'Uso: myct-search status | search "consulta" [--page 1–25] [--indexer ID positivo].')
+
+
+def result_id(item):
+    # Content hash identifies the same torrent across sources and hex/Base32 forms.
+    if item['magnet']:
+        value = parse_qs(urlsplit(item['magnet']).query)['xt'][0].split(':')[-1]
+        value = base64.b32decode(value.upper()).hex() if len(value) == 32 else value.lower()
+        identity = ['btih', value]
+    else:
+        identity = ['metadata', item['title'].casefold(), item['size_bytes']]
+    return hashlib.sha256(json.dumps(identity, ensure_ascii=True).encode()).hexdigest()
 
 
 def run(args, api):
-    query = validate_args(args)
-    if query is None:
+    options = validate_args(args)
+    if options is None:
         system = api.get('/api/v1/system/status')
         if not isinstance(system, dict) or system.get('appName') != 'Prowlarr' or not isinstance(system.get('version'), str):
             raise Failure('invalid_response', 'Status Prowlarr inválido.')
         return {'state': 'ready', 'version': text(system['version'], api.key, 64),
-                'indexers': indexers(api), 'result_limit': RESULT_LIMIT}
+                'indexers': indexers(api), 'result_limit': RESULT_LIMIT, 'total_limit': TOTAL_LIMIT}
+    query, page, indexer_id = options
     sources = indexers(api)
-    params = [('query', query), ('type', 'search'), ('limit', RESULT_LIMIT)]
+    if indexer_id is not None:
+        sources = [source for source in sources if source['id'] == indexer_id]
+        if not sources:
+            raise Failure('invalid_indexer', 'Indexador removido ou desabilitado. Atualize a lista de fontes.')
+        if not sources[0]['available']:
+            raise Failure('indexer_unavailable', 'Indexador temporariamente indisponível. Tente outra fonte.')
+    params = [('query', query), ('type', 'search')]
     params.extend(('indexerIds', source['id']) for source in sources)
     rows = api.get('/api/v1/search?' + urlencode(params), timeout=25)
     if not isinstance(rows, list):
         raise Failure('invalid_response', 'Lista de resultados inválida.')
-    results = []
+    groups = {source['id']: deque() for source in sorted(sources, key=lambda source: source['id'])}
     valid = 0
     for row in rows:
         item = simplify(row, api.key)
-        if item is not None:
+        if item is not None and item['indexer_id'] in groups:
             valid += 1
-            if len(results) < RESULT_LIMIT:
-                results.append(item)
+            item['id'] = result_id(item)
+            groups[item['indexer_id']].append(item)
     if rows and not valid:
-        raise Failure('invalid_response', 'Prowlarr não retornou resultados torrent válidos.')
+        raise Failure('invalid_response', 'Prowlarr não retornou resultados torrent válidos das fontes selecionadas.')
+    ordered, seen = [], set()
+    # Round-robin in ascending source ID, preserving each source's incoming order.
+    while groups:
+        for source in list(groups):
+            item = groups[source].popleft() if groups[source] else None
+            if not groups[source]:
+                del groups[source]
+            if item is not None and item['id'] not in seen:
+                seen.add(item['id'])
+                if len(ordered) < TOTAL_LIMIT:
+                    ordered.append(item)
+    start = (page - 1) * RESULT_LIMIT
+    results = ordered[start:start + RESULT_LIMIT]
+    has_more = start + RESULT_LIMIT < len(ordered)
     return {'state': 'results' if results else 'empty', 'results': results,
             'count': len(results), 'received_count': len(rows), 'discarded_count': len(rows) - valid,
-            'truncated': valid > RESULT_LIMIT, 'result_limit': RESULT_LIMIT}
+            'truncated': len(seen) > len(results), 'result_limit': RESULT_LIMIT,
+            'page': page, 'indexer_id': indexer_id, 'has_more': has_more,
+            'total_count': len(ordered), 'total_limit': TOTAL_LIMIT,
+            'limited': len(seen) > TOTAL_LIMIT, 'duplicate_count': valid - len(seen)}
 
 
 def main(args=None):

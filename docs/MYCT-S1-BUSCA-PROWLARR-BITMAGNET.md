@@ -1,7 +1,7 @@
 # MYCT-S1/S2 — Busca de torrents: Prowlarr primeiro, Bitmagnet depois
 
 **Acordado em:** 19/10/2026  
-**Situação:** S1A/S1B aprovadas no Fedora/Moto G06 e incorporadas à `main` pela PR #44 (`265b4e2`); MYCT-S1C planejada (filtros, paginação e diversidade), não implementada; MYCT-S2/Bitmagnet opcional.
+**Situação:** S1A/S1B aprovadas no Fedora/Moto G06 e incorporadas à `main` pela PR #44 (`265b4e2`); MYCT-S1C implementada em candidata (filtros, paginação e diversidade), aguardando aceite físico; MYCT-S2/Bitmagnet opcional.
 **Issue:** [#43](https://github.com/Samuel-Francisco-AS/My-CT/issues/43)  
 **Base inspecionada:** `main`, após consolidação da PR #42 (commit `99aaa24538`).
 
@@ -429,7 +429,7 @@ foi adicionado durante a implementação.** Sem aparelho conectado ao ADB para
 instrumentação; testes de UI/fluidez e fluxo SSH do Android não são declarados PASS.
 
 Resultado final: **BUILD SUCCESSFUL**, 268 testes JVM (266 aprovados, 2 opt-in
-ignorados: FedoraHandshakeTest e IdeFedoraSftpTest), **lint sem erros/avisos**.
+ignorados: FedoraHandshakeTest e IdeFedoraSftpTest), **lint sem erros/avisos (2 sugestões Hint de estado numérico)**.
 São 10 testes novos de Busca; a suíte existente também passou. Verificação
 `python3 terminal/upstream/verify.py`: 21 arquivos upstream/3 patches documentados
 preservados. `git diff --check` aprovado. Logs locais ignorados pelo Git em
@@ -545,3 +545,246 @@ Os **5 com zero** não são declarados quebrados: uma consulta Ubuntu pode não 
 
 **Critério de conclusão:** o usuário pode pesquisar em Todos ou numa fonte específica, navegar pelos resultados por páginas, ver variedade de indexadores em Todos e continuar adicionando manualmente magnets via Transmission, sem perda do comportamento da S1 já aprovado.
 
+
+
+## MYCT-S1C — implementação e candidata 0.8.1 (19/10/2026)
+
+**Situação:** implementação/testes Fedora e JVM concluídos; candidata Android
+`0.8.1-s1c-rc1`/code **40**. **Aceite físico Moto G06 pendente. PR #45 draft,
+sem merge.** O planejamento acima é o registro anterior à implementação.
+Árvore inicialmente limpa, fetch realizado e vínculo local criado para a branch
+remota existente `myct-s1c-search-filters-pagination`, em `e4b0f13`. Trabalho
+somente em `/home/sam/Projetos/My-CT`, sem worktree/clone/outra branch; `main`
+preservada. Helper instalado e serviços ativos não foram alterados.
+
+### API observada e solução
+
+Prowlarr local **2.6.5.5623**, 12 indexadores torrent habilitados. O código
+oficial de [SearchResource](https://github.com/Prowlarr/Prowlarr/blob/v2.6.5.5623/src/Prowlarr.Api.V1/Search/SearchResource.cs)
+e [SearchController](https://github.com/Prowlarr/Prowlarr/blob/v2.6.5.5623/src/Prowlarr.Api.V1/Search/SearchController.cs)
+aceita `limit`/`offset` e os encaminha à busca dos indexadores; isso não garante
+paginação da lista agregada. Experimento somente GET, com Ubuntu e a configuração
+real, confirmou:
+
+| Parâmetros adicionais | Itens | Tempo |
+| --- | ---: | ---: |
+| nenhum | 281 | 2,109 s |
+| `limit=20&offset=0` | 281 | 2,350 s |
+| `limit=20&offset=20` | 0 | 0,018 s |
+
+Os dois conjuntos de 281 tiveram a mesma sequência de fonte/título/tamanho
+(fingerprint SHA-256 abreviado `6b302f09fc489339`). Portanto o helper não usa
+`limit`/`offset` do Prowlarr para navegar: consulta o agregado, normaliza,
+intercala e devolve somente a página solicitada. Não usa POST de grab/download.
+
+- **Todos:** round-robin por ID crescente das fontes habilitadas, preservando
+  a ordem recebida dentro de cada fonte. Fontes vazias não geram cards.
+- **Fonte específica:** valida ID positivo contra a configuração atual e envia
+  somente esse ID em `indexerIds`; também descarta itens de outra fonte caso
+  o upstream os devolva indevidamente. Fonte removida/desabilitada gera
+  `invalid_indexer`; bloqueio temporário futuro em `/api/v1/indexerstatus`
+  gera `indexer_unavailable`. Esse estado é uma observação, não uma garantia
+  da disponibilidade durante a chamada seguinte; falhas HTTP/timeouts continuam
+  sanitizados. Zero resultados por si só não significa fonte quebrada.
+- **Deduplicação:** SHA-256 da identidade do conteúdo por BTIH (hex/Base32
+  normalizados); sem magnet, título sem distinção de caixa + tamanho. Guarda
+  a primeira ocorrência na ordem intercalada, sem reordenar os sobreviventes.
+  O fallback por metadados pode unir releases diferentes com título/tamanho
+  idênticos e não reconhece equivalência entre um item sem hash e outro com hash.
+- **Limites:** 20 itens por resposta, até 500 únicos navegáveis/25 páginas,
+  entrada HTTP de até 2 MiB e saída SSH de até 256 KiB. Entrada excessiva falha
+  com `response_limit` e pede refinar; acima de 500 únicos, `limited=true` e
+  aviso Android. Processamento/memória limitados pela entrada de 2 MiB, sem
+  banco, arquivo de resultados, cache permanente, dependência ou daemon novo.
+- **Consultas ao vivo:** cada página repete a consulta completa. A ordem relativa
+  de cada fonte, itens e contagens podem mudar. Sem snapshot não há garantia
+  de percorrer exatamente o conjunto original: mudanças podem pular itens ou
+  repetir candidatos. Helper deduplica cada agregado; Android oculta IDs já
+  exibidos, avança a página mesmo se todos forem repetidos e não busca outra
+  automaticamente. Refazer Pesquisar inicia um conjunto novo. O total mostrado
+  pertence à resposta mais recente; a contagem carregada pertence à navegação.
+
+### Contrato JSON v1 atualizado
+
+Comandos compatíveis e extensões (ordem dos pares opcionais indiferente):
+
+```bash
+myct-search status
+myct-search search "Ubuntu"
+myct-search search "Ubuntu" --page 2
+myct-search search "Ubuntu" --indexer 10
+myct-search search "Ubuntu" --indexer 10 --page 2
+```
+
+Sem opções = **Todos, página 1**. `--page` aceita inteiros 1–25 e `--indexer`
+inteiros 1–2147483647 existentes/habilitados; flags duplicadas/desconhecidas,
+zeros, negativos e controles são rejeitados antes de credenciais/rede. Consulta
+continua com 1–200 caracteres imprimíveis. Exit 0 em sucesso/vazio, 2 em
+uso/configuração e 3 nas demais falhas. Erros mantêm envelope v1 e códigos seguros.
+
+Mantidos `schema_version:1`, `ok`, `state`, `results`, `count`, `received_count`,
+`discarded_count`, `truncated`, `result_limit` e todos os campos anteriores de
+cada item (`title`, `size_bytes`, `source`, `indexer_id`, `seeders`, `leechers`,
+`link_type`, `magnet`, `magnet_source`). Campos adicionados:
+
+| Campo | Significado |
+| --- | --- |
+| status `indexers[].available` | disponibilidade observada; ID/nome continuam dinâmicos |
+| status/resultados `total_limit` | 500 |
+| resultados `page` | página atual, base 1 |
+| resultados `indexer_id` | filtro solicitado; `null` = Todos |
+| resultados `has_more` | existe próxima página conhecida dentro do limite |
+| resultados `total_count` | únicos navegáveis nesta consulta, até 500 |
+| resultados `limited` | há únicos além do teto de 500 |
+| resultados `duplicate_count` | ocorrências repetidas removidas do agregado |
+| item `id` | identidade estável SHA-256, 64 caracteres hex; não é URL autenticada |
+
+`received_count` conta a resposta bruta, `discarded_count` conta itens inválidos
+ou de fontes não selecionadas e `duplicate_count` é separado. `truncated` continua
+indicando que a resposta não contém todo o conjunto único; **não** é o sinal
+para carregar mais: usar `has_more`. Página além do fim retorna `empty` sem mais.
+
+API key permanece somente no Fedora, no cabeçalho HTTP loopback, com validação
+privada do config existente. URLs HTTP não são retornadas: links indiretos
+continuam classificados, sem magnet; URLs em metadados são omitidas. Magnets
+diretos preservam o BTIH e nome opcional seguro, com `magnet_source=direct`;
+parâmetros de tracker/URLs extras são removidos para não propagar passkeys ou
+credenciais. Isso os deixa dependentes da descoberta existente do cliente,
+como o fallback já aprovado. Fallback continua mínimo
+`magnet:?xt=urn:btih:<hash>`/`magnet_source=infohash`; sem hash válido,
+`magnet=null` e `magnet_source=null`. Não há resolução de proxy HTTP autenticado.
+
+### Android e arquivos
+
+Seletor compacto **Fonte: Todos** + fontes dinâmicas, atualizado manualmente por
+**Atualizar fontes** (também verifica serviço). Fontes temporariamente bloqueadas
+aparecem desabilitadas. Trocar fonte ou texto cancela/invalida a geração anterior,
+limpa cards/páginas e aguarda Pesquisar. Reconexão limpa catálogo/filtro/resultados
+e não repete ações. Não há polling nem busca automática ao entrar na tela.
+
+**Carregar mais** acrescenta cards com chaves estáveis na mesma LazyColumn,
+preserva os recebidos e não reposiciona a lista. Bloqueio enquanto ocupado;
+erro/cancelamento da página mantém cards, página anterior e possibilidade de
+retentativa manual. Fim de resultados remove o botão. Contagem, limite de 500 e
+natureza ao vivo ficam explícitos. IME Pesquisar, fechamento do teclado,
+transições e estilo preto/dourado continuam usando os componentes existentes.
+APK novo com helper anterior ainda permite pesquisa básica; aviso de listagem
+antiga pede atualizar o helper, e não há Carregar mais nesse contrato legado.
+
+Inclusão permanece **somente por toque** em
+`TorrentsModel.add → TorrentAction.Add → myct-torrent`; sem magnet o botão
+continua desabilitado. Nenhuma mudança em Transmission, Jellyfin, PostgreSQL,
+SSH, diretórios, seeding ou serviços ativos. Nenhum torrent real foi incluído.
+
+Arquivos alterados:
+
+- `ops/myct-search` e `ops/tests/test_search.py`.
+- `android/app/src/main/java/dev/myct/Search.kt`, `SearchModel.kt`, `SearchScreen.kt`.
+- `android/app/src/test/java/dev/myct/SearchTest.kt`, `SearchModelTest.kt`.
+- `android/app/build.gradle.kts` e este documento.
+
+### Validação
+
+```bash
+python3 -m unittest discover -s ops/tests -p test_search.py -v
+cd android
+./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --offline --console=plain
+```
+
+**21 testes Python PASS:** catálogo dinâmico/vazio, IDs removidos/desabilitados e
+bloqueados, filtro, 0/1/20/21/281/501/620 itens, todas as páginas sem duplicatas,
+round-robin determinístico/ordem interna/fontes vazias, limite de 500, hash
+hex/Base32 equivalente, URLs/passkeys/chave privadas, erros HTTP/timeouts e
+compatibilidade dos magnets diretos/infohash.
+
+**272 testes JVM, 270 PASS e 2 opt-in ignorados** (handshake/SFTP Fedora),
+zero falhas. Busca tem 14 testes, cobrindo catálogo/filtro, contrato e quoting,
+página inconsistente, anexação sem substituir os 20 iniciais, supressão de
+repetições, bloqueio de chamadas concorrentes, retentativa da mesma página após
+falha SSH, fim, cancelamento e respostas tardias após troca de consulta/fonte,
+saída ou desconexão, reconexão sem replay e inclusão explícita pelo modelo
+Transmission existente sem chamadas reais. Build/lint: **BUILD SUCCESSFUL em 2m48s; lint sem erros/avisos (2 sugestões Hint de estado numérico)**.
+Avisos Kotlin preexistentes em `IdeScreen.kt:332/344` e aviso de metaspace do
+Gradle não motivaram mudanças fora do escopo. `git diff --check` aprovado.
+
+Diagnóstico real com a versão do helper **do repositório**, sem instalar sobre
+`~/.local/bin/myct-search`:
+
+| Operação | Recebidos / únicos | Retornados | Tempo | JSON |
+| --- | --- | ---: | ---: | ---: |
+| status | 12 fontes habilitadas | — | 0,018 s | 762 bytes |
+| Ubuntu Todos, p1 | 281 / 228 | 20 | 1,989 s | 7.014 bytes |
+| Ubuntu Todos, p2 | 281 / 228 | 20 novos | 2,893 s | 6.991 bytes |
+| Ubuntu Pirate Bay, ID 10 | 100 / 100 | 20 só Pirate Bay | 0,225 s | 7.492 bytes |
+| ID inexistente 2147483647 | rejeitado antes de search | 0 | 0,017 s | 169 bytes |
+
+Todos p1: Knaben 4, BigFANGroup 3, LimeTorrents 3, Nyaa.si 1, Pirate Bay 3,
+Tokyo Toshokan 3 e Torrent Downloads 3. **Sete fontes na primeira página**, sem
+inventar as cinco que não retornaram itens. P2: Knaben/LimeTorrents/Pirate Bay/
+Torrent Downloads com 5 cada; interseção de IDs p1/p2 **zero**. 53 ocorrências
+repetidas removidas, nenhum item inválido descartado, sem limite de 500 atingido.
+P1: 8 magnets infohash/12 indisponíveis; p2: 10/10; filtro Pirate Bay: 20/0.
+Chave real e URLs HTTP ausentes nas respostas verificadas em memória.
+Pico RSS do processo Python que executou essas operações: **26.064 KiB**
+(~25,5 MiB), sem processo persistente. Contagens/tempos são observações pontuais,
+não garantia de cobertura ou disponibilidade. Página 12 real: 8 itens, `has_more=false`, 1,727 s; os 8 magnets foram
+aceitos pela função de validação de `myct-torrent`, sem chamada RPC.
+
+O teste real ocorreu no Fedora local via API loopback; transporte SSH Android
+foi validado por testes JVM do canal existente, **não pelo Moto** nesta entrega.
+ADB sem dispositivos. Scroll, ergonomia/teclado, transições e inclusão física
+continuam sujeitos ao roteiro do proprietário; não foram declarados PASS físico.
+
+### Candidata, atualização e teste físico
+
+`dev.myct`, **0.8.1-s1c-rc1, versionCode 40**, minSdk 26/target 36. Certificado
+SHA-256 `b788958be4c919889fc30813f13f1aceb5b6b69670514c82e16288f4b60b83b3`,
+verificado por apksigner contra o APK S1B code 39; mesma keystore existente.
+Tamanho APK: 17931625 bytes. SHA-256: `bfe8bb4cf745e5b562743348d4c206b13129beaea0a9be954f047c49fc6e6e2c`.
+
+[Pré-release](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-s1c-v0.8.1-rc1)
+· [APK](https://github.com/Samuel-Francisco-AS/My-CT/releases/download/myct-s1c-v0.8.1-rc1/myct-s1c-0.8.1-debug.apk)
+· [SHA256SUMS](https://github.com/Samuel-Francisco-AS/My-CT/releases/download/myct-s1c-v0.8.1-rc1/myct-s1c-SHA256SUMS.txt).
+
+**Atualização manual do helper pelo proprietário**, no Fedora, após conferir
+branch `myct-s1c-search-filters-pagination` e árvore limpa. Comandos sem `set -e`
+e sem `exit` no shell SSH interativo; se o pull falhar, a instalação não executa:
+
+```bash
+cd /home/sam/Projetos/My-CT
+git status --short
+git branch --show-current
+git pull --ff-only && install -m 0755 ops/myct-search "$HOME/.local/bin/myct-search" && "$HOME/.local/bin/myct-search" status
+```
+
+Nenhum restart/configuração de serviço é necessário. O Git sozinho não atualiza
+o helper instalado. Depois pode conferir `myct-search search "Ubuntu"` e
+`myct-search search "Ubuntu" --page 2`, sem downloads. Usar IDs do status atual.
+Baixar o APK e SHA256SUMS da release, conferir o hash e instalar como **atualização**
+sobre code 39, preservando dados/assinatura. Não desinstalar, limpar dados ou
+instalar sobre versão de code maior.
+
+Roteiro Moto G06, gate de aceite antes de merge:
+
+1. Atualizar helper manualmente, instalar APK como atualização e conectar o SSH
+   existente. Busca → Atualizar fontes: conferir Todos e as fontes atuais.
+2. Pesquisar Ubuntu em Todos: até 20 cards, variedade se houver várias fontes,
+   peers/tamanho, contagem e resultados sem magnet com botão desabilitado.
+3. Rolar ao fim → Carregar mais: observar novos cards, posição de rolagem,
+   contador e ausência de repetição; toque duplo não envia duas páginas. Repetir
+   até o fim (na medição, 228 únicos/12 páginas); botão deve desaparecer.
+4. Voltar ao formulário, escolher uma fonte: cards antigos devem sumir e nenhuma
+   pesquisa deve iniciar. Tocar Pesquisar e confirmar somente essa origem.
+   Trocar para Todos e repetir; editar consulta durante carregamento e conferir
+   que resposta antiga não se mistura. Conferir teclado e transições.
+5. Cancelar Carregar mais: cards preservados e retentativa manual. Testar falha
+   de conexão, sair/voltar e reconectar: sem replay automático de pesquisa ou
+   inclusão. Falha recuperável da página não deve apagar os cards recebidos;
+   desconexão confirmada limpa o estado, conforme o comportamento existente.
+6. Abrir Downloads → Torrents e conferir os itens existentes. Inclusão adicional
+   só por toque explícito do proprietário em conteúdo permitido, se desejar
+   repetir esse fluxo já aceito; não é disparada pelo teste de busca. Não remover
+   dados nem alterar seeding. Verificar brevemente Terminal/SFTP e navegação.
+
+Registrar resultado físico antes de retirar draft/fechar #43; **não houve merge**.
+MYCT-S2/Bitmagnet permanece opcional e não iniciada.
