@@ -1,4 +1,0 @@
-My-CT compatibility modifications to pinned sources in SOURCES.txt:
-Shell: removed dangling local includes #arithmetic_dollar and #line_continuation_character.
-Kotlin: removed dangling local include #type-constraint.
-Those rules are absent in their upstream repositories; TextMate ignored them with repeated warnings. No replacement parser or new syntax rules. Original MIT notices retained.

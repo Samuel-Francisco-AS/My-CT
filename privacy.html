@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Política de privacidade da integração My-CT Archive com Google Drive.">
+  <title>Política de Privacidade — My-CT</title>
+  <style>
+    :root{color-scheme:dark;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#0b1220;color:#e8edf6}
+    *{box-sizing:border-box}body{margin:0}main{max-width:790px;margin:auto;padding:64px 24px 80px}
+    h1{font-size:clamp(2rem,6vw,3rem);letter-spacing:-.04em}h2{margin-top:2rem}
+    p,li{font-size:1.04rem;line-height:1.75;color:#c7d1df}
+    a{color:#9bc8ff}a:hover{color:#d6eaff}footer{border-top:1px solid #35445c;margin-top:3rem;padding-top:1.5rem;color:#aab9ce;font-size:.9rem}
+    .date{font-size:.88rem;color:#9aacc5}code{overflow-wrap:anywhere}
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="./index.html">← Página inicial do My-CT</a></p>
+    <h1>Política de Privacidade — My-CT Archive</h1>
+    <p class="date">Atualizado em 19 de outubro de 2026 • Integração pessoal em desenvolvimento</p>
+    <p>My-CT é uma ferramenta de administração pessoal de um servidor Fedora. Seu módulo de arquivamento utiliza o Rclone e a API do Google Drive para transferir arquivos por solicitação do proprietário. Esta política descreve o tratamento de dados nessa integração.</p>
+    <h2>1. Dados acessados</h2>
+    <p>Após o consentimento OAuth, o Rclone poderá criar e acessar arquivos e pastas cobertos pelo escopo <code>https://www.googleapis.com/auth/drive.file</code> da conta Google autorizada. A ferramenta manipula conteúdo e metadados necessários para copiar, conferir integridade, listar e restaurar arquivos escolhidos pelo proprietário.</p>
+    <h2>2. Finalidade</h2>
+    <p>Os dados são usados exclusivamente para arquivamento pessoal, verificação de integridade e restauração. A integração não é utilizada para publicidade, perfis comerciais, revenda de dados ou treinamento de modelos.</p>
+    <h2>3. Armazenamento e credenciais</h2>
+    <p>Os arquivos arquivados permanecem no Google Drive da conta autorizada, sujeitos às políticas da Google. As credenciais OAuth do Rclone e o catálogo local de operações ficam no computador do proprietário. O aplicativo não envia credenciais para este site do GitHub Pages nem para um servidor de telemetria do My-CT.</p>
+    <h2>4. Compartilhamento</h2>
+    <p>O My-CT não publica automaticamente as mídias nem compartilha seus conteúdos com terceiros. A comunicação com os serviços da Google ocorre para executar as transferências solicitadas. O site informativo é hospedado no GitHub Pages, que pode tratar dados técnicos de acesso conforme suas próprias políticas.</p>
+    <h2>5. Controle e exclusão</h2>
+    <p>O proprietário decide quais arquivos enviar e restaurar e pode revogar o acesso OAuth nas configurações da Conta Google. Revogar o acesso impede novas operações autenticadas; isso não implica excluir automaticamente arquivos já arquivados. Arquivos no Drive podem ser removidos pelo próprio proprietário. A implementação inicial do My-CT não realiza exclusão automática de originais ou cópias remotas.</p>
+    <h2>6. Segurança e limitações</h2>
+    <p>O projeto está em desenvolvimento e é destinado a uso pessoal. O proprietário controla seu sistema, a conta Google e as permissões. A disponibilidade e os limites de armazenamento dependem dos serviços da Google. Arquivos valiosos devem, quando possível, possuir cópias adicionais independentes.</p>
+    <h2>7. Contato e alterações</h2>
+    <p>Questões sobre o projeto podem ser encaminhadas ao proprietário pelas funcionalidades de contato da sua conta GitHub. Esta política poderá ser atualizada à medida que a integração evoluir, com a data de alteração publicada nesta página.</p>
+    <footer><a href="./index.html">Voltar à página inicial</a> · My-CT Archive</footer>
+  </main>
+</body>
+</html>

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="My-CT: ferramenta pessoal para administrar um servidor Linux e arquivar arquivos de forma controlada no Google Drive.">
+  <title>My-CT — Servidor pessoal e arquivo em nuvem</title>
+  <style>
+    :root{color-scheme:dark;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#0b1220;color:#e8edf6}
+    *{box-sizing:border-box}body{margin:0}main{max-width:790px;margin:auto;padding:64px 24px 80px}
+    h1{font-size:clamp(2.4rem,7vw,4rem);letter-spacing:-.05em;margin:.25em 0}h2{margin-top:2rem}
+    p,li{font-size:1.04rem;line-height:1.75;color:#c7d1df}
+    .eyebrow{font-weight:750;letter-spacing:.15em;color:#9bc8ff;text-transform:uppercase;font-size:.75rem}
+    .panel{margin:2rem 0;padding:1.4rem 1.6rem;border:1px solid #35445c;border-radius:16px;background:#151f30}
+    a{color:#9bc8ff}a:hover{color:#d6eaff}footer{border-top:1px solid #35445c;margin-top:3rem;padding-top:1.5rem;color:#aab9ce;font-size:.9rem}
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">My-CT • Projeto pessoal</p>
+    <h1>Um servidor Linux sob seu controle.</h1>
+    <p>My-CT é um projeto pessoal em desenvolvimento para administrar remotamente um computador Fedora por meio de um aplicativo Android. Ele inclui acesso a arquivos e ferramentas de gerenciamento de downloads e mídia.</p>
+    <div class="panel">
+      <h2>Integração com Google Drive</h2>
+      <p>O recurso <strong>My-CT Archive</strong> utiliza o <strong>Rclone</strong> no próprio servidor para copiar arquivos selecionados pelo proprietário para sua conta Google Drive e restaurá-los posteriormente. O objetivo é preservar arquivos e liberar armazenamento local apenas após confirmação separada.</p>
+      <p>O acesso é autorizado pelo proprietário via OAuth. A permissão solicitada é <code>drive.file</code>, destinada aos arquivos criados ou abertos pelo aplicativo. A integração não exige disponibilizar os arquivos ao público.</p>
+      <p>O recurso ainda está em fase de desenvolvimento e testes. As transferências dependem de autorização e comandos iniciados pelo próprio proprietário.</p>
+    </div>
+    <h2>Como seus dados são tratados?</h2>
+    <p>As cópias ficam no Google Drive da conta autorizada. O My-CT mantém informações de controle e autenticação no servidor do proprietário, não neste site. Consulte a política de privacidade para detalhes e limitações.</p>
+    <p><a href="./privacy.html">Ler a Política de Privacidade do My-CT</a></p>
+    <footer>My-CT — projeto pessoal de software, sem serviço público de armazenamento oferecido a terceiros. Esta página é informativa e não pede credenciais.</footer>
+  </main>
+</body>
+</html>

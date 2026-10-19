@@ -1,3 +1,0 @@
-#!/bin/sh
-# Transmission completion hook. No file moves or names interpolated into a shell.
-exec "$HOME/.local/bin/myct-torrent" organize "${TR_TORRENT_HASH:?}"

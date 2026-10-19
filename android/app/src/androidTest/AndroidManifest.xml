@@ -1,8 +1,0 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application>
-        <!-- Test APK only; exposes generated fixtures, never workspace/user documents. -->
-        <provider android:name="dev.myct.SharedFixtureProvider" android:authorities="dev.myct.test.shared"
-            android:exported="true" android:grantUriPermissions="true"
-            android:permission="android.permission.MANAGE_DOCUMENTS" />
-    </application>
-</manifest>
