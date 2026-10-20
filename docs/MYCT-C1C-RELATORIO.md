@@ -1,10 +1,90 @@
 # MYCT-C1C — Nuvem no Android
 
-Candidata de **20/10/2026**, [PR única #50 draft](https://github.com/Samuel-Francisco-AS/My-CT/pull/50), branch única `myct-c1c-cloud-android`, vinculada à
-[issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46). **Sem merge e
-sem aceite físico da RC2 declarado.** A C1B-2 continua aceita. Esta revisão
-acrescenta telemetria opt-in e resultado de interrupção aos helpers; preserva a
-semântica de arquivamento/liberação e não repete o aceite físico anterior.
+**20/10/2026 — ACEITE FUNCIONAL REAL NO MOTO G06 PELO PROPRIETÁRIO.**
+[PR #50](https://github.com/Samuel-Francisco-AS/My-CT/pull/50), branch
+`myct-c1c-cloud-android`. A C1C cobre Nuvem no Android, trabalhos duráveis
+no Fedora e progresso real no upload. **Fechamento da implementação autorizado**;
+os resultados ainda não observados fisicamente são mantidos como limitações, não
+promovidos ficticiamente a PASS. A situação de merge consta no GitHub e na seção
+de fechamento remoto deste relatório.
+
+A descrição de candidata RC1/RC2 nos blocos abaixo é **histórica, anterior ao
+aceite físico e ao fechamento**.
+
+
+
+## Aceite físico final C1C no Moto G06 — 20/10/2026
+
+**Autorização expressa de fechamento concedida pelo proprietário.**
+Evidências foram obtidas no app instalado no Moto G06 e no Fedora real, sem
+reexecutar matrizes de teste antigas. O uso cotidiano do app e acesso ao servidor
+prosseguiram durante a fase.
+
+**Upload real C1B-2 / nuvem:** o pacote de mídia nomeado `S01` (~24,4 GiB)
+foi arquivado no Drive via RC1. A operação entrou em `running` (job
+`22894a4872e3483f80a8b269f980bad4`) e após conclusão o app exibiu
+`Arquivar: concluído`, pacote `24.4 GiB · Arquivado`, Drive
+`Arquivado e verificado`, Transmission pausado e 28 nomes/28 hardlinks Jellyfin
+presentes. Capturas da UI do Google Drive mostraram episódios separados na tela
+**Sugestões** (que não representa a estrutura real de pastas) além de
+`manifest.json` e `original.torrent`. O motor remoto conserva a árvore
+`My-CT-Archive/torrents/<archive-id>/data/...`. Esses metadados não devem ser
+movidos/excluídos manualmente.
+
+**RC2 / progresso real:** app RC2 code 42 e sete helpers instalados após concluir
+upload grande. Captura física de envio de arquivo próprio descartável de 128 MiB
+revelou **20,6%, 26,5 MiB de 128 MiB, 1,7 MiB/s, ETA ~1min02s, etapa 1/1**,
+barra de progresso e comando `Cancelar transferência…` visíveis.
+O proprietário saiu da aba e do app, retornou, e **o upload prosseguiu e o
+progresso foi recuperado**; reportou **fim das piscadas** de `Atualizar` e
+`Resultado`. A conclusão final com hash da fixture de 128 MiB não foi
+documentada em saída separada; o aceite físico de progresso *em operação*
+não equivale à validação da conclusão dessa fixture específica.
+
+**Liberação real de espaço pela interface Android:** o proprietário optou por
+remover a temporada S01 do SSD, mantendo o Drive. Após a operação, a tela
+exibiu **`S01 · 24,4 GiB · Liberado do SSD`**, com
+`Drive: Arquivado e verificado · pode restaurar`. A aba Saúde confirmou
+`Core conectado`, CPU ~0%, RAM **1,7 GiB usada de 7,6 GiB**, disco raiz
+**171,0 GiB ocupados / 221,6 GiB totais / 50,5 GiB livres** e uptime do Core
+**0d 18h 11min 56s**, todos da última consulta exibida. A medição de 50,5 GiB
+livres é um **snapshot final**, e não prova matemática isolada de exatamente
+24,4 GiB liberados. O proprietário confirmou que a temporada poderá ficar
+offline no Jellyfin até restaurar do Drive. Nenhum arquivo do acervo foi
+removido por intervenção externa; a liberação foi acionada pelo usuário
+na interface aprovada, com os consentimentos do motor.
+
+**Verificações Android adicionais:** no mesmo aparelho, listagem real das
+entradas, navegação para os detalhes, tarefa assíncrona `space`, resultado
+consultável, bloqueio seguro da fixture antiga com `LOCAL_DIVERGENCE` /
+`NO_LOCAL_DATA`, consulta de seeding e hardlinks, retorno ao app/SSH e
+interface estável. No período de desenvolvimento, o upload grande de 24,4 GiB
+não foi interrompido para instalar helpers; a troca para RC2 aconteceu
+posteriormente.
+
+### Evidências não obtidas fisicamente e condições de manutenção
+
+- **Cancelar transferência:** o botão e o diálogo existem no APK; o fluxo
+  servidor foi coberto pelos testes direcionados e simulação isolada, **mas o
+  cancelamento de uma transferência real a partir do Moto ainda não foi
+  demonstrado**. Não afirmar PASS físico.
+- **Download / restauração com porcentagem e ETA:** implementação e mocks
+  aprovados, porém **sem captura física de restauração em andamento** nessa RC2.
+- **Fixture C1B-2 antiga:** diretório restaurado divergente (`LOCAL_DIVERGENCE`)
+  e link Jellyfin ausente permaneceram bloqueados; o motor evitou exclusão e
+  não houve limpeza cega. Tratar só se o proprietário voltar ao assunto.
+- **Armazenamento Btrfs:** os cálculos `space` são estimativos; ganhos
+  efetivos precisam ser medidos antes/depois para qualquer novo pacote.
+- **Persistência:** queda do processo no Fedora/reboot não ganha retomada
+  automática. Arquivamentos com resultado `uncertain` exigem inspeção
+  manual, sem replay automático.
+- **Drive:** este trabalho mantém cópia remota e catálogo; o encerramento
+  não autoriza exclusão remota, nem reinstalar/desinstalar APK.
+
+**Decisão:** C1C aceita funcionalmente e autorizada para merge/fechamento
+padrão; os dois comportamentos físicos não exercitados permanecem descritos
+como limitações documentadas, sem criar uma subfase ou exigir outro upload
+de 24,4 GiB.
 
 ## Correção atual — 0.9.1-c1c-rc2 / code 42
 
