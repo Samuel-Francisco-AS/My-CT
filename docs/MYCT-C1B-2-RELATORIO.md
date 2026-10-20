@@ -1,10 +1,12 @@
 # MYCT-C1B-2 — ciclo integral de armazenamento torrent
 
-19/10/2026. **Candidata para auditoria Luna e validação física posterior.**
+**20/10/2026 — ACEITE FUNCIONAL NO FEDORA:** C1B-2 integrada em uma única PR #49, com 121 testes executados no Fedora e ciclo físico completo de fixture descartável: arquivamento Drive, restauração/verificação, duas modalidades de liberação consentida, preservação Jellyfin, reconstrução e início explícito de seeding. A PR #49 é a unidade de fechamento e integrações na `main` devem ser verificadas no GitHub. **Nenhum upload efetivo para peers foi observado**; o teste demonstra prontidão e início do estado seeding, não throughput. Testes físicos não equivalem a prova de compatibilidade irrestrita com quaisquer torrents pessoais.
+
 Uma entrega, branch `myct-c1b-storage-lifecycle`, baseada na `main` sincronizada
-em `c5a2c82b378d51549e2da164862ae8047e7a66d6`, árvore inicialmente limpa.
-Relacionado à [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46).
-Não declarar aceite físico da C1B-2 a partir dos testes simulados.
+em `c5a2c82b378d51549e2da164862ae8047e7a66d6`.
+Relacionado à [PR #49](https://github.com/Samuel-Francisco-AS/My-CT/pull/49)
+e à [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46).
+A C1C Android permanece pendente.
 
 ## Resultado e arquitetura
 
@@ -267,7 +269,7 @@ ausência de start nesses casos; as suítes C1A/Torrent/Media verificam regress�
   do Drive. Preservar ativos privados e conferir assinatura/cota antes de depender
   do armazenamento remoto. Nenhuma mudança OAuth/Google Pages nesta entrega.
 
-Roteiro físico, **exclusivamente após Luna e autorização específica do proprietário**:
+Roteiro físico original (histórico: **executado e validado em 20/10/2026**, conforme fechamento acima):
 
 1. Preservar o teste C1B-1 atual e usar outra fixture pequena, descartável e
    livremente redistribuível, completa no Transmission, com vídeo e extras.
@@ -294,3 +296,41 @@ Referências técnicas: [RPC Transmission 4.1.3](https://github.com/transmission
 [C1B-1 aceita](MYCT-C1B-1-RELATORIO.md),
 [mecanismos Media](MYCT-MEDIA-STORAGE-CLEANUP.md),
 [infraestrutura OAuth preservada](MYCT-INFRA-GOOGLE-CLOUD-DRIVE-OAUTH-PAGES.md).
+
+
+## Fechamento físico e aceite do proprietário — 20/10/2026
+
+**Escopo aprovado:** uma entrega C1B-2, sem 2A/2B/2C. Auditoria estática da Luna favorável e testes reais executados pelo proprietário no Fedora 44. A autorização incluiu **somente a fixture própria**; os conteúdos e links pessoais permaneceram fora das operações destrutivas. Branch/PR de implementação: [#49](https://github.com/Samuel-Francisco-AS/My-CT/pull/49), head funcional auditado `d6058fb4e61fd4d2a1841ebafb7593a748353695`. O fechamento remoto foi executado após estas evidências; a situação vigente deve ser consultada na PR.
+
+### Regressões reais e inventário de acervo preexistente
+
+Com o SHA auditado, execução independente no Fedora: **79 testes archive + 17 torrent + 25 media = 121/121 PASS**, sem falhas. Sem CI externa declarada (nenhum status publicado para esse head).
+
+Consulta `space` **somente leitura** sobre a entrada da C1B-1 já arquivada: `ok:true`, nuvem verificada (size/MD5/manifest/metainfo), original e cópia restaurada presentes e íntegras, vínculo Jellyfin reconhecido, `blockers:[]`, `can_release:true`, `unknown_links:0`. `physical_bytes:1229570048`, `reclaim_estimate_bytes:640176128`, `retained_known_bytes:589393920` e `reclaim_guaranteed_bytes:0`. Observou-se Transmission em status RPC 6 (seeding), embora o aceite anterior C1B-1 tivesse terminado em RPC 0; a causa da retomada anterior **não foi estabelecida**. Esse acervo não foi liberado, restaurado novamente nem usado como cobaia destrutiva.
+
+### Fixture 100% própria e redistribuível
+
+Gerada com `transmission-create` sem trackers, nome `MyCT-C1B2-Fixture`, infohash `590561b2aac74e4392da9a71b42a380bc8258e9f` e três arquivos: vídeo Matroska produzido localmente (`32280` bytes), texto (`55` bytes) e payload descartável (`134217728` bytes); total `134250063` bytes. Registrada no Transmission pausada, peça/estrutura verificada: `inspect` retornou `complete:true`, `can_archive:true`, `blockers:[]` e metainfo original válido.
+
+Vínculo de teste criado por `python3 ops/myct-media approve HASH:CAMINHO movie "MyCT C1B2 Fixture" 2026`: destino `Filmes/MyCT C1B2 Fixture (2026)/MyCT C1B2 Fixture (2026).mkv`, dev/inode compartilhados `50:4098075` com `nlink=2`. A tentativa inicial de executar `./ops/myct-media` sem bit executável recebeu "Permissão negada"; a execução por Python funcionou, sem alterar permissões no repositório.
+
+`archive HASH`: `ok:true`, `state:verified`, ID `8b027a7acf219ef87b7c3aa75328f46112b5d68d975bcf89318c9a2a9469067e`, `storage_bytes:134272484`, `remote_verified:["size","md5"]`, `sha256_recorded:true`, originais e hardlinks preservados, Transmission pausado.
+
+`restore ID`: `state:verified`, `reused:false`, size/MD5/SHA-256/metainfo verificados. `recover ID` pausado: `seeding_ready:true`, `rpc_status:0`, `seed_started:false`; sem peers/upload. `space ID` após restauração: original e cópia restaurada íntegras, link da biblioteca preservado, `blockers:[]`, `can_release:true`, `physical_bytes:268509184`, `reclaim_estimate_bytes:268476416`, `retained_known_bytes:32768` e `reclaim_guaranteed_bytes:0`.
+
+### Duas liberações consentidas e recuperação física
+
+**Teste 1 — liberação padrão:** operador conferiu programa em branch/SHA auditados, **duas árvores exatas**, seis arquivos, diretórios, objetos Drive e metainfo, RPC pausado na cópia restaurada, único link de teste e ausência de links desconhecidos. `release ID --preview TOKEN --confirm TOKEN` retornou `state:released`, removeu a entrada do Transmission e ambas as árvores, preservando o link Jellyfin com **mesmo inode e SHA-256** e mantendo nuvem/catálogo/metainfo. Restauração subsequente: `restore` verified; `recover` pausado/validado; `recover --resume`: `seeding_ready:true`, `seed_started:true`, `rpc_status:6`, `peers_connected:0`, `upload_observed:false`. Sem redownload de dados faltantes observado no fluxo.
+
+Observações do espaço livre de `/home` em bytes: antes `27925688320`; **imediatamente depois da liberação `27925688320` (delta 0)**; depois da restauração `28059926528` (**diferença líquida final +134238208 bytes**). É **compatível** com contabilização atrasada do Btrfs e com armazenamento de uma única árvore restaurada, mas não comprova sozinho causa nem bytes liberados isoladamente no instante de `release`. Não apresentar `268476416` como economia medida/garantida.
+
+**Teste 2 — liberação com biblioteca e reconstrução:** com original ausente, cópia restaurada e biblioteca de teste presentes, revisão da prévia `space ID --remove-library REL` mostrou **quatro arquivos exatos** da fixture (três da árvore restaurada + um link de biblioteca); sem links externos/bloqueios. `release` com duas confirmações (`--confirm` e `--confirm-library`) retornou `released`, removeu os caminhos explicitamente selecionados. `restore ID` verified e `recover ID` pausado concluídos. `relink ID --library REL` retornou `added`; repetição `existing` (idempotente); comparação de `dev/ino` e SHA-256 confirmou vínculo correto. `recover ID --resume` terminou em `seeding_ready:true`, `seed_started:true`, `rpc_status:6`, `upload_observed:false`. **Ciclo ponta a ponta funcional aprovado.**
+
+### Condição residual e continuidade
+
+- Torrent da fixture foi deixado em **seeding RPC 6**, sem peers/tráfego observado. O vídeo de teste na biblioteca está restaurado por hardlink ao arquivo da árvore recuperada. Nenhuma exclusão adicional de fixture, mídia pessoal, Drive ou metadados foi realizada.
+- O programa é uma ferramenta CLI executada do checkout auditado; nenhuma instalação de helper, mudança do Android, serviços, SSH, banco, OAuth ou infraestrutura `gh-pages` foi realizada.
+- `space` é custoso para torrents grandes por hashing completo. Suporte restrito às árvores e metainfo v1 gerenciadas, e a estimativa Btrfs não é garantia. Diários `uncertain` continuam exigindo inspeção manual; sem bypass automático.
+- **C1C Android é a próxima fase**: expor de modo adequado na interface móvel os comandos e confirmações agora validados na CLI, na mesma linha de engenharia enxuta. A issue #46 deve permanecer aberta para acompanhar C1C.
+
+**Estado:** C1B-2 **funcionalmente aceita** após testes reais; PR #49 é o único veículo de integração.
