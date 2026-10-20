@@ -74,13 +74,13 @@ internal interface DownloadExec : AutoCloseable {
     val done: Boolean
     val exitStatus: Int
 }
-private class BoundedDownloadOutput : OutputStream() {
+private class BoundedDownloadOutput(private val limit: Int = 262144) : OutputStream() {
     private val data = ByteArrayOutputStream()
     var overflow = false
         private set
-    @Synchronized override fun write(b: Int) { if (data.size() < 262144) data.write(b) else overflow = true }
+    @Synchronized override fun write(b: Int) { if (data.size() < limit) data.write(b) else overflow = true }
     @Synchronized override fun write(b: ByteArray, off: Int, len: Int) {
-        val count = minOf(len, 262144 - data.size())
+        val count = minOf(len, limit - data.size())
         data.write(b, off, count)
         if (count < len) overflow = true
     }
@@ -110,14 +110,15 @@ internal fun executeSshCommand(command: String, open: () -> DownloadExec, timeou
 
 internal data class SshExecResult(val output: String, val error: String, val status: Int)
 /** Raw exit status is data: the AV contract returns informative JSON on exit 1. */
-internal fun executeSshResult(command: String, open: () -> DownloadExec, timeoutMs: Long = 25000): SshExecResult {
-    val output = BoundedDownloadOutput(); val error = BoundedDownloadOutput()
+internal fun executeSshResult(command: String, open: () -> DownloadExec, timeoutMs: Long = 25000,
+                              maxOutputBytes: Int = 262144): SshExecResult {
+    val output = BoundedDownloadOutput(maxOutputBytes); val error = BoundedDownloadOutput()
     val deadline = System.nanoTime() + timeoutMs * 1_000_000
     open().use { channel ->
         channel.connect(command, output, error)
         while (true) {
             if (Thread.currentThread().isInterrupted) throw InterruptedException()
-            if (output.exceeded() || error.exceeded()) throw DownloadFailure("Resposta da CLI excedeu o limite de 256 KiB por saída.")
+            if (output.exceeded() || error.exceeded()) throw DownloadFailure("Resposta da CLI excedeu o limite de leitura.")
             if (System.nanoTime() >= deadline) throw DownloadFailure("Tempo limite SSH. Atualize para conferir o resultado antes de repetir.")
             if (channel.done) break
             Thread.sleep(25)

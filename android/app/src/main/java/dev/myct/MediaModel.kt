@@ -8,6 +8,7 @@ internal class MediaModel internal constructor(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
     private val execute: (SshConnection, MediaAction) -> String = { ssh, action -> ssh.media(action) }
 ) {
+    val cloud = CloudModel()
     private var connection: SshConnection? = null
     private var generation = 0
     private var job: Job? = null
@@ -40,6 +41,7 @@ internal class MediaModel internal constructor(
         private set
 
     fun attach(ssh: SshConnection?) {
+        cloud.attach(ssh)
         generation++
         job?.cancel(); job = null
         connection = ssh

@@ -49,6 +49,8 @@ class SshConnection {
 
     internal fun search(action: SearchAction): SearchReply = executeSearch(action, { openDownloadExec() })
 
+    internal fun cloud(query: CloudQuery): String = executeCloud(query) { openDownloadExec() }
+
     internal fun media(action: MediaAction): String = executeMedia(action, { openDownloadExec() })
 
     internal fun inspectFile(path: String): FileInspection = executeInspection(path) { openDownloadExec(true) }

@@ -282,7 +282,7 @@ private fun TerminalApp(model: TerminalModel) {
                         Text("Use rede privada. Senha não é salva. Perda do processo exige nova autenticação; trabalho remoto pode ser preservado pelo tmux.", style = MaterialTheme.typography.bodySmall)
                     }
                 } else {
-                    if (connected && selectedTab == AppSection.Files) FilesScreen(model.files, Modifier.weight(1f))
+                    if (connected && selectedTab == AppSection.Files) FilesScreen(model.files, Modifier.weight(1f), model.media.cloud)
                     else {
                     if (showingLocal) Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(model.localTerminal.message, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)

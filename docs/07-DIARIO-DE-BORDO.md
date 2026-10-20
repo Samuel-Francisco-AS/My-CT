@@ -258,3 +258,17 @@ com APKs e SHA-256. Build/JVM/lint offline PASS: 224 testes, 223 aprovados,
 Integração validada no Moto G06: IDE Sora salva `Documents/My-CT/Project-C/teste.c` pela árvore SAF; Termux lê o mesmo fonte, GCC compila e roda quando o binário é gravado em `$HOME` (`gcc teste.c -o "$HOME/teste" && "$HOME/teste"`). Execução direta em Documents negada por política de armazenamento Android, não bug do My-CT. L1A privada e PTY L1B também tiveram aceite físico funcional prévio. Testes detalhados de conflito/revogação, rotação/clipboard e regressão SSH não receberam PASS individual.
 
 PRs #28, #29 e #31 integrados por merges `4ae5fe7`, `b46c25b`, `e4d0a57`; PR #30 L1C cancelado/fechado sem merge. Decisão: encerrar MVP e realizar depois somente pequeno refinamento UI/UX, sem compilar dentro do APK. [Relatório de fechamento](MYCT-L1-FECHAMENTO.md).
+
+
+## 20/10/2026 — C1C, correção na PR #50: progresso, polling e cancelamento
+
+Implementados na branch `myct-c1c-cloud-android`: stats estruturadas Rclone
+opt-in, agregado multiarquivo por job privado, barra/porcentagem/bytes/taxa/ETA
+no Android, polling silencioso somente da tarefa ativa e cancelamento explícito
+de cópias novas com confirmação/identidade systemd/resultado persistente.
+BUSY informativo e LOCAL_DIVERGENCE traduzido, sem alterar os bloqueios.
+Fixtures isoladas para progresso/concorrência/cancelamento; Rclone real apenas
+em cópia local temporária, sem novo upload Drive. O upload de ~24,4 GiB não
+foi interrompido e nenhum helper instalado foi substituído. Candidata code 42
+na mesma PR draft, sem merge. Instalação e aceite Moto após conclusão e
+conferência do upload grande; [evidências e roteiro curto](MYCT-C1C-RELATORIO.md).

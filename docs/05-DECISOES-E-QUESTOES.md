@@ -430,3 +430,53 @@ reais dependem de auditoria Luna e autorização física específica.
 **Diretriz operacional do proprietário:** evitar autorizações repetidas para operações ordinárias, de risco limitado e verificáveis no escopo de um teste/projeto aprovado. Priorizar execução ágil e resultado funcional; manter proteções para evitar perda catastrófica, interrupção de SSH/Fedora, quebra do My-CT ou remoção de acervo pessoal/arquivamentos sem escopo. Esta decisão **não é** permissão irrestrita para excluir dados reais, alterar serviços/rede nem desativar as proteções da ferramenta. Fixtures descartáveis e operações de baixo risco podem prosseguir dentro do escopo autorizado; em caso de estado incerto, interromper em vez de repetir a operação destrutiva.
 
 **Estado dos testes:** fixture própria foi deixada restaurada, com hardlink reconstruído e Transmission em seeding RPC 6. O acervo pessoal existente da C1B-1 não foi objeto de nenhuma das liberações.
+
+### 20/10/2026 — MYCT-C1C: Android com arquivamento persistente
+
+A integração candidata reutiliza as CLIs C1A/C1B-2 sem alterar seu motor.
+Nuvem fica dentro de Downloads → Mídia → Armazenamento. Um adaptador específico
+`myct-cloud` entrega trabalhos de arquivo/torrent por unidades transitórias
+systemd de usuário; recibo privado anterior ao lançamento permite consultar
+o resultado após perder SSH sem repetir operações ambíguas. Nenhum daemon,
+banco/API novo, serviço global ou dependência Android. A alternativa de esperar
+hashing/transferência no exec de 25 s não atende à continuidade pedida.
+Prévia/token e consentimentos Jellyfin continuam sob decisão final da C1B-2.
+[Relatório, instalação e aceite único no Moto](MYCT-C1C-RELATORIO.md).
+
+
+### 20/10/2026 — C1C: progresso real, polling silencioso e cancelamento de cópias
+
+Por solicitação expressa do proprietário nos dois comentários da Luna da PR #50,
+a mesma candidata incorpora telemetria Rclone opt-in e recibo numérico por job,
+separado do catálogo. Hashing/validação não viram bytes transmitidos; transporte
+concluído não equivale a arquivamento verificado. Polling lê apenas a tarefa
+ativa e não alterna `busy` nem relê catálogos bloqueados. Cancelamento confirmado
+apenas de `archive`/`restore`, com identidade da unidade/processo e encerramento
+do cgroup; `cancel_requested` não implica `cancelled`, e sucesso concorrente é
+preservado. Resultados ambíguos continuam bloqueados por `uncertain`, sem retry.
+Não alterar helpers instalados nem o upload real de ~24,4 GiB durante sua execução.
+Instalação e sessão Moto ficam após conclusão/conferência remota desse upload;
+sem nova PR, subfase ou merge. [Contrato, evidências e retomada](MYCT-C1C-RELATORIO.md).
+
+
+
+### 20/10/2026 — C1C aceita funcionalmente no Moto G06
+
+**DECIDIDO (aceite do proprietário):** fechar a MYCT-C1C na PR #50, entrega
+única, sem multiplicar gates. A RC2 instalada code42 comprovou no aparelho
+upload de fixture própria de 128 MiB com progresso real (20,6%, 26,5 MiB,
+1,7 MiB/s, ETA 1min02s); retorno após sair de tela e app mantendo transferência,
+sem piscar controles. Upload real de pacote S01 de 24,4 GiB terminou com Drive
+verificado e 28 hardlinks Jellyfin detectados, seguido por **liberação
+solicitada pelo proprietário** no aplicativo, com o cartão exibindo
+`Liberado do SSD` e cópia remota restaurável. O Core permaneceu acessível e
+a aba Saúde mostrou 50,5 GiB livres. Não declarar que este valor representa
+24,4 GiB de economia medida exatamente na mesma base.
+
+**Limites de aceite preservados:** acionamento físico do cancelamento remoto
+e barra de um download/restore real não foram demonstrados nesta sessão.
+Essas rotinas têm implementação e testes direcionados; continuar tratando
+com atenção estados `uncertain` e não reexecutar/descartar dados
+automaticamente. Não há autorização para remover backups Drive nem para
+limpar vestígios divergentes da fixture antiga sem revisão.
+[Relatório final](MYCT-C1C-RELATORIO.md).
