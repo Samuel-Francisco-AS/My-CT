@@ -1,5 +1,21 @@
 # MYCT-C1 — Arquivamento em nuvem e restauração de seeding
 
+**Fechamento global C1 (20/10/2026):** C1A, C1B-1 e C1B-2 já
+integradas à main; **C1C aceita funcionalmente pelo proprietário no Moto G06**
+na [PR #50](https://github.com/Samuel-Francisco-AS/My-CT/pull/50).
+A interface Nuvem da RC2 (0.9.1/code42) demonstrou catálogo Drive/RPC,
+progresso com 20,6% / 26,5 de 128 MiB / 1,7 MiB/s / ETA real, continuidade
+após sair e voltar ao app e polling sem piscadas. Uma temporada real S01 de
+24,4 GiB foi arquivada/verificada, com 28 hardlinks identificados, e
+posteriormente **liberada do SSD pela opção guiada do Android**, com
+restauração disponível pelo Drive. Fedora apresentou 50,5 GiB livres no
+snapshot final; valor não representa economia isolada comprovada. **Cancelamento
+físico e barra de download ainda não observados no Moto**, embora implementados
+e testados automaticamente. [Relatório/aceite](MYCT-C1C-RELATORIO.md).
+
+**Nota:** os estados de 19/10 nas seções abaixo são histórico e não substituem
+o fechamento de 20/10.
+
 **Decisão:** 19/10/2026  
 **Estado atual (19/10/2026): MYCT-C1A aceita e integrada à `main` via [PR #47](https://github.com/Samuel-Francisco-AS/My-CT/pull/47), merge `bbf929886a1c66d2b0927b2ca3f8c46fa25cfe7b`. Rclone configurado no Fedora pelo proprietário, OAuth próprio com acesso Google Drive; 29 testes locais PASS e arquivo de 37 bytes arquivado/restaurado com bytes idênticos. C1B-1 foi aceita funcionalmente com upload/restore real (~615 MB), verificação integral das peças pelo Transmission (recuperação pausada) e PR #48 integrada à `main` no merge `fce805ea96bc108a85b466133c6724b4688a329c`; **não houve retomada efetiva do seeding**. C1B-2/liberação de SSD e C1C/Android seguem não implementadas. Nenhum serviço extra ou exclusão realizados.
 
