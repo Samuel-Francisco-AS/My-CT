@@ -423,13 +423,20 @@ class Installer:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=('diagnose', 'apply'))
+    parser.add_argument('action', choices=('diagnose', 'apply', 'verify-cloud'))
     parser.add_argument('--approved')
-    parser.add_argument('--component', choices=('base', 'transmission', 'prowlarr'), default='base')
+    parser.add_argument('--component', choices=('base', 'transmission', 'prowlarr', 'rclone'), default='base')
+    parser.add_argument('--remote')
+    parser.add_argument('--config', default='')
     args = parser.parse_args()
     os.umask(0o077)
     if MANIFEST is None:
         raise SetupError('Use o pacote gerado por ops/setup/build_bundle.py; não executar o fonte sem manifesto.')
+    if args.component == 'rclone':
+        cloud_main(args)
+        return
+    if args.action == 'verify-cloud':
+        raise SetupError('Verificação online disponível somente para Rclone.')
     if args.component != 'base':
         addon_main(args)
         return

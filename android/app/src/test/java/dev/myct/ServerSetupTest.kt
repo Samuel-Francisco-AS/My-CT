@@ -107,4 +107,51 @@ class ServerSetupTest {
         assertEquals(listOf("running", "failure"), events)
         assertThrows(Exception::class.java) { stream.write(ByteArray(128 * 1024 + 1) { 120 }) }
     }
+    @Test fun cloudSelectionTravelsAsDataAndOnlineRequiresExactApproval() {
+        val selection = SetupCloudSelection("other-drive:", "/home/alice/private ' \$() config.conf")
+        val source = "import json,sys; print(json.dumps(sys.argv[1:]))".toByteArray()
+        for (approval in listOf(null, "c".repeat(64))) {
+            val cmd = setupDiagnosticCommand(source, SetupTarget.rclone, selection, approval)
+            assertFalse(cmd.contains(selection.config))
+            val p = ProcessBuilder("sh", "-c", cmd).start()
+            val args = JSONArray(p.inputStream.bufferedReader().readText())
+            assertEquals(0, p.waitFor())
+            assertEquals(if (approval == null) "diagnose" else "verify-cloud", args.getString(0))
+            val values = (0 until args.length()).map { args.getString(it) }
+            assertEquals(selection.remote, values[values.indexOf("--remote") + 1])
+            assertEquals(selection.config, values[values.indexOf("--config") + 1])
+        }
+        assertThrows(Exception::class.java) { SetupCloudSelection("bad:path", "") }
+        assertThrows(Exception::class.java) { SetupCloudSelection("drive:", "relative") }
+        assertThrows(Exception::class.java) { setupDiagnosticCommand(source, SetupTarget.rclone, selection, "bad") }
+        assertThrows(Exception::class.java) { setupDiagnosticCommand(source, SetupTarget.base, selection, "c".repeat(64)) }
+    }
+    @Test fun cloudOnlineNeverRendersRawSecretsOrClaimsArchiveRecovery() {
+        val secret = "SYNTHETIC-OAUTH-MUST-NOT-APPEAR"
+        val failure = JSONObject().put("schema", 1).put("state", "failure").put("code", "oauth").put("message", secret)
+        assertFalse(setupCloudVerificationMessage(failure.toString()).contains(secret))
+        val verified = JSONObject().put("schema", 1).put("state", "verified").put("access", true)
+            .put("archive_recoverable", false).put("archive_accessible", true).put("quota_free", 0).put("message", secret)
+        val result = setupCloudVerificationMessage(verified.toString())
+        assertFalse(result.contains(secret)); assertTrue(result.contains("sem espaço")); assertTrue(result.contains("não foram verificadas"))
+        verified.put("archive_recoverable", true)
+        assertThrows(Exception::class.java) { setupCloudVerificationMessage(verified.toString()) }
+    }
+    @Test fun cloudConfigurationPendingIsNotAnInstallationFailure() {
+        val j = fixture()
+        j.getJSONObject("facts").put("target", "rclone")
+        j.put("components", JSONArray(listOf("packages", "rclone", "services", "verify").map {
+            JSONObject().put("id", it).put("state", "existing").put("description", "offline installed").put("privilege", "user")
+        })).put("can_apply", false).put("complete", true)
+        j.put("inventory", JSONObject().put("detected", true).put("managed", true).put("installed", true)
+            .put("running", false).put("enabled", false).put("linger", true).put("api_ready", false).put("version", "1.74.3"))
+        j.put("cloud", JSONObject().put("selection", JSONObject().put("remote", "other:").put("config", "/home/alice/custom.conf"))
+            .put("config", JSONObject().put("state", "pending").put("path", "/home/alice/custom.conf").put("configured", false))
+            .put("manager", true).put("helpers", JSONObject().put("myct-archive", "compatible")))
+        val plan = parseSetupPlan(j.toString())
+        assertTrue(plan.complete); assertFalse(plan.cloud!!.configured); assertEquals("other:", plan.cloud.selection.remote)
+        j.remove("cloud")
+        assertThrows(Exception::class.java) { parseSetupPlan(j.toString()) }
+    }
+
 }

@@ -110,6 +110,7 @@ private fun TerminalApp(model: TerminalModel) {
     var licenses by remember { mutableStateOf(false) }
     var tmuxHelp by remember { mutableStateOf(false) }
     var settings by remember { mutableStateOf(false) }
+    var cloudOAuthSensitive by rememberSaveable { mutableStateOf(false) }
     var setupOptions by remember { mutableStateOf(false) }
     var captureWarning by remember { mutableStateOf(false) }
     var stopPersistenceFor by remember { mutableStateOf<TerminalSession?>(null) }
@@ -163,8 +164,8 @@ private fun TerminalApp(model: TerminalModel) {
     }
     // Always block screenshots on the vault tab, regardless of the general preference.
     val captureProtected = captureProtectionRequired(model.protectScreenshots, selectedTab, navigation.protectCapture)
-    DisposableEffect(activity, captureProtected, setupOptions) {
-        activity.applyCaptureProtection(captureProtected || setupOptions)
+    DisposableEffect(activity, captureProtected, setupOptions, cloudOAuthSensitive) {
+        activity.applyCaptureProtection(captureProtected || setupOptions || cloudOAuthSensitive)
         onDispose { }
     }
     LaunchedEffect(model.phase, model.backgroundEnabled, model.terminal) {
@@ -394,7 +395,11 @@ private fun TerminalApp(model: TerminalModel) {
                 .panelEntrance(antivirusOptions, if (antivirusOptions) 1f else -1f)) {
                 if (setupOptions) {
                     MyCtTextButton(onClick = { navigationFeedback(); setupOptions = false }) { Text("← Voltar às opções") }
-                    ServerSetupSection(model.serverSetup)
+                    ServerSetupSection(model.serverSetup, onOAuthTerminal = {
+                        cloudOAuthSensitive = true
+                        model.selectTerminal(IdeEnvironment.REMOTE)
+                        settings = false; setupOptions = false; navigateTo(AppSection.Terminal)
+                    })
                 } else if (antivirusOptions) {
                     MyCtTextButton(onClick = { navigationFeedback(); antivirusOptions = false }) { Text("← Voltar às opções") }
                     AntivirusSignaturesSection(model.antivirusSignatures)

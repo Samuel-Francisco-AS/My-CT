@@ -1,0 +1,23 @@
+{
+  "environment": "rootless Fedora 44 container; x86_64",
+  "physical_clean_fedora": "NOT VALIDATED",
+  "google_drive": "NOT ACCESSED",
+  "payload_sha256": "7ee079c137fddc9bccd110e26fdd9a3308e90e585f7dfd7ce638f947a156b8f1",
+  "missing_diagnosis_and_denied_approval": true,
+  "package_installed_then_failure_resumable": true,
+  "installed_version": "1.74.3",
+  "oauth_pending_is_complete_offline": true,
+  "repeat_unchanged": true,
+  "copy_restore_sha256": "f0b222d30e58d7674ed1131d9980e647be3ba40f4e89acd59c5e5475d5dd692b",
+  "custom_remote_and_path": true,
+  "original_preserved": true,
+  "existing_cloud_worker_with_custom_selection": true,
+  "systemd_run_independent": true,
+  "linger": true,
+  "resource_limits": {
+    "ram_mib": 1536,
+    "cpus": 1,
+    "pids": 1024
+  },
+  "container_usage": "59.31MB / 1.611GB / 51.85839009133979"
+}

@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "release": "myct-setup-2-rc1",
+  "release": "myct-setup-3-rc1",
   "fedora_min": 43,
   "fedora_max": 44,
   "architectures": [
@@ -25,7 +25,14 @@
     "ops/myct-torrent",
     "ops/torrent/myct-torrent-done",
     "ops/torrent/myct-transmission.service",
-    "ops/myct-search"
+    "ops/myct-search",
+    "ops/myct-archive",
+    "ops/myct-archive-torrent",
+    "ops/myct-cloud",
+    "ops/myct_cloud_progress.py",
+    "ops/myct_cloud_config.py",
+    "ops/myct-media",
+    "ops/myct-media-cleanup"
   ],
   "components": [
     {
@@ -57,7 +64,7 @@
   "optional": [
     "Transmission e Prowlarr têm planos opcionais separados; não são dependências da Base.",
     "Indexadores e fontes Prowlarr exigem configuração humana por túnel SSH; nenhuma fonte é adicionada pelo instalador.",
-    "Rclone/Drive: SETUP-3, fora desta entrega.",
+    "Rclone/Google Drive tem plano opcional separado; OAuth é configuração humana, acesso online exige confirmação própria.",
     "Backup/recuperação: SETUP-4. Cofre e demais helpers não são provisionados por esta etapa."
   ],
   "addons": {
@@ -92,5 +99,23 @@
         }
       }
     }
+  },
+  "cloud": {
+    "packages": [
+      "rclone"
+    ],
+    "version_min": "1.70.0",
+    "remote_default": "myct-gdrive:",
+    "archive_folder": "My-CT-Archive/",
+    "helpers": [
+      "myct-archive",
+      "myct-archive-torrent",
+      "myct-cloud",
+      "myct_cloud_progress.py",
+      "myct_cloud_config.py",
+      "myct-media",
+      "myct-media-cleanup",
+      "myct-torrent"
+    ]
   }
 }

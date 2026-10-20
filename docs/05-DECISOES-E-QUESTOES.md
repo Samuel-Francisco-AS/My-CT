@@ -480,3 +480,20 @@ com atenção estados `uncertain` e não reexecutar/descartar dados
 automaticamente. Não há autorização para remover backups Drive nem para
 limpar vestígios divergentes da fixture antiga sem revisão.
 [Relatório final](MYCT-C1C-RELATORIO.md).
+
+
+### 20/10/2026 — SETUP-3: instalação offline e OAuth separados
+
+Rclone continua opcional; diagnóstico permite somente consultas locais `version`
+e `config file` e leitura restrita do tipo do remote escolhido. `about` e a consulta
+pontual `lsjson --stat` exigem autorização online própria, pois podem renovar OAuth
+e escrever tokens. Não usar status dos motores como diagnóstico passivo: ele
+consulta cota e pode acessar catálogos. A seleção não secreta em
+`~/.config/myct/cloud.json` permite reutilizar os motores e unidades transitórias
+existentes com outro remote/caminho; nenhum segundo catálogo ou daemon.
+Configurações/helpers anteriores divergentes são preservados e bloqueiam escrita.
+OAuth usa Client ID próprio e prompts do Rclone com túnel SSH temporário em loopback;
+segredos não entram em argumentos do authorize. O proprietário autorizou avançar
+SETUP-3/4 sem instalação física limpa, que permanece NÃO VALIDADA. Auditoria reforçada
+Codex e revisão independente Luna ficam exigidas ao final da SETUP-4, antes de merge.
+[Relatório SETUP-3](MYCT-SETUP-3-RELATORIO.md).

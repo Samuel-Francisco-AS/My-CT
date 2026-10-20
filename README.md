@@ -1,8 +1,15 @@
 # My-CT
 
+**MYCT-SETUP-3 candidata (20/10/2026):** Rclone/Google Drive opcional em
+**Opções → Configurar servidor**: diagnóstico passivo, instalação supervisionada,
+OAuth humano pelo Terminal/túnel temporário e verificação online separada.
+APK **0.12.0-setup3-rc1 / code 46**. Fedora pessoal preservado; nenhuma consulta
+Drive ou transferência real nesta missão. Instalação física limpa **NÃO VALIDADA**;
+aceite Moto SETUP-3 pendente. [Relatório e roteiro seguro](docs/MYCT-SETUP-3-RELATORIO.md).
+
 **MYCT-SETUP-2 candidata (20/10/2026):** planos opcionais separados para
 Transmission e Prowlarr em **Opções → Configurar servidor**. APK
-**0.11.0-setup2-rc1 / code 45**, aceite físico pendente. Legados do Fedora
+**0.11.0-setup2-rc1 / code 45**, diagnóstico aceito pelo proprietário no Moto G06; instalação física limpa NÃO VALIDADA. Legados do Fedora
 pessoal reconhecidos e preservados. Diagnóstico SETUP-1 já validado no Moto;
 instalação física limpa da Base continua sem aceite.
 [Relatório, evidências e roteiro](docs/MYCT-SETUP-2-RELATORIO.md).
@@ -10,7 +17,7 @@ instalação física limpa da Base continua sem aceite.
 
 **MYCT-SETUP-1 candidata (20/10/2026):** **Opções → Configurar servidor**, diagnóstico
 Fedora por SSH e instalação supervisionada de Core/PostgreSQL. APK
-**0.10.0-setup1-rc1 / code 44**; aceite Moto/Fedora físico limpo pendente.
+**0.10.0-setup1-rc1 / code 44**; diagnóstico Moto aceito, instalação Fedora físico limpo NÃO VALIDADA.
 Nenhuma implantação no servidor pessoal. [Arquitetura, testes e validação](docs/MYCT-SETUP-1-RELATORIO.md).
 
 

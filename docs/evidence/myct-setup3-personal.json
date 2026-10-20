@@ -1,0 +1,29 @@
+{
+  "environment": "Fedora pessoal 44; somente inspe\u00e7\u00e3o passiva",
+  "version": "1.74.3",
+  "managed": false,
+  "remote_configured_locally": true,
+  "online": "NOT EXECUTED",
+  "archive": "NOT ACCESSED",
+  "configuration_and_installed_helpers_unchanged": true,
+  "can_apply": false,
+  "blockers": [
+    "intervention: Helpers anteriores/divergentes preservados; sem ado\u00e7\u00e3o ou atualiza\u00e7\u00e3o autom\u00e1tica. A inspe\u00e7\u00e3o continua dispon\u00edvel."
+  ],
+  "helper_states": {
+    "myct-archive": "previous",
+    "myct-archive-torrent": "previous",
+    "myct-cloud": "compatible",
+    "myct_cloud_progress.py": "compatible",
+    "myct_cloud_config.py": "missing",
+    "myct-media": "compatible",
+    "myct-media-cleanup": "compatible",
+    "myct-torrent": "compatible"
+  },
+  "elapsed_seconds": 0.716,
+  "rclone_commands_allowed": [
+    "version",
+    "config file"
+  ],
+  "catalogs_read": false
+}
