@@ -1,6 +1,6 @@
 # MYCT-C1B-1 — torrent integral: arquivar, restaurar e preparar seeding
 
-**19/10/2026 — Fechamento: C1B-1 aceita funcionalmente para inspect/archive/restore/recover pausado no Fedora, PR #48 autorizada para merge. Retomada de seeding efetivo NÃO testada.**
+**19/10/2026 — Fechamento: C1B-1 aceita funcionalmente para inspect/archive/restore/recover pausado no Fedora, PR #48 incorporada à `main` no merge `fce805ea96bc108a85b466133c6724b4688a329c`. Retomada de seeding efetivo NÃO testada.**
 Branch `myct-c1b-torrent-roundtrip`, criada da `main` sincronizada em `a831b87`,
 árvore inicialmente limpa. A C1A/PR #47 permanece aceita e intacta.
 Planejamento e continuidade: [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46)
@@ -287,4 +287,4 @@ Referências técnicas consultadas: [RPC Transmission 4.1.3](https://github.com/
 
 Implementar primeiro **prévia operacional de ocupação real do SSD** (inodes/hardlinks, originais, biblioteca, cópia restaurada e Transmission), sem exclusões. Depois avaliar liberação guiada de pacotes já verificados com autorização separada, sem danificar o Jellyfin e sem confundir unlink com espaço recuperado. A reconstrução de hardlinks deve reutilizar o mecanismo Media existente, sem sobrescrever links. Validar a retomada efetiva usando conteúdo autorizado. Android C1C segue etapa posterior.
 
-**Fechamento remoto:** PR #48 será integrada à `main` após registrar estas evidências. A issue #46 deve permanecer aberta. Preservar a branch `gh-pages`, a infraestrutura Google OAuth e a [documentação correspondente](MYCT-INFRA-GOOGLE-CLOUD-DRIVE-OAUTH-PAGES.md).
+**Fechamento remoto:** PR #48 integrada à `main` no merge `fce805ea96bc108a85b466133c6724b4688a329c` após registrar estas evidências. A issue #46 deve permanecer aberta. Preservar a branch `gh-pages`, a infraestrutura Google OAuth e a [documentação correspondente](MYCT-INFRA-GOOGLE-CLOUD-DRIVE-OAUTH-PAGES.md).
