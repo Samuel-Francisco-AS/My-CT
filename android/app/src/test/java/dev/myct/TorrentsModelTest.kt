@@ -91,7 +91,7 @@ class TorrentsModelTest {
 
     @Test fun userClickPreemptsPollingClosesItsChannelAndRunsExactlyOnce() {
         val start = TorrentAction.Add("magnet:?xt=urn:btih:$id")
-        for (action in listOf(TorrentAction.List, start, TorrentAction.Control("pause", id))) {
+        for (action in listOf(TorrentAction.List, start, TorrentAction.AddFile("Ubuntu", 12, "a".repeat(64)), TorrentAction.Control("pause", id))) {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
             val pollingEntered = CountDownLatch(1)
             val pollingClosed = CountDownLatch(1)
@@ -110,12 +110,13 @@ class TorrentsModelTest {
                         actionEntered.countDown()
                         check(releaseAction.await(2, TimeUnit.SECONDS))
                     }
-                    if (command is TorrentAction.Add) """{"hash":"$id","id":1,"duplicate":false}""" else if (command is TorrentAction.Control) reply() else record("canceled")
+                    if (command is TorrentAction.Add || command is TorrentAction.AddFile) """{"hash":"$id","id":1,"duplicate":false}""" else if (command is TorrentAction.Control) reply() else record("canceled")
                 }
             }
             fun click() = when (action) {
                 TorrentAction.List -> model.refresh()
                 is TorrentAction.Add -> model.add(action.magnet)
+                is TorrentAction.AddFile -> model.addFile(action.query, action.indexerId, action.resultRef)
                 is TorrentAction.Control -> model.control(action.verb, action.hash)
             }
             try {

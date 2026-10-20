@@ -4,6 +4,8 @@ import base64
 from contextlib import contextmanager
 import fcntl
 import http.client
+import hashlib
+import select
 import ipaddress
 import json
 import os
@@ -13,7 +15,7 @@ import socket
 import sys
 import time
 import unicodedata
-from urllib.parse import parse_qs, unquote_plus, urlsplit
+from urllib.parse import parse_qs, unquote_plus, urlsplit, urlencode
 
 ENDPOINT_PORT = 19091
 LIMIT = 262144
@@ -113,7 +115,8 @@ class Rpc:
                     if isinstance(error, dict) and isinstance(error.get('code'), int) and isinstance(error.get('message'), str):
                         # The daemon's short JSON-RPC error message is more useful
                         # than blaming its version. Never print request params/magnet.
-                        message = re.sub(r'[\x00-\x1f\x7f]+', ' ', error['message']).strip()[:160]
+                        message = ('metadados recusados' if method == 'torrent_add' and 'metainfo' in params else
+                                   re.sub(r'[\x00-\x1f\x7f]+', ' ', error['message']).strip()[:160])
                         raise Failure(f'Transmission recusou {method}: {message} (código {error["code"]}).')
                     raise Failure(f'Transmission recusou {method}: erro RPC sem detalhes válidos.')
                 if not isinstance(result.get('result'), dict):
@@ -321,31 +324,186 @@ def delete_torrent_data(rpc, key):
         return {'ok': True, 'hash': key, 'deleted_data': True}
 
 
-def run(args, rpc):
+MAX_META = 4 * 1024 * 1024
+
+
+def metainfo(raw):
+    """Validate bounded v1 metainfo and hash the original info byte span.
+
+    Trackers and private flags are preserved verbatim, never rebuilt as a magnet.
+    Mirrors the C1 archive validator's supported v1 subset without its file IO.
+    """
+    if not isinstance(raw, bytes) or not 0 < len(raw) <= MAX_META:
+        raise Failure('Arquivo .torrent ausente ou maior que 4 MiB.')
+    pos, span, nodes = 0, None, 0
+
+    def parse(depth=0):
+        nonlocal pos, span, nodes
+        nodes += 1
+        if depth > 32 or nodes > 100000 or pos >= len(raw):
+            raise ValueError()
+        start = pos
+        token = raw[pos:pos + 1]
+        pos += 1
+        if token == b'i':
+            end = raw.index(b'e', pos)
+            value = raw[pos:end]
+            if not re.fullmatch(b'(?:0|-[1-9][0-9]*|[1-9][0-9]*)', value) or len(value) > 20:
+                raise ValueError()
+            pos = end + 1
+            return int(value)
+        if token in (b'l', b'd'):
+            result = [] if token == b'l' else {}
+            previous = None
+            while raw[pos:pos + 1] != b'e':
+                if isinstance(result, list):
+                    result.append(parse(depth + 1))
+                else:
+                    name = parse(depth + 1)
+                    if not isinstance(name, bytes) or (previous is not None and name <= previous):
+                        raise ValueError()
+                    previous = name
+                    begin = pos
+                    result[name] = parse(depth + 1)
+                    if depth == 0 and name == b'info':
+                        span = (begin, pos)
+            pos += 1
+            return result
+        colon = raw.index(b':', start)
+        length = raw[start:colon]
+        if not re.fullmatch(b'(?:0|[1-9][0-9]*)', length) or len(length) > 8:
+            raise ValueError()
+        end = colon + 1 + int(length)
+        if end > len(raw):
+            raise ValueError()
+        pos = end
+        return raw[colon + 1:end]
+
+    def component(value):
+        text = value.decode('utf-8')
+        if (not text or text in ('.', '..') or len(value) > 255 or
+                any(c in text for c in '/\\') or any(ord(c) < 32 or ord(c) == 127 for c in text)):
+            raise ValueError()
+        return text
+
+    try:
+        root = parse()
+        if pos != len(raw) or span is None or not isinstance(root, dict):
+            raise ValueError()
+        info = root[b'info']
+        if not isinstance(info, dict) or any(k in info for k in (b'meta version', b'file tree', b'attr', b'symlink path')):
+            raise ValueError()
+        name = component(info[b'name'])
+        if b'name.utf-8' in info:
+            component(info[b'name.utf-8'])
+        pieces, size = info[b'pieces'], info[b'piece length']
+        if type(size) is not int or size <= 0 or not isinstance(pieces, bytes):
+            raise ValueError()
+        if b'files' in info:
+            if b'length' in info or not isinstance(info[b'files'], list) or not 1 <= len(info[b'files']) <= 20000:
+                raise ValueError()
+            files = []
+            for row in info[b'files']:
+                if not isinstance(row, dict) or any(k in row for k in (b'attr', b'symlink path')):
+                    raise ValueError()
+                parts = row[b'path']
+                if not isinstance(parts, list) or not parts:
+                    raise ValueError()
+                path = tuple(component(p) for p in parts)
+                if b'path.utf-8' in row:
+                    # Avoid alternate path layouts interpreted differently by clients.
+                    if row[b'path.utf-8'] != parts:
+                        raise ValueError()
+                files.append((path, row[b'length']))
+            paths = {f[0] for f in files}
+            if len(paths) != len(files) or any(path[:i] in paths for path in paths for i in range(1, len(path))):
+                raise ValueError()
+        else:
+            files = [((name,), info[b'length'])]
+        if any(type(length) is not int or not 0 <= length <= 2**63 - 1 for _, length in files):
+            raise ValueError()
+        total = sum(length for _, length in files)
+        if total <= 0 or total > 2**63 - 1 or len(pieces) != 20 * ((total + size - 1) // size):
+            raise ValueError()
+        if b'private' in info and info[b'private'] not in (0, 1):
+            raise ValueError()
+        # Web seeds would introduce a separate HTTP download path in the daemon.
+        if any(k in root for k in (b'url-list', b'httpseeds', b'nodes')):
+            raise ValueError()
+        trackers = []
+        if b'announce' in root:
+            trackers.append(root[b'announce'].decode('utf-8'))
+        if b'announce-list' in root:
+            if not isinstance(root[b'announce-list'], list):
+                raise ValueError()
+            for tier in root[b'announce-list']:
+                if not isinstance(tier, list):
+                    raise ValueError()
+                trackers.extend(tracker.decode('utf-8') for tracker in tier)
+        if len(trackers) > 128 or (info.get(b'private') == 1 and not trackers):
+            raise ValueError()
+        if trackers:
+            # Reuse the existing tracker address policy, but refuse instead of
+            # stripping any private torrent's necessary authenticated tracker.
+            test = 'magnet:?xt=urn:btih:' + '0' * 40 + '&' + urlencode([('tr', t) for t in trackers])
+            if magnet(test) != test:
+                raise Failure('Tracker indisponível ou restrito; .torrent recusado sem remover trackers.')
+        return hashlib.sha1(raw[slice(*span)], usedforsecurity=False).hexdigest()
+    except (ValueError, TypeError, KeyError, IndexError, AttributeError, UnicodeError, RecursionError):
+        raise Failure('Metadados v1 inválidos ou incompatíveis; v2, híbridos, arquivos especiais e web seeds não são suportados.') from None
+
+
+def read_metainfo():
+    deadline = time.monotonic() + 10
+    raw = bytearray()
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or not select.select([sys.stdin.buffer], [], [], remaining)[0]:
+            raise Failure('Tempo limite ao receber .torrent por stdin.')
+        chunk = os.read(sys.stdin.buffer.fileno(), min(65536, MAX_META + 1 - len(raw)))
+        if not chunk:
+            return bytes(raw)
+        raw.extend(chunk)
+        if len(raw) > MAX_META:
+            raise Failure('Arquivo .torrent maior que 4 MiB.')
+
+
+def add_source(rpc, key, source):
+    with naming_lock(key):
+        data = read_naming(key)
+        root = destination() / (data['target'] if data and data.get('target') else key)
+        if root.resolve() != root:
+            raise Failure('Destino redirecionado; operação recusada.')
+        fresh = not root.exists() and data is None
+        root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        result = rpc.call('torrent_add', {**source, 'download_dir': str(root), 'paused': True})
+        duplicate = 'torrent_duplicate' in result
+        item = result.get('torrent_duplicate') if duplicate else result.get('torrent_added')
+        if not item or item.get('hash_string', '').lower() != key:
+            raise Failure('Resposta de inclusão inválida; consulte antes de repetir.')
+        if not duplicate:
+            if fresh:
+                write_naming(key, {'state': 'pending', 'target': None})
+            rpc.call('torrent_start', {'ids': [key]})
+        return {'duplicate': duplicate, 'id': item['id'], 'hash': item['hash_string']}
+
+
+def run(args, rpc, raw=None):
     if args == ['list']:
         return {'torrents': records(rpc)}
     if len(args) == 2 and args[0] == 'add':
         value = magnet(args[1])
         xt = parse_qs(urlsplit(value).query)['xt'][0].split(':')[-1]
         key = xt.lower() if len(xt) == 40 else base64.b32decode(xt.upper()).hex()
-        with naming_lock(key):
-            data = read_naming(key)
-            root = destination() / (data['target'] if data and data.get('target') else key)
-            if root.resolve() != root:
-                raise Failure('Destino redirecionado; operação recusada.')
-            fresh = not root.exists() and data is None
-            root.mkdir(parents=True, exist_ok=True, mode=0o700)
-            # Register eligibility before allowing a new torrent to finish. Duplicates untouched.
-            result = rpc.call('torrent_add', {'filename': value, 'download_dir': str(root), 'paused': True})
-            duplicate = 'torrent_duplicate' in result
-            item = result.get('torrent_duplicate') if duplicate else result.get('torrent_added')
-            if not item or item.get('hash_string', '').lower() != key:
-                raise Failure('Resposta de inclusão inválida; consulte antes de repetir.')
-            if not duplicate:
-                if fresh:
-                    write_naming(key, {'state': 'pending', 'target': None})
-                rpc.call('torrent_start', {'ids': [key]})
-            return {'duplicate': duplicate, 'id': item['id'], 'hash': item['hash_string']}
+        return add_source(rpc, key, {'filename': value})
+    if len(args) in (1, 2) and args[0] == 'add-metainfo-stdin':
+        if len(args) == 2 and not re.fullmatch('[0-9a-f]{40}', args[1]):
+            raise Failure('Infohash esperado inválido.')
+        raw = read_metainfo() if raw is None else raw
+        key = metainfo(raw)
+        if len(args) == 2 and args[1] != key:
+            raise Failure('Arquivo .torrent não corresponde ao infohash do resultado. Pesquise novamente.')
+        return add_source(rpc, key, {'metainfo': base64.b64encode(raw).decode('ascii')})
     if args == ['enable-naming']:
         return enable_naming(rpc)
     if len(args) == 2 and args[0] == 'organize':
@@ -371,7 +529,7 @@ def run(args, rpc):
             params['delete_local_data'] = False
         rpc.call(method, params)
         return {'ok': True, 'hash': key}
-    raise Failure('Uso: myct-torrent list | add MAGNET | status/pause/resume/remove/delete-data HASH')
+    raise Failure('Uso: myct-torrent list | add MAGNET | add-metainfo-stdin | status/pause/resume/remove/delete-data HASH')
 
 def main():
     os.umask(0o077)

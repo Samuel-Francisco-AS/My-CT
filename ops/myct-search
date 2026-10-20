@@ -1,11 +1,16 @@
 #!/usr/bin/python3
-"""Read-only, SSH-facing Prowlarr adapter. Python standard library only."""
+"""SSH-facing Prowlarr adapter. Python standard library only."""
 import base64
 from collections import deque
 from datetime import datetime, timezone
 import hashlib
 import http.client
 import json
+import ipaddress
+import socket
+import subprocess
+import time
+from functools import lru_cache
 import os
 from pathlib import Path
 import re
@@ -19,6 +24,7 @@ RESULT_LIMIT = 20
 TOTAL_LIMIT = 500
 MAX_PAGE = TOTAL_LIMIT // RESULT_LIMIT
 RESPONSE_LIMIT = 2 * 1024 * 1024
+META_LIMIT = 4 * 1024 * 1024
 OUTPUT_LIMIT = 256 * 1024
 MAGNET_LIMIT = 8192
 
@@ -89,6 +95,69 @@ class Api:
             conn.close()
 
 
+    def download(self, path):
+        conn = http.client.HTTPConnection('127.0.0.1', PORT, timeout=15)
+        deadline = time.monotonic() + 20
+        try:
+            conn.request('GET', path, headers={'X-Api-Key': self.key, 'Accept': 'application/x-bittorrent'})
+            response = conn.getresponse()
+            if response.status in (401, 403):
+                raise Failure('authentication', 'Autenticação recusada ao obter .torrent.')
+            if 300 <= response.status < 400:
+                raise Failure('download_redirect', 'A fonte redirecionou em vez de entregar .torrent; nenhum redirect foi seguido.')
+            if response.status in (404, 410):
+                raise Failure('expired_file', 'Arquivo expirado ou indisponível. Pesquise novamente.')
+            if response.status != 200:
+                raise Failure('download_unavailable', 'Indexador não entregou .torrent. Tente outra fonte mais tarde.')
+            if 'html' in response.getheader('Content-Type', '').lower():
+                raise Failure('html_response', 'Fonte devolveu HTML/login/CAPTCHA em vez de .torrent.')
+            length = response.getheader('Content-Length')
+            if length is not None and (not length.isdigit() or len(length) > 10 or int(length) > META_LIMIT):
+                raise Failure('file_limit', 'Arquivo .torrent excede 4 MiB ou possui tamanho inválido.')
+            data = bytearray()
+            while response.fp is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError()
+                # read1 avoids indefinitely waiting for a full buffer on a slow stream.
+                response.fp.raw._sock.settimeout(min(15, remaining))
+                block = response.read1(min(65536, META_LIMIT + 1 - len(data)))
+                if not block:
+                    break
+                data.extend(block)
+                if len(data) > META_LIMIT:
+                    raise Failure('file_limit', 'Arquivo .torrent excede 4 MiB.')
+            raw = bytes(data)
+            if raw.lstrip().startswith(b'<'):
+                raise Failure('html_response', 'Fonte devolveu HTML/XML em vez de .torrent.')
+            if not raw.startswith(b'd') or (length is not None and len(raw) != int(length)):
+                raise Failure('invalid_metainfo', 'Resposta não contém metadados .torrent completos.')
+            return raw
+        except TimeoutError:
+            raise Failure('timeout', 'Tempo limite ao obter arquivo .torrent.') from None
+        except (OSError, http.client.HTTPException):
+            raise Failure('connection', 'Conexão interrompida ao obter .torrent; consulte Downloads antes de repetir.') from None
+        finally:
+            conn.close()
+
+
+def add_metainfo(raw, expected=None):
+    helper = Path.home() / '.local/bin/myct-torrent'
+    try:
+        command = [str(helper), 'add-metainfo-stdin'] + ([expected] if expected else [])
+        result = subprocess.run(command, input=raw, capture_output=True, timeout=25)
+        if result.returncode != 0:
+            # Helper stderr may contain third-party RPC text. Never forward it.
+            raise Failure('metainfo_rejected', 'Metadados recusados ou Transmission indisponível. Atualize os helpers e consulte Downloads antes de repetir.')
+        reply = json.loads(result.stdout)
+        if (type(reply.get('duplicate')) is not bool or type(reply.get('id')) is not int or reply['id'] < 0
+                or not isinstance(reply.get('hash'), str) or not re.fullmatch(r'[a-fA-F0-9]{40}', reply['hash'])):
+            raise ValueError()
+        return {'state': 'added', 'duplicate': reply['duplicate'], 'id': reply['id'], 'hash': reply['hash']}
+    except (OSError, subprocess.TimeoutExpired, ValueError, TypeError, AttributeError):
+        raise Failure('addition_uncertain', 'Inclusão não confirmada. Consulte Downloads → Torrents antes de repetir; não haverá repetição automática.') from None
+
+
 def indexers(api):
     rows = api.get('/api/v1/indexer')
     if not isinstance(rows, list):
@@ -147,6 +216,76 @@ def link(value, key):
         return 'none', None
 
 
+@lru_cache(maxsize=128)
+def public_host(host):
+    try:
+        if '.' not in host or host.endswith(('.local', '.localhost', '.internal', '.lan', '.home', '.test', '.invalid')):
+            return False
+        addresses = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+        return bool(addresses) and all(ipaddress.ip_address(row[4][0]).is_global for row in addresses)
+    except (ValueError, OSError):
+        return False
+
+
+def public_page(value, key):
+    """Conservative page-only subset of infoUrl; no opaque/authenticated links."""
+    if not isinstance(value, str) or not 1 <= len(value) <= 2048:
+        return None
+    try:
+        decoded = unquote(value)
+        uri = urlsplit(value)
+        if (uri.scheme not in ('http', 'https') or not uri.hostname or uri.username or uri.password
+                or uri.port not in (None, 80 if uri.scheme == 'http' else 443)
+                or uri.fragment or key.lower() in decoded.lower()
+                or any(c.isspace() or not c.isprintable() for c in decoded)
+                or '\\' in decoded or '%' in decoded or not public_host(uri.hostname)):
+            return None
+        # Only numeric public page identifiers may occur in query parameters.
+        query = parse_qs(uri.query, keep_blank_values=True, strict_parsing=True)
+        if any(k not in ('id', 't', 'p', 'page') or len(v) != 1 or not re.fullmatch(r'[0-9]{1,12}', v[0])
+               for k, v in query.items()):
+            return None
+        path = unquote(uri.path).lower()
+        if (any(x in path for x in ('api', 'download', 'announce', 'auth', 'login', 'token', 'passkey', 'proxy'))
+                or path.endswith('.torrent') or any(x in ('.', '..') for x in path.split('/'))
+                or re.search(r'[a-f0-9]{24,}|[a-z0-9_=-]{80,}', path)):
+            return None
+        # Recognizable detail-page routes, rather than arbitrary opaque URL paths.
+        if not (re.search(r'/(?:view|torrent|torrents|details)/[0-9]+(?:/|$)', path)
+                or (path.endswith(('/viewtopic.php', '/viewtorrent.php', '/details.php', '/description.php')) and query)
+                or re.search(r'-torrent-[0-9]+\.html$', path)):
+            return None
+        return value
+    except (ValueError, UnicodeError):
+        return None
+
+
+def reference(row):
+    guid = row.get('guid')
+    if not isinstance(guid, str) or not 1 <= len(guid) <= 8192 or not number(row.get('indexerId')):
+        return None
+    # Proxy ciphertext changes on each query, so it must not participate in identity.
+    identity = [row['indexerId'], guid, row.get('title'), row.get('size'), row.get('infoHash'), row.get('infoUrl')]
+    return hashlib.sha256(json.dumps(identity, ensure_ascii=True, sort_keys=True).encode()).hexdigest()
+
+
+def proxy_path(value, key, indexer_id):
+    if not isinstance(value, str) or len(value) > 32768 or any(not c.isprintable() or c.isspace() for c in value):
+        return None
+    try:
+        uri = urlsplit(value)
+        query = parse_qs(uri.query, keep_blank_values=True, strict_parsing=True)
+        if (uri.scheme != 'http' or uri.hostname != '127.0.0.1' or uri.port != PORT
+                or uri.username or uri.password or uri.fragment or uri.path != f'/{indexer_id}/download'
+                or set(query) != {'apikey', 'link', 'file'} or any(len(v) != 1 or not v[0] for v in query.values())
+                or query['apikey'] != [key] or not re.fullmatch(r'[A-Za-z0-9_-]{1,24000}', query['link'][0])):
+            return None
+        # Key goes in a header, never in the request URL constructed by this adapter.
+        return uri.path + '?' + urlencode({'link': query['link'][0], 'file': query['file'][0]})
+    except ValueError:
+        return None
+
+
 def simplify(row, key):
     if not isinstance(row, dict) or row.get('protocol') != 'torrent':
         return None
@@ -172,12 +311,19 @@ def simplify(row, key):
             'source': text(row.get('indexer'), key, 128),
             'indexer_id': number(row.get('indexerId')),
             'seeders': number(row.get('seeders')), 'leechers': number(row.get('leechers')),
-            'link_type': kind, 'magnet': magnet, 'magnet_source': magnet_source}
+            'link_type': kind, 'magnet': magnet, 'magnet_source': magnet_source,
+            'public_url': public_page(row.get('infoUrl'), key),
+            'result_ref': reference(row),
+            'torrent_available': bool(reference(row) and proxy_path(row.get('downloadUrl'), key, row.get('indexerId')))}
 
 
 def validate_args(args):
     if args == ['status']:
         return None
+    if len(args) == 6 and args[0] == 'add-torrent' and args[2] == '--indexer' and args[4] == '--result':
+        options = validate_args(['search', args[1], '--indexer', args[3]])
+        if re.fullmatch(r'[a-f0-9]{64}', args[5]):
+            return (*options, args[5])
     if len(args) in (2, 4, 6) and args[0] == 'search':
         query = args[1].strip()
         page, indexer_id = 1, None
@@ -194,7 +340,7 @@ def validate_args(args):
             if (1 <= len(query) <= 200 and all(c.isprintable() for c in args[1])
                     and 1 <= page <= MAX_PAGE and (indexer_id is None or indexer_id <= 2**31 - 1)):
                 return query, page, indexer_id
-    raise Failure('usage', 'Uso: myct-search status | search "consulta" [--page 1–25] [--indexer ID positivo].')
+    raise Failure('usage', 'Uso: myct-search status | search "consulta" [--page 1–25] [--indexer ID] | add-torrent "consulta" --indexer ID --result REF.')
 
 
 def result_id(item):
@@ -205,6 +351,9 @@ def result_id(item):
         identity = ['btih', value]
     else:
         identity = ['metadata', item['title'].casefold(), item['size_bytes']]
+        if item.get('torrent_available') or item.get('public_url'):
+            # Keep actionable sources distinct; do not hide the only usable file/page.
+            identity += [item.get('indexer_id'), item.get('result_ref')]
     return hashlib.sha256(json.dumps(identity, ensure_ascii=True).encode()).hexdigest()
 
 
@@ -216,7 +365,7 @@ def run(args, api):
             raise Failure('invalid_response', 'Status Prowlarr inválido.')
         return {'state': 'ready', 'version': text(system['version'], api.key, 64),
                 'indexers': indexers(api), 'result_limit': RESULT_LIMIT, 'total_limit': TOTAL_LIMIT}
-    query, page, indexer_id = options
+    query, page, indexer_id = options[:3]
     sources = indexers(api)
     if indexer_id is not None:
         sources = [source for source in sources if source['id'] == indexer_id]
@@ -229,6 +378,20 @@ def run(args, api):
     rows = api.get('/api/v1/search?' + urlencode(params), timeout=25)
     if not isinstance(rows, list):
         raise Failure('invalid_response', 'Lista de resultados inválida.')
+    if len(options) == 4:
+        matches = [row for row in rows if isinstance(row, dict) and row.get('protocol') == 'torrent'
+                   and row.get('indexerId') == indexer_id and reference(row) == options[3]]
+        if len(matches) != 1:
+            raise Failure('stale_result', 'Resultado ausente ou alterado. Pesquise novamente antes de adicionar.')
+        path = proxy_path(matches[0].get('downloadUrl'), api.key, indexer_id)
+        if path is None:
+            raise Failure('unsupported_file', 'Esta fonte não oferece arquivo .torrent pelo proxy local.')
+        raw = api.download(path)
+        expected = matches[0].get('infoHash')
+        if isinstance(expected, str) and re.fullmatch(r'(?:[a-fA-F0-9]{40}|[A-Za-z2-7]{32})', expected):
+            expected = expected.lower() if len(expected) == 40 else base64.b32decode(expected.upper()).hex()
+            return add_metainfo(raw, expected)
+        return add_metainfo(raw)
     groups = {source['id']: deque() for source in sorted(sources, key=lambda source: source['id'])}
     valid = 0
     for row in rows:

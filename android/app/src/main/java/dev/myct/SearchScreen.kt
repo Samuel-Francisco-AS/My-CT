@@ -1,6 +1,9 @@
 package dev.myct
 
 import androidx.activity.compose.LocalActivity
+import android.content.Intent
+import android.net.Uri
+import android.content.ActivityNotFoundException
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -31,6 +34,7 @@ internal fun SearchScreen(model: SearchModel, torrents: TorrentsModel, openDownl
         activity.lifecycle.addObserver(observer)
         onDispose { activity.lifecycle.removeObserver(observer); model.hide() }
     }
+    var pageFailure by remember { mutableStateOf<String?>(null) }
     var choosingSource by remember { mutableStateOf(false) }
     val canSearch = visible && model.connected && !model.busy
     fun submit() {
@@ -84,14 +88,34 @@ internal fun SearchScreen(model: SearchModel, torrents: TorrentsModel, openDownl
                     .ifBlank { "Tamanho e origem indisponíveis" }, style = MaterialTheme.typography.bodySmall)
                 Text(listOfNotNull(item.seeders?.let { "Seeders: $it" }, item.leechers?.let { "Leechers: $it" })
                     .joinToString(" · ").ifBlank { "Peers não informados" }, style = MaterialTheme.typography.bodySmall)
-                MyCtButton(onClick = { model.add(item) }, enabled = visible && model.canAdd(item)) {
+                if (item.magnet != null) MyCtButton(onClick = { model.add(item) }, enabled = visible && model.canAdd(item)) {
                     Text("Adicionar aos downloads")
                 }
-                if (item.magnet == null) StatusNotice("Sem magnet disponível para adicionar.")
-                if (item.magnet != null && item.magnet == model.additionMagnet) {
+                if (item.torrentAvailable && item.resultRef != null && item.indexerId != null) {
+                    MyCtButton(onClick = { model.addFile(item) }, enabled = visible && model.canAddFile(item)) {
+                        Text("Adicionar arquivo torrent")
+                    }
+                    Text("A fonte pode não entregar o arquivo. A inclusão só ocorre após validar .torrent no Fedora.",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                item.publicUrl?.let { url ->
+                    MyCtTextButton(onClick = {
+                        if (publicSearchPage(url) != null) try {
+                            activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE))
+                            pageFailure = null
+                        } catch (_: ActivityNotFoundException) { pageFailure = item.identity() }
+                        catch (_: SecurityException) { pageFailure = item.identity() }
+                    }, enabled = visible) { Text("Abrir página da fonte") }
+                }
+                if (pageFailure == item.identity()) StatusNotice("Não foi possível abrir um navegador externo.", true)
+                if (item.magnet == null && !item.torrentAvailable && item.publicUrl == null)
+                    StatusNotice("Esta fonte não disponibilizou magnet, arquivo .torrent recuperável ou página pública segura.")
+                if ((item.magnet != null && item.magnet == model.additionMagnet) ||
+                    (item.resultRef != null && item.resultRef == model.additionRef)) {
                     if (torrents.busy) {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
                         StatusNotice("Enviando pedido ao Fedora…")
+                        MyCtTextButton(onClick = { model.cancelAddition() }) { Text("Interromper espera") }
                     } else StatusNotice(torrents.message, torrents.stale)
                     MyCtTextButton(onClick = openDownloads) { Text("Ver em Downloads → Torrents") }
                 }

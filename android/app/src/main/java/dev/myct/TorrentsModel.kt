@@ -10,6 +10,7 @@ internal class TorrentsModel internal constructor(
     private var connection: SshConnection? = null
     private var generation = 0
     private var job: Job? = null
+    private var activeAction: TorrentAction? = null
     var connected by mutableStateOf(false)
         private set
     var busy by mutableStateOf(false)
@@ -27,19 +28,25 @@ internal class TorrentsModel internal constructor(
 
     fun attach(value: SshConnection?) {
         generation++
-        job?.cancel(); job = null
+        job?.cancel(); job = null; activeAction = null
         connection = value; connected = value != null
         busy = false; passiveRefresh = false; items = emptyList(); stale = false
         message = if (connected) "Consulte o histórico do Fedora." else "SSH desconectado. Conecte pela aba Terminal."
     }
     fun refresh(passive: Boolean = false) = operate(TorrentAction.List, passive)
     fun add(magnet: String) = operate(TorrentAction.Add(magnet.trim()))
+    fun addFile(query: String, indexerId: Int, resultRef: String) = operate(TorrentAction.AddFile(query, indexerId, resultRef))
     fun control(verb: String, hash: String) = operate(TorrentAction.Control(verb, hash))
     // Leaving the tab stops queries. A mutation already sent may have succeeded: never retry it.
     fun hide() {
         if (!busy) return
-        generation++; job?.cancel(); job = null; busy = false; passiveRefresh = false; stale = true
+        generation++; job?.cancel(); job = null; activeAction = null; busy = false; passiveRefresh = false; stale = true
         message = "Consulta encerrada. Atualize para conferir o estado real antes de repetir uma ação."
+    }
+    fun cancelSearchAddition(magnet: String?, ref: String?) {
+        val action = activeAction
+        if ((action is TorrentAction.Add && action.magnet == magnet) ||
+            (action is TorrentAction.AddFile && action.resultRef == ref)) hide()
     }
     private fun operate(action: TorrentAction, passive: Boolean = false) {
         val ssh = connection ?: return
@@ -50,6 +57,7 @@ internal class TorrentsModel internal constructor(
         val epoch = ++generation
         previous?.cancel()
         passiveRefresh = passive
+        activeAction = action
         busy = true
         job = scope.launch {
             try {
@@ -57,7 +65,7 @@ internal class TorrentsModel internal constructor(
                 val result = runInterruptible(Dispatchers.IO) { execute(ssh, action) }
                 val notice = when (action) {
                     TorrentAction.List -> null
-                    is TorrentAction.Add -> {
+                    is TorrentAction.Add, is TorrentAction.AddFile -> {
                         val reply = org.json.JSONObject(result)
                         require(torrentHash.matches(reply.getString("hash")))
                         if (reply.getBoolean("duplicate")) "Torrent já existente no motor; não foi adicionado novamente (ID ${reply.getLong("id")})."
@@ -89,12 +97,12 @@ internal class TorrentsModel internal constructor(
             } catch (_: IllegalArgumentException) {
                 if (epoch == generation) {
                     stale = true
-                    message = if (action is TorrentAction.Add) "Confira o magnet. Se o pedido foi enviado, atualize antes de repetir."
+                    message = if (action is TorrentAction.Add || action is TorrentAction.AddFile) "Confira o resultado ou magnet. Se o pedido foi enviado, atualize antes de repetir."
                         else "Resposta inesperada ou incompleta da CLI. Atualize; dados anteriores não confirmam o estado atual."
                 }
             } catch (_: Exception) {
                 if (epoch == generation) { stale = true; message = "Falha no canal SSH. Confira a conexão e atualize antes de repetir a ação." }
-            } finally { if (epoch == generation) { busy = false; passiveRefresh = false } }
+            } finally { if (epoch == generation) { busy = false; passiveRefresh = false; activeAction = null } }
         }
     }
 }

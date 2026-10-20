@@ -6,7 +6,8 @@ import java.net.URLDecoder
 
 internal data class SearchResult(val title: String, val size: Long?, val source: String?,
     val seeders: Long?, val leechers: Long?, val magnet: String?, val magnetSource: String?,
-    val id: String? = null, val indexerId: Int? = null)
+    val id: String? = null, val indexerId: Int? = null,
+    val publicUrl: String? = null, val resultRef: String? = null, val torrentAvailable: Boolean = false)
 internal data class SearchIndexer(val id: Int, val name: String, val available: Boolean = true)
 internal fun SearchResult.identity(): String = id ?: (magnet?.substringAfter("xt=")?.substringBefore('&')?.lowercase()
     ?: "metadata:$title:$size")
@@ -55,6 +56,46 @@ internal fun usableSearchMagnet(value: String?): String? = runCatching {
     value
 }.getOrNull()
 
+/** Additional client boundary: public pages only; Fedora also checks DNS before export. */
+internal fun publicSearchPage(value: String?): String? = runCatching {
+    require(value != null && value.length in 1..2048 && value.none { it.isWhitespace() || it.isISOControl() })
+    val uri = URI(value)
+    val host = checkNotNull(uri.host).lowercase()
+    require(uri.scheme in setOf("http", "https") && uri.rawUserInfo == null && uri.rawFragment == null)
+    require(uri.port == -1 || uri.port == if (uri.scheme == "https") 443 else 80)
+    require('.' in host && host.any { it in 'a'..'z' } && ':' !in host && !host.startsWith('['))
+    require(listOf(".local", ".localhost", ".internal", ".lan", ".home", ".test", ".invalid").none { host.endsWith(it) })
+    val decoded = URLDecoder.decode(value, "UTF-8")
+    require('%' !in decoded && '\\' !in decoded && decoded.none { it.isWhitespace() || it.isISOControl() })
+    val path = uri.path.lowercase()
+    require(listOf("api", "download", "announce", "auth", "login", "token", "passkey", "proxy").none { it in path })
+    require(!path.endsWith(".torrent") && path.split('/').none { it == "." || it == ".." })
+    require(!Regex("[a-f0-9]{24,}|[a-z0-9_=-]{80,}").containsMatchIn(path))
+    val query = uri.rawQuery
+    require(query == null || (query.isNotBlank() && query.split('&').all { Regex("(?:id|t|p|page)=[0-9]{1,12}").matches(it) }))
+    require(Regex("/(?:view|torrent|torrents|details)/[0-9]+(?:/|$)").containsMatchIn(path) ||
+        (listOf("/viewtopic.php", "/viewtorrent.php", "/details.php", "/description.php").any { path.endsWith(it) } && query != null) ||
+        Regex("-torrent-[0-9]+\\.html$").containsMatchIn(path))
+    value
+}.getOrNull()
+
+internal fun searchTorrentCommand(query: String, indexerId: Int, resultRef: String): String {
+    require(validSearchQuery(query) && indexerId > 0 && Regex("[a-f0-9]{64}").matches(resultRef))
+    val quoted = "'" + query.trim(' ').replace("'", "'\"'\"'") + "'"
+    return "if [ -x \"\$HOME/.local/bin/myct-search\" ]; then exec \"\$HOME/.local/bin/myct-search\" add-torrent $quoted --indexer $indexerId --result $resultRef; else exit 127; fi"
+}
+
+internal fun executeSearchTorrent(action: TorrentAction.AddFile, open: () -> DownloadExec): String {
+    val result = executeSshResult(searchTorrentCommand(action.query, action.indexerId, action.resultRef), open, 80000)
+    if (result.status == 127) throw DownloadFailure("Helper myct-search ausente. Atualize os helpers S1D no Fedora.")
+    val root = JSONObject(result.output)
+    if (root.opt("ok") == false) {
+        try { parseSearchReply(result.output) } catch (failure: SearchFailure) { throw DownloadFailure(failure.safeMessage) }
+    }
+    require(result.status == 0 && root.get("schema_version") == 1 && root.get("ok") == true && root.getString("state") == "added")
+    return root.toString()
+}
+
 internal fun parseSearchReply(output: String): SearchReply {
     require(output.toByteArray(Charsets.UTF_8).size <= 262144)
     val root = JSONObject(output)
@@ -69,6 +110,16 @@ internal fun parseSearchReply(output: String): SearchReply {
             "invalid_indexer" -> "Indexador removido ou desabilitado. Atualize as fontes. Sua pesquisa não será repetida automaticamente."
             "indexer_unavailable" -> "Indexador temporariamente indisponível. Escolha outra fonte ou tente mais tarde."
             "response_limit" -> "Resposta excessiva. Refine a pesquisa."
+            "stale_result" -> "Resultado ausente ou alterado. Faça uma nova pesquisa antes de adicionar."
+            "unsupported_file" -> "Esta fonte não oferece .torrent pelo proxy Prowlarr suportado."
+            "download_redirect" -> "A fonte redirecionou em vez de entregar .torrent. Redirects não são seguidos; tente outra fonte ou abra a página."
+            "expired_file" -> "Arquivo expirado ou indisponível. Pesquise novamente."
+            "download_unavailable" -> "O indexador não entregou .torrent. Tente outra fonte mais tarde."
+            "html_response" -> "A fonte devolveu HTML, login ou CAPTCHA em vez de .torrent."
+            "file_limit" -> "Arquivo .torrent excedeu o limite de 4 MiB."
+            "invalid_metainfo" -> "Resposta sem metadados .torrent completos."
+            "metainfo_rejected" -> "Metadados v1 recusados ou motor indisponível. V2, híbridos, arquivos especiais e web seeds não são suportados. Consulte Downloads antes de repetir."
+            "addition_uncertain" -> "Inclusão não confirmada. Consulte Downloads → Torrents antes de repetir; não haverá repetição automática."
             "usage" -> "Use uma consulta de 1 a 200 caracteres, sem quebras de linha."
             else -> "Falha na pesquisa do Fedora. Confira o Prowlarr e os indexadores."
         }
@@ -113,7 +164,10 @@ internal fun parseSearchReply(output: String): SearchReply {
         require(origin == null || origin in setOf("direct", "infohash"))
         SearchResult(title, number("size_bytes"), text("source", 256), number("seeders"), number("leechers"),
             magnet, origin.takeIf { magnet != null }, text("id", 64)?.also { require(Regex("[a-f0-9]{64}").matches(it)) },
-            number("indexer_id")?.also { require(it in 1..Int.MAX_VALUE.toLong()) }?.toInt())
+            number("indexer_id")?.also { require(it in 1..Int.MAX_VALUE.toLong()) }?.toInt(),
+            publicSearchPage(text("public_url", 2048)),
+            text("result_ref", 64)?.also { require(Regex("[a-f0-9]{64}").matches(it)) },
+            if (row.has("torrent_available")) row.getBoolean("torrent_available") else false)
     }
     val paginated = root.has("page")
     val page = if (paginated) root.getInt("page").also { require(it in 1..25) } else 1

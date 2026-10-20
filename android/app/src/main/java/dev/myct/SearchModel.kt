@@ -46,7 +46,9 @@ internal class SearchModel(
         private set
     var additionMagnet by mutableStateOf<String?>(null)
         private set
-    val additionRequested get() = additionMagnet != null
+    var additionRef by mutableStateOf<String?>(null)
+        private set
+    val additionRequested get() = additionMagnet != null || additionRef != null
 
     fun attach(value: SshConnection?) {
         cancel()
@@ -56,9 +58,12 @@ internal class SearchModel(
         state = if (connected) SearchState.Idle else SearchState.Disconnected
         message = if (connected) "Digite uma consulta e toque em Pesquisar." else "SSH desconectado. Conecte pela aba Terminal."
     }
-    private fun cancel() { generation++; job?.cancel(); job = null; loadingMore = false }
+    private fun cancel() {
+        generation++; job?.cancel(); job = null; loadingMore = false
+        if (additionRequested) torrents.cancelSearchAddition(additionMagnet, additionRef)
+    }
     private fun clearResults() {
-        items = emptyList(); truncated = false; additionMagnet = null
+        items = emptyList(); truncated = false; additionMagnet = null; additionRef = null
         page = 0; hasMore = false; total = 0; received = 0; limited = false; paginated = false; pageError = null
     }
     fun selectIndexer(id: Int?) {
@@ -74,6 +79,7 @@ internal class SearchModel(
         message = if (connected) "Toque em Pesquisar para consultar." else "SSH desconectado. Conecte pela aba Terminal."
     }
     fun hide() {
+        if (additionRequested) torrents.cancelSearchAddition(additionMagnet, additionRef)
         if (!busy) return
         val keepResults = loadingMore
         cancel()
@@ -100,7 +106,7 @@ internal class SearchModel(
     }
     private fun request(action: SearchAction, append: Boolean = false) {
         val ssh = connection ?: return
-        if (busy) return
+        if (busy || (additionRequested && torrents.busy)) return
         cancel()
         if (!append) clearResults()
         val epoch = generation
@@ -143,11 +149,24 @@ internal class SearchModel(
         else { state = SearchState.Error; message = safeMessage }
     }
     fun canAdd(item: SearchResult): Boolean = connected && state == SearchState.Results &&
-        item in items && item.magnet != null && torrents.connected && torrents.actionsEnabled && !torrents.busy
+        item in items && item.magnet != null && !busy && torrents.connected && torrents.actionsEnabled && !torrents.busy
+
+    fun cancelAddition() = torrents.cancelSearchAddition(additionMagnet, additionRef)
+
+    fun canAddFile(item: SearchResult): Boolean = connected && state == SearchState.Results && !busy &&
+        item in items && item.torrentAvailable && item.resultRef != null && item.indexerId != null &&
+        torrents.connected && torrents.actionsEnabled && !torrents.busy
+
+    fun addFile(item: SearchResult) {
+        if (!canAddFile(item)) return
+        additionMagnet = null; additionRef = item.resultRef
+        torrents.addFile(query, checkNotNull(item.indexerId), checkNotNull(item.resultRef))
+    }
 
     fun add(item: SearchResult) {
         if (!canAdd(item)) return
         val magnet = usableSearchMagnet(item.magnet) ?: return
+        additionRef = null
         additionMagnet = magnet
         torrents.add(magnet) // Existing TorrentAction.Add, validation, RPC and notices.
     }

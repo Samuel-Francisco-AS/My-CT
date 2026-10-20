@@ -49,6 +49,7 @@ internal fun parseTorrents(text: String): List<ServerTorrent> {
 internal sealed interface TorrentAction {
     data object List : TorrentAction
     data class Add(val magnet: String) : TorrentAction
+    data class AddFile(val query: String, val indexerId: Int, val resultRef: String) : TorrentAction
     data class Control(val verb: String, val hash: String) : TorrentAction
 }
 internal fun torrentCommand(action: TorrentAction): String {
@@ -56,7 +57,9 @@ internal fun torrentCommand(action: TorrentAction): String {
         require(value.length <= 8192 && value.none { it.isISOControl() })
         return "'" + value.replace("'", "'\"'\"'") + "'"
     }
+    if (action is TorrentAction.AddFile) return searchTorrentCommand(action.query, action.indexerId, action.resultRef)
     val args = when (action) {
+        is TorrentAction.AddFile -> error("Handled above")
         TorrentAction.List -> "list"
         is TorrentAction.Add -> {
             require(URI(action.magnet).scheme == "magnet")
@@ -69,8 +72,9 @@ internal fun torrentCommand(action: TorrentAction): String {
     }
     return "if [ -x \"\$HOME/.local/bin/myct-torrent\" ]; then exec \"\$HOME/.local/bin/myct-torrent\" $args; else exit 127; fi"
 }
-internal fun executeTorrent(action: TorrentAction, open: () -> DownloadExec, timeoutMs: Long = 25000): String =
-    executeSshCommand(torrentCommand(action), open, timeoutMs) { status, reason ->
+internal fun executeTorrent(action: TorrentAction, open: () -> DownloadExec, timeoutMs: Long = 25000): String {
+    if (action is TorrentAction.AddFile) return executeSearchTorrent(action, open)
+    return executeSshCommand(torrentCommand(action), open, timeoutMs) { status, reason ->
         DownloadFailure(when {
             status == 127 -> "CLI myct-torrent ausente. Atualize o helper no Fedora."
             status == 3 -> "Transmission indisponível. Confira o serviço myct-transmission no Fedora."
@@ -82,6 +86,8 @@ internal fun executeTorrent(action: TorrentAction, open: () -> DownloadExec, tim
             else -> "Pedido recusado pelo motor. Confira magnet, diretório e Transmission 4.1+. Atualize antes de repetir."
         })
     }
+
+}
 
 // Optional on purpose: the installed pre-R2B CLI does not request these RPC fields.
 private fun optionalTorrentCounter(row: JSONObject, key: String): Long? {
