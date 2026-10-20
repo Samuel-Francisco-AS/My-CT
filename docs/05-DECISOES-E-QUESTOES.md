@@ -457,3 +457,26 @@ preservado. Resultados ambíguos continuam bloqueados por `uncertain`, sem retry
 Não alterar helpers instalados nem o upload real de ~24,4 GiB durante sua execução.
 Instalação e sessão Moto ficam após conclusão/conferência remota desse upload;
 sem nova PR, subfase ou merge. [Contrato, evidências e retomada](MYCT-C1C-RELATORIO.md).
+
+
+
+### 20/10/2026 — C1C aceita funcionalmente no Moto G06
+
+**DECIDIDO (aceite do proprietário):** fechar a MYCT-C1C na PR #50, entrega
+única, sem multiplicar gates. A RC2 instalada code42 comprovou no aparelho
+upload de fixture própria de 128 MiB com progresso real (20,6%, 26,5 MiB,
+1,7 MiB/s, ETA 1min02s); retorno após sair de tela e app mantendo transferência,
+sem piscar controles. Upload real de pacote S01 de 24,4 GiB terminou com Drive
+verificado e 28 hardlinks Jellyfin detectados, seguido por **liberação
+solicitada pelo proprietário** no aplicativo, com o cartão exibindo
+`Liberado do SSD` e cópia remota restaurável. O Core permaneceu acessível e
+a aba Saúde mostrou 50,5 GiB livres. Não declarar que este valor representa
+24,4 GiB de economia medida exatamente na mesma base.
+
+**Limites de aceite preservados:** acionamento físico do cancelamento remoto
+e barra de um download/restore real não foram demonstrados nesta sessão.
+Essas rotinas têm implementação e testes direcionados; continuar tratando
+com atenção estados `uncertain` e não reexecutar/descartar dados
+automaticamente. Não há autorização para remover backups Drive nem para
+limpar vestígios divergentes da fixture antiga sem revisão.
+[Relatório final](MYCT-C1C-RELATORIO.md).
