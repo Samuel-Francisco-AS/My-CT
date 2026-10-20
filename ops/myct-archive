@@ -14,6 +14,13 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
+
+# Also supports loading this CLI as the torrent engine's common module.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from myct_cloud_progress import Progress
+
+progress = Progress()
 
 
 class Failure(Exception):
@@ -142,15 +149,35 @@ def rclone(*args):
     # changing copy semantics. An encrypted existing config may still be unlocked.
     env = {k: v for k, v in os.environ.items()
            if not k.startswith('RCLONE_') or k in {'RCLONE_CONFIG', 'RCLONE_CONFIG_PASS'}}
+    telemetry = progress.enabled and args[0] == 'copyto'
+    flags = (['--use-json-log', '--stats', '2s', '--stats-log-level', 'NOTICE', '--log-level', 'NOTICE']
+             if telemetry else ['--stats', '0', '--log-level', 'ERROR'])
     try:
-        process = subprocess.Popen(['rclone', *args, '--stats', '0', '--log-level', 'ERROR',
+        process = subprocess.Popen(['rclone', *args, *flags,
                                     '--retries', '1', '--contimeout', '15s', '--timeout', '60s'],
                                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, env=env, start_new_session=True)
     except FileNotFoundError as error:
         raise Failure('RCLONE_NOT_FOUND', 'Rclone ausente; instalação e configuração são tarefas do proprietário.') from error
+    errors = bytearray()
+    def drain():
+        oversized = False
+        while line := process.stderr.readline(65537):
+            # Bound both NDJSON parsing and private, in-memory error classification.
+            errors.extend(line); del errors[:-65536]
+            if len(line) > 65536 or oversized:
+                oversized = not line.endswith(b'\n')
+                continue
+            progress.stats(line)
+    reader = None
     try:
-        output, errors = process.communicate()
+        if telemetry:
+            reader = threading.Thread(target=drain, daemon=True)
+            reader.start()
+            output = process.stdout.read()
+            process.wait(); reader.join()
+        else:
+            output, errors = process.communicate()
     except BaseException:
         try:
             os.killpg(process.pid, signal.SIGTERM)
@@ -162,6 +189,10 @@ def rclone(*args):
             os.killpg(process.pid, signal.SIGKILL)
             process.wait()
         raise
+    finally:
+        if reader is not None:
+            reader.join()
+            process.stdout.close(); process.stderr.close()
     if process.returncode:
         # Classify privately; never return Rclone's raw stdout/stderr or OAuth URLs.
         detail = errors.lower()
@@ -226,15 +257,19 @@ def verify_remote(row):
 
 
 def copy(source, target):
+    progress.begin_copy(not source.startswith('/'))
     rclone('copyto', source, target, '--ignore-existing', '--checksum',
            '--transfers', '1', '--checkers', '1', '--multi-thread-streams', '0')
+    progress.end_copy()
 
 
 def archive(source, remote, data):
     path = safe_path(Path(source).expanduser().absolute())
     if not component(path.name):
         raise Failure('INVALID_FILE', 'Nome de arquivo inválido.')
+    progress.phase('hashing')
     hashes, snapshot = fingerprint(path)
+    progress.plan([hashes['size']])
     key = identity(remote, str(path), hashes['sha256'])
     row = data['entries'].get(key)
     if row is None:
@@ -266,6 +301,8 @@ def restore(key, remote, data):
         raise Failure('NOT_FOUND', 'ID não encontrado no catálogo deste remote.')
     if row['state'] != 'verified':
         raise Failure('NOT_VERIFIED', 'Somente cópias verificadas podem ser restauradas; revise/revalide o arquivamento.')
+    progress.plan([row['size']])
+    progress.phase('verifying')
     root = private_dir(restore_root())
     folder = private_dir(root / key)
     target = safe_path(folder / row['name'])

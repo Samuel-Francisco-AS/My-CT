@@ -2,8 +2,174 @@
 
 Candidata de **20/10/2026**, [PR única #50 draft](https://github.com/Samuel-Francisco-AS/My-CT/pull/50), branch única `myct-c1c-cloud-android`, vinculada à
 [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46). **Sem merge e
-sem aceite físico Android declarado.** A C1B-2 continua aceita; seu motor não
-foi alterado nem seus testes físicos repetidos.
+sem aceite físico da RC2 declarado.** A C1B-2 continua aceita. Esta revisão
+acrescenta telemetria opt-in e resultado de interrupção aos helpers; preserva a
+semântica de arquivamento/liberação e não repete o aceite físico anterior.
+
+## Correção atual — 0.9.1-c1c-rc2 / code 42
+
+Esta revisão responde aos dois comentários da Luna, na **mesma PR #50 draft**:
+[progresso/estados](https://github.com/Samuel-Francisco-AS/My-CT/pull/50#issuecomment-6283497682)
+e [polling/cancelamento](https://github.com/Samuel-Francisco-AS/My-CT/pull/50#issuecomment-6283572595).
+Os critérios de aceite são os contratos desses comentários: números reais do
+Rclone para upload/restore C1A e torrent multiarquivo; persistência após
+reconexão; nenhuma conclusão antes da validação; controles estáveis; cancelamento
+confirmado apenas de cópias; preservação de originais e dos bloqueios do motor.
+
+**Proteção operacional:** o upload real de aproximadamente **24,4 GiB** foi
+observado ativo durante o desenvolvimento. Não foi interrompido, reiniciado,
+editado nem usado em testes. Nenhum helper em `~/.local/bin` foi substituído.
+Não há progresso retroativo nem cancelamento habilitado para esse job antigo.
+A instalação dos helpers e do APK fica para **depois da conclusão e conferência
+remota desse upload**, com uma única sessão curta no Moto e fixture pequena.
+Não repetir o upload de 24 GiB para testar. Publicar a candidata não instala nada.
+Na RC1 o proprietário já comprovou consultas/tela reais e `space` de Severance;
+isso não autoriza liberação desse conteúdo nem comprova conclusão do upload.
+
+### Progresso e integridade
+
+- `myct_cloud_progress.py` é um módulo compartilhado pelos helpers, sem serviço
+  residente. Somente o worker `myct-cloud` e seu filho, vinculados a recibo
+  `running` com `worker_pid`, habilitam a escrita. CLI avulsa e consultas não
+  escrevem progresso. O catálogo autoritativo permanece separado.
+- `copyto` opt-in usa `--use-json-log --stats 2s --stats-log-level NOTICE`.
+  Consome somente `stats.bytes`, `totalBytes`, `speed`, `eta` numéricos válidos.
+  Stderr é drenado simultaneamente ao stdout; linhas e buffer privado de erro
+  são limitados. Nenhum log bruto Rclone é persistido ou devolvido ao Android.
+  [Contrato oficial Rclone](https://rclone.org/docs/#use-json-log).
+- Cada `ID.progress` fica em `~/.local/share/myct/cloud-jobs`, 0600/0700, por
+  substituição atômica e `fsync`. Contém somente `phase`, `bytes_done`,
+  `bytes_total`, `percent`, `speed_bps`, `eta_seconds`, `updated_at`,
+  `current_file_index` e `total_files`; campos desconhecidos não são projetados.
+- A soma inclui todos os `copyto` efetivos do pacote, inclusive `.torrent` e
+  manifesto. Objetos já verificados e dispensados de nova cópia não são somados
+  como bytes transmitidos. Hashing e validação não aumentam o numerador. Se um
+  `copyto` não produzir stats válidas, não se deduzem bytes pelo tamanho do arquivo
+  nem se inventa porcentagem. Uma tentativa nova tem seu próprio ID/contagem.
+- ETA usa taxa real suavizada entre amostras/arquivos. Taxa zero, ETA Rclone
+  ausente, total desconhecido, hashing ou validação mostram **Tempo estimado
+  indisponível**. Stats com mais de 8 s também deixam de sustentar taxa/ETA.
+- A barra é determinada quando a porcentagem é conhecida. Ao terminar o
+  transporte, informa **Transporte finalizado; verificação pendente**, com barra
+  indeterminada; só apresenta 100% após resultado de sucesso do motor, incluindo
+  hashes/metainfo e gravação do catálogo. A porcentagem exibida é truncada a uma
+  casa decimal para não arredondar 99,99% para 100 antes da verificação.
+- Últimas operações e detalhes mostram fase, porcentagem, bytes exatos/formatados,
+  taxa, ETA e etapas. `BUSY` é informativo: **Transferência em andamento; catálogo
+  temporariamente ocupado**. Mantém entradas/progresso conhecidos, sem habilitar
+  mutações com catálogo indisponível. Diretório presente não comprova integridade.
+  `LOCAL_DIVERGENCE` passa a **Arquivos locais não correspondem ao pacote arquivado;
+  liberação bloqueada**; `NO_LOCAL_DATA` redundante é ocultado apenas na apresentação.
+  Nenhum bloqueio é contornado e nenhum resíduo é removido automaticamente.
+
+### Polling e cancelamento
+
+- Polling visível a cada **3 s** consulta apenas `task ID` enquanto há trabalho
+  ativo. Não altera `busy`, seleção, rolagem ou diálogo. Um mutex serializa IO;
+  consultas sobrepostas são agrupadas. Atualizar manual também consulta a tarefa
+  ativa. Catálogos são lidos uma vez após término/falha/cancelamento ou reconexão.
+  Não há polling Android em segundo plano; o worker Fedora continua independente.
+- **Detalhes / progresso** fica disponível durante o job; **Resultado** aparece
+  após término. O botão **Cancelar transferência…** aparece apenas para
+  `archive`/`restore` de arquivo/torrent novos e compatíveis. Um diálogo identifica
+  o conteúdo e explica preservação de originais/backup anterior, possíveis
+  parciais e ausência de retry automático. Fechar tela/SSH não envia cancelamento.
+- `myct-cloud cancel ID` aceita somente ID hexadecimal exato de recibo privado,
+  versão/origem compatível e ação de cópia. Confere nome exato da unidade,
+  `MainPID` do worker e argv em `/proc`, além de `KillMode=control-group`.
+  Não recebe PID/nome de serviço fornecido pelo cliente. `release`, `recover`,
+  `space`, `inspect`, `relink` e jobs antigos não são interrompidos.
+- Grava `cancel_requested` antes do `systemctl --user stop --no-block` específico.
+  O spawn do motor e o pedido de cancelamento são serializados para não iniciar
+  transporte após a solicitação. O worker coleta o JSON sanitizado do motor;
+  `INTERRUPTED` produz `cancelling`, ainda bloqueante. Somente unidade inativa
+  com esse recibo vira `cancelled`. `stop` aceito isoladamente nunca equivale a
+  cancelamento confirmado. Sucesso que vence a corrida permanece `succeeded`.
+- Unidades novas têm `KillMode=control-group` e `TimeoutStopSec=15s`. O systemd
+  encerra os filhos remanescentes se o desligamento gracioso não terminar.
+  Resultado perdido, identidade não confirmada ou stop ambíguo gera `uncertain`,
+  sem replay e sem nova mutação até avaliação. O protocolo é idempotente;
+  repetir `cancel` não despacha outro stop. [Semântica oficial do systemd](https://www.freedesktop.org/software/systemd/man/latest/systemd.kill.html).
+- Cancelar não executa comandos de exclusão adicionais. O motor mantém seu
+  tratamento existente de temporários próprios, integridade, catálogos e objetos
+  parciais. Download interrompido não é publicado como arquivo completo/verificado.
+  Torrent pode conservar arquivos completos já restaurados em uma árvore parcial;
+  nenhum pacote parcial recebe `verified`. Originais e backup verificado prévio
+  são preservados. Reboot/queda não ganham retomada automática nesta correção.
+
+### Verificações desta revisão
+
+```bash
+python3 -m unittest discover -s ops/tests -p 'test_*archive*.py' -v
+python3 -m unittest discover -s ops/tests -p 'test_cloud*.py' -v
+cd android
+ANDROID_HOME=/home/sam/Android/Sdk ./gradlew \
+  :app:testDebugUnitTest --tests 'dev.myct.Cloud*' \
+  :app:assembleDebug :app:lintDebug :app:compileDebugAndroidTestKotlin \
+  --offline --console=plain
+```
+
+- Moto: ADB não encontrou aparelho autorizado. O teste instrumentado
+  `CloudUiInstrumentedTest` foi acrescentado para botão/diálogo e estabilidade
+  dos controles com polling bloqueado e SSH falso. **Compilação desse teste não
+  é execução nem aceite no aparelho.** Não se usou emulador nem se instalou APK.
+- Prova local adicional: Rclone **1.74.3 real**, somente entre dois arquivos
+  temporários, 147.456 bytes idênticos. Stats reais observadas: 98.304 bytes
+  (66,66%), 147.456 bytes, taxa e ETA numéricos; fase final pré-recibo `verifying`,
+  porcentagem nula. Não acessou Drive, OAuth ou acervo. Os testes de transferência
+  multiarquivo e cancelamento usam motores/Rclone simulados e fixtures próprias.
+- Logs de validação locais ignorados pelo Git:
+  `artifacts/myct-c1c-rc2-validation/`.
+
+### Resultado final e artefato RC2
+
+| Verificação direcionada | Resultado |
+| --- | --- |
+| Regressões dos motores C1A/C1B-2 | 79 PASS, 24,610 s |
+| Bridge, progresso e cancelamento | 33 PASS, 4,349 s |
+| JVM `Cloud*` | 24 PASS, sem falhas/erros/skip |
+| APK / lint | PASS; 0 erros, 0 warnings, 2 hints existentes |
+| `compileDebugAndroidTestKotlin` (inclui UI) | PASS; não executado em aparelho |
+| Certificado contra RC1/code 41 | Idêntico, conferido por apksigner |
+| Upload grande / helpers instalados | Preservados; unidade observada ativa, hashes instalados idênticos |
+| Aceite Moto RC2 | Pendente após término/conferência do upload grande |
+
+Rodada final Android: **3m20,38s**, pico RSS **2.342.460 KiB**; regressões Python
+medidas: pico **30.352 KiB**, 24,75 s externos. É custo de desenvolvimento, não
+medição do runtime de uma transferência Drive de 24 GiB. Não se alteraram
+configurações de memória/serviços. Warnings de Metaspace do Gradle e dois
+warnings Kotlin já existentes em `IdeScreen` não impediram o build.
+
+[Release RC2](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-c1c-v0.9.1-rc2) · [APK code 42](https://github.com/Samuel-Francisco-AS/My-CT/releases/download/myct-c1c-v0.9.1-rc2/myct-c1c-0.9.1-rc2-debug.apk) · [SHA-256](https://github.com/Samuel-Francisco-AS/My-CT/releases/download/myct-c1c-v0.9.1-rc2/myct-c1c-0.9.1-rc2-debug.apk.sha256).
+APK **19.043.431 bytes**, `dev.myct`, **0.9.1-c1c-rc2 / code 42**.
+SHA-256: `3a60d0c6fc692d3b5854e4e15f4f0d761dbe5e3fcefc882a261666b220b4f211`.
+Certificado SHA-256: `b788958be4c919889fc30813f13f1aceb5b6b69670514c82e16288f4b60b83b3`.
+Atualizar sem desinstalar/limpar dados; nenhuma instalação foi feita pelo agente.
+Os assets publicados são apenas APK e checksum; nenhum catálogo/OAuth/mídia.
+
+### Sessão curta de aceite após o upload grande
+
+1. Confirmar que o upload terminou e a cópia remota está verificada; conferir
+   ausência de jobs ativos/incertos. Só então instalar manualmente os helpers
+   deste checkout, **incluindo o novo módulo**, e atualizar o APK sem desinstalar.
+2. Usar fixture pequena descartável (arquivo comum e pacote multiarquivo):
+   observar upload/restore com barra, bytes, %, taxa e ETA; conferir fase de
+   integridade e conclusão. Sair/desconectar/reconectar sem replay. Verificar
+   Atualizar/Resultado estáveis e que abrir detalhes/diálogo não pisca nem fecha.
+3. Cancelar uma cópia da fixture com confirmação e consultar após reconectar:
+   `cancel_requested` → `cancelling` → `cancelled`, ou sucesso se já concluída;
+   conferir original/backup preservados e ausência de publicação incompleta.
+   Não cancelar/liberar conteúdo real nem refazer os testes físicos já aceitos.
+4. Conferir a mensagem de divergência na fixture antiga sem excluir seus resíduos.
+   Registrar separadamente o que foi efetivamente observado. PR continua draft,
+   sem merge até o aceite do proprietário.
+
+---
+
+## Registro histórico da RC1 / code 41
+
+Os resultados, limitações e instruções históricas abaixo referem-se à entrega
+original; a revisão vigente acima acrescenta telemetria, polling e cancelamento.
 
 ## Entrega e critérios
 
@@ -148,6 +314,16 @@ trabalho de arquivamento ativo:
 ```bash
 cd ~/Projetos/My-CT
 # Checkout da branch/commit candidato recebido pela PR; não trocar para main antiga.
+# PARE se o upload grande ainda estiver ativo ou houver resultado incerto.
+python3 - <<'PY_CHECK'
+import json
+from pathlib import Path
+root = Path.home() / '.local/share/myct/cloud-jobs'
+assert not any(json.loads(p.read_text())['state'] in
+               {'starting', 'running', 'cancelling', 'uncertain'} for p in root.glob('*.json')), 'Há trabalho ativo/incerto; não instalar.'
+PY_CHECK
+# Só prossiga após o check passar e conferir a cópia remota/ausência de unidades ativas.
+install -Dm0600 ops/myct_cloud_progress.py "$HOME/.local/bin/myct_cloud_progress.py"
 for helper in myct-cloud myct-archive myct-archive-torrent myct-torrent myct-media myct-media-cleanup; do
     install -Dm0700 "ops/$helper" "$HOME/.local/bin/$helper"
 done
@@ -158,7 +334,7 @@ loginctl show-user "$(id -u)" -p Linger --value
 "$HOME/.local/bin/myct-cloud" snapshot
 ```
 
-Os seis helpers precisam ficar no **mesmo diretório**. `myct-media` também usa
+Os seis helpers e o módulo `myct_cloud_progress.py` precisam ficar no **mesmo diretório**. `myct-media` também usa
 `~/.local/bin/myct-torrent`; por isso instalar somente o novo bridge não basta
 se os complementos estiverem ausentes/desatualizados. Estes arquivos vêm da
 mesma branch atual e preservam o mecanismo de nomeação/hook vigente. Não

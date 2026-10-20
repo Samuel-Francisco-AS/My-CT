@@ -34,8 +34,8 @@ internal fun CloudScreen(model: CloudModel, openFiles: (String) -> Unit, modifie
         if (visible && model.connected) {
             model.refresh()
             while (isActive) {
-                delay(4000)
-                if (model.active || model.tasks.any { it.active }) model.refresh()
+                delay(3000)
+                model.poll()
             }
         }
     }
@@ -64,7 +64,7 @@ internal fun CloudScreen(model: CloudModel, openFiles: (String) -> Unit, modifie
                 ScreenPanel(Modifier.clickable { model.select(item.id) }) {
                     Text(item.name, style = MaterialTheme.typography.titleSmall)
                     Text("${formatCleanupBytes(item.size)} · ${cloudState(item, rpc, task)}", style = MaterialTheme.typography.bodySmall)
-                    Text("Local: ${if (item.local) "presente" else "ausente"} · Drive: ${cloudCopyLabel(item.state)}", style = MaterialTheme.typography.bodySmall)
+                    Text("Local: ${if (item.local) "diretório presente; integridade a conferir" else "ausente"} · Drive: ${cloudCopyLabel(item.state)}", style = MaterialTheme.typography.bodySmall)
                     Text(if (item.restorable) "Restauração disponível (revalida ao iniciar)" else "Restauração indisponível", style = MaterialTheme.typography.labelSmall)
                     Text("Transmission: ${rpc?.state?.label ?: "ausente ou indisponível"}", style = MaterialTheme.typography.bodySmall)
                     Text(if (item.libraryChecked) "Jellyfin: ${item.existingLinks} nomes presentes · ${item.linkedFiles} hardlinks ligados ao pacote"
@@ -122,11 +122,14 @@ internal fun CloudScreen(model: CloudModel, openFiles: (String) -> Unit, modifie
 
 @Composable
 private fun CloudTasks(model: CloudModel) {
+    var cancelling by remember { mutableStateOf<CloudTask?>(null) }
     val recent = model.tasks.take(5)
     if (recent.isNotEmpty()) ScreenPanel {
         val active = recent.firstOrNull { it.active || it.uncertain }
         if (active != null) {
             Text("${active.work.title} · ${active.label}", style = MaterialTheme.typography.titleSmall)
+            CloudTransferProgress(active, model.connected && !model.stale)
+            if (active.canCancel) MyCtTextButton(onClick = { cancelling = active }, enabled = model.connected && !model.busy) { Text("Cancelar transferência…") }
             Text("Executado no Fedora. Pode fechar a tela ou desconectar.", style = MaterialTheme.typography.bodySmall)
         }
         ExpandDetails("Últimas operações") {
@@ -137,11 +140,58 @@ private fun CloudTasks(model: CloudModel) {
                 if (target.isNotBlank()) Text(target, style = MaterialTheme.typography.labelSmall, maxLines = 2)
                 Row(Modifier.fillMaxWidth()) {
                     Text("${task.work.title} · ${task.label}", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                    MyCtTextButton(onClick = { model.viewTask(task) }, enabled = model.connected && !model.busy && !task.active) { Text("Resultado") }
+                    MyCtTextButton(onClick = { model.viewTask(task) }, enabled = model.connected && !model.busy) { Text(if (task.active) "Detalhes / progresso" else "Resultado") }
                 }
+                if (task.id != active?.id) CloudTransferProgress(task, model.connected && !model.stale)
             }
         }
     }
+    cancelling?.let { task ->
+        val current = model.tasks.firstOrNull { it.id == task.id && it.work == task.work }
+        val target = model.entries.firstOrNull { task.work.target in setOf(it.id, it.hash) }?.name
+            ?: model.torrents.firstOrNull { it.hash == task.work.target }?.name
+            ?: task.work.target.substringAfterLast('/')
+        AlertDialog(onDismissRequest = { cancelling = null }, title = { Text("Cancelar transferência?") }, text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(target)
+                Text("Interrompe somente esta transferência no Fedora. Não apaga os arquivos originais nem backup anterior verificado. Pode restar um objeto parcial no Drive ou arquivos de restauração; o motor mantém suas verificações. Não haverá nova tentativa automática.")
+                if (current?.canCancel != true) Text("A operação já terminou ou o cancelamento foi solicitado.")
+            }
+        }, confirmButton = { MyCtTextButton(onClick = { cancelling = null; model.cancel(task) },
+            enabled = model.connected && !model.busy && current?.canCancel == true) { Text("Confirmar cancelamento") } },
+            dismissButton = { MyCtTextButton(onClick = { cancelling = null }) { Text("Continuar transferência") } })
+    }
+}
+
+@Composable
+private fun CloudTransferProgress(task: CloudTask, connected: Boolean) {
+    val progress = task.progress
+    if (progress == null) {
+        if (task.active && task.work.action in setOf("archive", "restore")) {
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+            Text("Telemetria indisponível para esta operação. Tempo estimado indisponível.", style = MaterialTheme.typography.bodySmall)
+        }
+        return
+    }
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(task.active) {
+        while (task.active && isActive) { now = System.currentTimeMillis(); delay(1000) }
+    }
+    val percent = progress.percent?.takeIf { task.state == "succeeded" || (task.active && it < 100) }
+    if (percent != null) LinearProgressIndicator(progress = { (percent / 100).toFloat() }, modifier = Modifier.fillMaxWidth())
+    else if (task.active) LinearProgressIndicator(Modifier.fillMaxWidth())
+    val fraction = percent?.let { String.format(java.util.Locale.forLanguageTag("pt-BR"), "%.1f%%", kotlin.math.floor(it * 10) / 10) }
+        ?: if (task.active && progress.bytesTotal != null && progress.bytesTotal > 0 && progress.bytesDone == progress.bytesTotal)
+            "Transporte finalizado; verificação pendente" else "Porcentagem indisponível"
+    Text(fraction, style = MaterialTheme.typography.bodySmall)
+    val total = progress.bytesTotal?.let { "${formatCleanupBytes(it)} ($it bytes)" } ?: "total desconhecido"
+    Text("${formatCleanupBytes(progress.bytesDone)} (${progress.bytesDone} bytes) / $total", style = MaterialTheme.typography.bodySmall)
+    val liveRate = connected && task.active && !task.cancelRequested && progress.transferring(now)
+    Text(if (liveRate && progress.speed != null) "Velocidade: ${formatCleanupBytes(progress.speed.toLong())}/s"
+        else "Velocidade indisponível", style = MaterialTheme.typography.bodySmall)
+    Text(if (connected && task.active && !task.cancelRequested) progress.estimate(now) else "Tempo estimado indisponível", style = MaterialTheme.typography.bodySmall)
+    if (progress.totalFiles != null && progress.totalFiles > 0) Text("Etapa de transferência ${progress.fileIndex ?: 0}/${progress.totalFiles} (inclui metadados)", style = MaterialTheme.typography.labelSmall)
+    if (task.active && (!connected || !progress.fresh(now))) Text("Último andamento recebido; aguardando atualização.", style = MaterialTheme.typography.labelSmall)
 }
 
 @Composable
@@ -227,7 +277,7 @@ private fun CloudDetail(model: CloudModel, entry: CloudEntry?, torrent: ServerTo
                     Text("Economia garantida: 0 B. Btrfs, snapshots e arquivos abertos podem reter espaço.", style = MaterialTheme.typography.bodySmall)
                     plan.trees.forEach { tree ->
                         DetailValue(if (tree.getString("role") == "original") "Árvore original" else "Árvore restaurada", tree.getString("path"))
-                        Text(if (tree.getBoolean("present")) "Presente · ${if (tree.optBoolean("verified")) "verificada" else "divergente"}" else "Ausente", style = MaterialTheme.typography.bodySmall)
+                        Text(if (tree.getBoolean("present")) "Presente · ${if (!tree.has("verified")) "integridade não confirmada" else if (tree.getBoolean("verified")) "verificada" else "divergente"}" else "Ausente", style = MaterialTheme.typography.bodySmall)
                     }
                     Text("A liberação encerra o seeding e remove a entrada do Transmission e as árvores indicadas.")
                     ExpandDetails("Arquivos atingidos (${plan.paths.size})") { plan.paths.forEach { Text(it, style = MaterialTheme.typography.bodySmall) } }

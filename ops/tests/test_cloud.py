@@ -123,7 +123,7 @@ class CloudTests(unittest.TestCase):
         reply = {'ok': True, 'id': ID, 'state': 'verified', 'verified': ['size', 'md5', 'sha256']}
         with patch.object(cloud, 'invoke', return_value=reply) as invoke:
             cloud.worker(REQUEST); cloud.worker(REQUEST)
-            invoke.assert_called_once_with('torrent', ['restore', ID])
+            invoke.assert_called_once_with('torrent', ['restore', ID], REQUEST)
         row = cloud.load(REQUEST)
         self.assertEqual(row['state'], 'succeeded'); self.assertEqual(row['result'], reply)
 
@@ -194,15 +194,24 @@ class CloudTests(unittest.TestCase):
         bridge = self.root / 'myct-cloud'
         source = SOURCE.read_text().replace("ROOT = Path.home() / '.local/share/myct/cloud-jobs'", 'ROOT = Path(' + repr(str(cloud.ROOT)) + ')')
         bridge.write_text(source)
+        (self.root / 'myct_cloud_progress.py').write_text((SOURCE.parent / 'myct_cloud_progress.py').read_text())
         marker = self.root / 'engine-started'
         engine = self.root / 'myct-archive-torrent'
-        engine.write_text('import json,time\nfrom pathlib import Path\np=Path(' + repr(str(marker)) + ')\nwith p.open("a") as f: f.write("once\\n")\ntime.sleep(2)\nprint(json.dumps({"ok":True,"state":"verified"}))\n')
+        engine.write_text('import json,time,os\nfrom pathlib import Path\nfrom myct_cloud_progress import Progress\np=Path(' + repr(str(marker)) + ')\nwith p.open("a") as f: f.write("once\\n")\nprogress=Progress(Path(' + repr(str(cloud.ROOT)) + '),os.environ["MYCT_CLOUD_JOB"])\nprogress.plan([100]); progress.begin_copy(False)\nprogress.stats(json.dumps({"stats":{"bytes":50,"totalBytes":100,"speed":25,"eta":2}}))\ntime.sleep(2)\nprogress.stats(json.dumps({"stats":{"bytes":100,"totalBytes":100,"speed":25,"eta":0}}))\nprogress.end_copy()\nprint(json.dumps({"ok":True,"state":"verified"}))\n')
         payload = base64.urlsafe_b64encode(json.dumps(self.work()).encode()).decode().rstrip('=')
         try:
             start = subprocess.run([sys.executable, str(bridge), 'start', REQUEST, payload], capture_output=True, text=True, timeout=15)
             self.assertEqual(start.returncode, 0, start.stdout)
             self.assertTrue(json.loads(start.stdout)['ok'])
-            # The delivery process has exited; only the user unit owns the fake work.
+            # The delivery process has exited; a new query observes persistent telemetry.
+            progress_path = cloud.ROOT / (REQUEST + '.progress')
+            deadline = time.monotonic() + 3
+            while time.monotonic() < deadline:
+                current = cloud.run(['task', REQUEST])['task']
+                if current.get('progress', {}).get('bytes_done') == 50: break
+                time.sleep(.02)
+            self.assertEqual(current['progress']['bytes_done'], 50)
+            self.assertEqual(current['progress']['percent'], 50)
             deadline = time.monotonic() + 15
             while time.monotonic() < deadline:
                 row = cloud.load(REQUEST)
@@ -210,6 +219,7 @@ class CloudTests(unittest.TestCase):
                 time.sleep(.05)
             self.assertEqual(row['state'], 'succeeded')
             self.assertEqual(row['result'], {'ok': True, 'state': 'verified'})
+            self.assertEqual(cloud.run(['task', REQUEST])['task']['progress']['phase'], 'done')
             repeat = subprocess.run([sys.executable, str(bridge), 'start', REQUEST, payload], capture_output=True, text=True, timeout=15)
             self.assertTrue(json.loads(repeat.stdout)['duplicate'])
             self.assertEqual(marker.read_text(), 'once\n')

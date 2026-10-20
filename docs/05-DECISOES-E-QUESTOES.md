@@ -442,3 +442,18 @@ banco/API novo, serviço global ou dependência Android. A alternativa de espera
 hashing/transferência no exec de 25 s não atende à continuidade pedida.
 Prévia/token e consentimentos Jellyfin continuam sob decisão final da C1B-2.
 [Relatório, instalação e aceite único no Moto](MYCT-C1C-RELATORIO.md).
+
+
+### 20/10/2026 — C1C: progresso real, polling silencioso e cancelamento de cópias
+
+Por solicitação expressa do proprietário nos dois comentários da Luna da PR #50,
+a mesma candidata incorpora telemetria Rclone opt-in e recibo numérico por job,
+separado do catálogo. Hashing/validação não viram bytes transmitidos; transporte
+concluído não equivale a arquivamento verificado. Polling lê apenas a tarefa
+ativa e não alterna `busy` nem relê catálogos bloqueados. Cancelamento confirmado
+apenas de `archive`/`restore`, com identidade da unidade/processo e encerramento
+do cgroup; `cancel_requested` não implica `cancelled`, e sucesso concorrente é
+preservado. Resultados ambíguos continuam bloqueados por `uncertain`, sem retry.
+Não alterar helpers instalados nem o upload real de ~24,4 GiB durante sua execução.
+Instalação e sessão Moto ficam após conclusão/conferência remota desse upload;
+sem nova PR, subfase ou merge. [Contrato, evidências e retomada](MYCT-C1C-RELATORIO.md).

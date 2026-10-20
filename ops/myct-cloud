@@ -21,8 +21,10 @@ import tempfile
 import time
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+from myct_cloud_progress import Progress, read_progress
 ROOT = Path.home() / '.local/share/myct/cloud-jobs'
-ACTIVE = {'starting', 'running', 'uncertain'}
+ACTIVE = {'starting', 'running', 'cancelling', 'uncertain'}
 ID = re.compile('[0-9a-f]{32}')
 ARCHIVE = re.compile('[0-9a-f]{64}')
 TOKEN = re.compile('[0-9]{1,12}-[0-9a-f]{64}')
@@ -51,6 +53,9 @@ def load(identity):
     need(ID.fullmatch(identity))
     path = ROOT / (identity + '.json')
     need(not path.is_symlink(), 'JOURNAL', 'Diário redirecionado; confira manualmente.')
+    info = path.lstat()
+    need(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid() and
+         not info.st_mode & 0o077 and info.st_nlink == 1, 'PERMISSIONS', 'Recibo deve ser privado e pertencer ao usuário.')
     return json.loads(path.read_text())
 
 
@@ -121,13 +126,25 @@ def validate(work):
     return work
 
 
-def invoke(kind, args):
+def invoke(kind, args, job_id=None):
     helper = HERE / ('myct-archive-torrent' if kind == 'torrent' else 'myct-archive' if kind == 'file' else 'myct-torrent')
     if not helper.is_file() or helper.is_symlink():
         return {'ok': False, 'error': {'code': 'DEPENDENCIES', 'message': 'Instale todos os helpers complementares no mesmo diretório.'}}
+    env = {k: v for k, v in os.environ.items() if k != 'MYCT_CLOUD_JOB'}
+    if job_id is not None:
+        env['MYCT_CLOUD_JOB'] = job_id
     # Disk spool avoids unbounded capture of large manifests in RAM. Nothing is logged.
     with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
-        status = subprocess.call([sys.executable, str(helper), *args], stdout=output, stderr=errors)
+        command = [sys.executable, str(helper), *args]
+        if job_id is None:
+            status = subprocess.call(command, stdout=output, stderr=errors, env=env)
+        else:
+            # Serialize only spawn with cancellation; never hold delivery.lock during a copy.
+            with locked():
+                if load(job_id).get('cancel_requested'):
+                    return {'ok': False, 'error': {'code': 'INTERRUPTED', 'message': 'Cancelado antes da cópia.'}}
+                process = subprocess.Popen(command, stdout=output, stderr=errors, env=env)
+            status = process.wait()
         output.seek(0)
         raw = output.read(LIMIT + 1)
     if len(raw) <= LIMIT:
@@ -145,7 +162,7 @@ def invoke(kind, args):
 
 
 def reconcile(row):
-    if row['state'] not in ('starting', 'running'):
+    if row['state'] not in ('starting', 'running', 'cancelling'):
         return row
     # A newly accepted start may not yet have reached systemd-run. Never relaunch it.
     if row['state'] == 'starting' and time.time() - row['created'] < 30:
@@ -157,8 +174,12 @@ def reconcile(row):
     # Reread after querying systemd: the worker could have just committed its result.
     with locked():
         fresh = load(row['id'])
-        if fresh['state'] in ('starting', 'running'):
-            fresh.update(state='uncertain', finished=time.time())
+        if fresh['state'] in ('starting', 'running', 'cancelling'):
+            # A collected/inactive unit plus the engine's interruption receipt is proof.
+            stopped = check.stdout.strip() == 'inactive'
+            cancelled = (fresh['state'] == 'cancelling' and stopped and
+                         fresh.get('result', {}).get('error', {}).get('code') == 'INTERRUPTED')
+            fresh.update(state='cancelled' if cancelled else 'uncertain', finished=time.time())
             save(fresh)
         return fresh
 
@@ -169,7 +190,13 @@ def rows():
 
 
 def summary(row):
-    return {k: row[k] for k in ('id', 'work', 'state', 'created', 'finished') if k in row}
+    result = {k: row[k] for k in ('id', 'work', 'state', 'created', 'finished', 'cancel_supported', 'cancel_requested') if k in row}
+    return with_progress(result)
+
+
+def with_progress(row):
+    progress = read_progress(ROOT, row['id'])
+    return {**row, **({'progress': progress} if progress is not None else {})}
 
 
 def live_library(row):
@@ -254,12 +281,14 @@ def start(identity, work):
                                 capture_output=True, text=True, timeout=5)
         need(linger.returncode == 0 and linger.stdout.strip() == 'yes', 'LINGER',
              'Persistência de usuário indisponível. O proprietário deve conferir linger no Fedora.')
-        row = {'id': identity, 'work': work, 'state': 'starting', 'created': time.time()}
+        row = {'id': identity, 'work': work, 'state': 'starting', 'created': time.time(),
+               'bridge_version': 2, 'cancel_supported': work['args'][0] in ('archive', 'restore')}
         save(row)  # Durable receipt before launch: a lost SSH acknowledgment cannot duplicate work.
         try:
             run = subprocess.run(['systemd-run', '--user', '--quiet', '--collect',
                                   '--unit=myct-cloud-' + identity, '--property=Type=exec',
                                   '--property=UMask=0077', '--property=Nice=10',
+                                  '--property=KillMode=control-group', '--property=TimeoutStopSec=15s',
                                   '--property=StandardOutput=null', '--property=StandardError=null',
                                   '--', sys.executable, str(HERE / 'myct-cloud'), '_work', identity],
                                  capture_output=True, timeout=8)
@@ -270,21 +299,83 @@ def start(identity, work):
         return {'ok': True, 'task': summary(row), 'duplicate': False}
 
 
-def worker(identity):
+def unit(identity):
+    need(ID.fullmatch(identity))
+    return 'myct-cloud-' + identity + '.service'
+
+
+def cancel(identity):
+    need(ID.fullmatch(identity))
     with locked():
         row = load(identity)
-        # Even a manually repeated internal invocation must never repeat a mutation.
+        validate(row['work'])
+        need(row.get('bridge_version') == 2 and row.get('cancel_supported') is True and
+             row['work']['args'][0] in ('archive', 'restore'), 'CANCEL_UNSUPPORTED',
+             'Este trabalho não oferece cancelamento seguro. Nenhum processo foi interrompido.')
+        if row['state'] not in ('starting', 'running') or row.get('cancel_requested'):
+            return {'ok': True, 'task': summary(row)}
+        if row['state'] == 'running':
+            check = subprocess.run(['systemctl', '--user', 'show', unit(identity),
+                                    '--property=Id', '--property=MainPID', '--property=KillMode'],
+                                   capture_output=True, text=True, timeout=5)
+            fields = dict(line.split('=', 1) for line in check.stdout.splitlines() if '=' in line)
+            pid = row.get('worker_pid')
+            expected = [sys.executable, str(HERE / 'myct-cloud'), '_work', identity]
+            try:
+                command = Path('/proc') / str(pid) / 'cmdline'
+                actual = command.read_bytes().rstrip(b'\0').decode().split('\0')
+            except (OSError, UnicodeError):
+                actual = []
+            if not (check.returncode == 0 and fields.get('Id') == unit(identity) and
+                    type(pid) is int and pid > 0 and fields.get('MainPID') == str(pid) and
+                    fields.get('KillMode') == 'control-group' and actual == expected):
+                row.update(state='uncertain', finished=time.time()); save(row)
+                raise Failure('CANCEL_UNCERTAIN', 'Unidade não confirmada. Consulte o resultado antes de repetir.')
+        row.update(cancel_requested=True, cancel_requested_at=time.time())
+        save(row)  # Durable explicit intent, before any signal. No repeated stop on replay.
+        if row['state'] == 'running':
+            try:
+                stopped = subprocess.run(['systemctl', '--user', 'stop', '--no-block', unit(identity)],
+                                         capture_output=True, timeout=5)
+                if stopped.returncode:
+                    row.update(state='uncertain', finished=time.time()); save(row)
+            except (OSError, subprocess.TimeoutExpired):
+                row.update(state='uncertain', finished=time.time()); save(row)
+        # A starting worker consumes the durable flag without invoking the engine.
+        return {'ok': True, 'task': summary(row)}
+
+
+def worker(identity):
+    # systemd stop signals this worker AND its cgroup. Keep the worker alive to
+    # collect the engine's sanitized interruption result; systemd enforces 15 s.
+    signal.signal(signal.SIGTERM, lambda *_: None)
+    with locked():
+        row = load(identity)
         if row['state'] != 'starting':
             return
         validate(row['work'])
-        row['state'] = 'running'; save(row)
+        row.update(state='running', worker_pid=os.getpid()); save(row)
+    progress = Progress(ROOT, identity)
+    progress.phase('preparing')
     try:
-        result = invoke(row['work']['kind'], row['work']['args'])
-        row.update(state='succeeded' if result.get('ok') else 'failed', result=result, finished=time.time())
+        with locked():
+            requested = load(identity).get('cancel_requested')
+        result = ({'ok': False, 'error': {'code': 'INTERRUPTED', 'message': 'Cancelado antes de iniciar a cópia.'}}
+                  if requested else invoke(row['work']['kind'], row['work']['args'], identity))
+        state = 'succeeded' if result.get('ok') else 'failed'
+        with locked():
+            row = load(identity)  # Preserve a cancel intent committed while the engine ran.
+            if row.get('cancel_requested') and result.get('error', {}).get('code') == 'INTERRUPTED':
+                state = 'cancelling'
+            elif row.get('cancel_requested') and result.get('error', {}).get('code') == 'RESPONSE':
+                state = 'uncertain'
+            row.update(state=state, result=result, finished=time.time()); save(row)
     except Exception:
-        row.update(state='uncertain', finished=time.time())
-    with locked():
-        save(row)
+        with locked():
+            row = load(identity)
+            row.update(state='uncertain', finished=time.time()); save(row)
+    if row['state'] in ('succeeded', 'failed', 'cancelling'):
+        progress.finish(row['state'] == 'succeeded')
 
 
 def run(args):
@@ -292,14 +383,16 @@ def run(args):
     if args == ['snapshot']:
         return snapshot()
     if len(args) == 2 and args[0] == 'task':
-        return {'ok': True, 'task': reconcile(load(args[1]))}
+        return {'ok': True, 'task': with_progress(reconcile(load(args[1])))}
+    if len(args) == 2 and args[0] == 'cancel':
+        return cancel(args[1])
     if len(args) == 3 and args[0] == 'start':
         need(len(args[2]) <= 200000 and re.fullmatch('[A-Za-z0-9_-]+', args[2]))
         work = json.loads(base64.urlsafe_b64decode(args[2] + '=' * (-len(args[2]) % 4)))
         return start(args[1], work)
     if len(args) == 2 and args[0] == '_work':
         worker(args[1]); return {'ok': True}
-    raise Failure('USAGE', 'Use snapshot, task ID ou start ID PEDIDO_BASE64URL.')
+    raise Failure('USAGE', 'Use snapshot, task ID, cancel ID ou start ID PEDIDO_BASE64URL.')
 
 
 def main():

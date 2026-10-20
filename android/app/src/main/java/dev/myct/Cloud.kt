@@ -61,11 +61,13 @@ internal data class CloudWork(val kind: String, val args: List<String>) {
 internal sealed interface CloudQuery {
     data object Snapshot : CloudQuery
     data class Task(val id: String) : CloudQuery
+    data class Cancel(val id: String) : CloudQuery
     data class Start(val id: String, val work: CloudWork) : CloudQuery
 }
 internal fun cloudCommand(query: CloudQuery): String {
     val args = when (query) {
         CloudQuery.Snapshot -> "snapshot"
+        is CloudQuery.Cancel -> { require(cloudRequestId.matches(query.id)); "cancel ${query.id}" }
         is CloudQuery.Task -> { require(cloudRequestId.matches(query.id)); "task ${query.id}" }
         is CloudQuery.Start -> {
             require(cloudRequestId.matches(query.id))
@@ -82,7 +84,11 @@ internal fun cloudError(error: JSONObject?): String {
     val code = error?.optString("code").orEmpty()
     val hint = when (code) {
         "DEPENDENCIES" -> "Helper ausente. Instale myct-cloud e seus complementos no Fedora."
-        "BUSY" -> "O motor está ocupado. Aguarde e atualize."
+        "BUSY" -> "Transferência em andamento; catálogo temporariamente ocupado"
+        "CANCEL_UNSUPPORTED" -> "Este trabalho não oferece cancelamento seguro com os helpers atuais."
+        "CANCEL_UNCERTAIN" -> "Cancelamento não confirmado. Consulte o resultado; nada será repetido automaticamente."
+        "LOCAL_DIVERGENCE" -> "Arquivos locais não correspondem ao pacote arquivado; liberação bloqueada"
+        "NO_LOCAL_DATA" -> "Nenhuma árvore local íntegra disponível para liberação"
         "STALE_PREVIEW", "CONFIRMATION", "LIBRARY_CONFIRMATION" -> "A prévia expirou ou mudou. Consulte espaço novamente."
         "RCLONE_NOT_FOUND" -> "Rclone indisponível no Fedora."
         "AUTH" -> "Drive indisponível. Confira a autorização privada do Rclone no Fedora."
@@ -127,18 +133,63 @@ internal fun parseCloudEntries(json: JSONObject, kind: String): List<CloudEntry>
         require(it.links.all(::validMediaPath))
     }
 }
-internal data class CloudTask(val id: String, val work: CloudWork, val state: String) {
-    val active get() = state in setOf("starting", "running")
+internal data class CloudProgress(val phase: String, val bytesDone: Long, val bytesTotal: Long?,
+    val percent: Double?, val speed: Double?, val eta: Double?, val updatedAt: Double,
+    val fileIndex: Int?, val totalFiles: Int?) {
+    val label get() = when (phase) {
+        "uploading" -> "Enviando"; "downloading" -> "Baixando"; "hashing" -> "Calculando hashes"
+        "verifying" -> "Conferindo integridade"; "done" -> "Concluído"; "failed" -> "Falhou"
+        else -> "Preparando"
+    }
+    fun fresh(now: Long) = now / 1000.0 - updatedAt in -5.0..8.0
+    fun transferring(now: Long) = phase in setOf("uploading", "downloading") && fresh(now)
+    fun estimate(now: Long): String {
+        if (!transferring(now) || eta == null || speed == null || speed <= 0) return "Tempo estimado indisponível"
+        val seconds = kotlin.math.ceil(eta).toLong()
+        val duration = when {
+            seconds >= 3600 -> "${seconds / 3600} h ${(seconds % 3600) / 60} min"
+            seconds >= 60 -> "${seconds / 60} min ${seconds % 60} s"
+            else -> "$seconds s"
+        }
+        return "Tempo estimado: $duration"
+    }
+}
+internal fun parseCloudProgress(row: JSONObject): CloudProgress? = try {
+    fun value(key: String): Double? {
+        if (row.isNull(key)) return null
+        val number = row.get(key) as? Number ?: throw IllegalArgumentException()
+        return number.toDouble().also { require(it.isFinite() && it >= 0 && it <= 9007199254740991.0) }
+    }
+    fun integer(key: String): Long? = value(key)?.also { require(it % 1 == 0.0) }?.toLong()
+    val phase = row.getString("phase")
+    require(phase in setOf("preparing", "hashing", "uploading", "downloading", "verifying", "done", "failed"))
+    val done = requireNotNull(integer("bytes_done"))
+    val total = integer("bytes_total")
+    val percent = value("percent")
+    require(total == null || done <= total)
+    require(percent == null || (total != null && total > 0 && percent <= 100 && (percent < 100 || phase == "done")))
+    CloudProgress(phase, done, total, percent, value("speed_bps"), value("eta_seconds"),
+        requireNotNull(value("updated_at")), integer("current_file_index")?.also { require(it <= Int.MAX_VALUE) }?.toInt(),
+        integer("total_files")?.also { require(it <= Int.MAX_VALUE) }?.toInt())
+} catch (_: Exception) { null }
+
+internal data class CloudTask(val id: String, val work: CloudWork, val state: String, val progress: CloudProgress? = null,
+    val cancelSupported: Boolean = false, val cancelRequested: Boolean = false) {
+    val canCancel get() = active && state != "cancelling" && !cancelRequested && cancelSupported && work.action in setOf("archive", "restore")
+    val active get() = state in setOf("starting", "running", "cancelling")
     val uncertain get() = state == "uncertain"
-    val label get() = when (state) {
-        "starting", "running" -> "Em andamento"
-        "succeeded" -> "Concluído"; "failed" -> "Erro"; else -> "Resultado incerto — conferir no Fedora"
+    val label get() = if (cancelRequested && active) "Cancelamento solicitado" else when (state) {
+        "cancelling" -> "Confirmando cancelamento"
+        "cancelled" -> "Cancelada"
+        "starting", "running" -> progress?.label?.takeUnless { progress?.phase in setOf("done", "failed") } ?: "Em andamento"
+        "succeeded" -> "Concluído"; "failed" -> "Falhou"; else -> "Resultado incerto — conferir no Fedora"
     }
 }
 internal fun parseCloudTask(row: JSONObject): CloudTask {
     val work = row.getJSONObject("work")
-    return CloudTask(row.getString("id"), CloudWork(work.getString("kind"), work.cloudStrings("args")), row.getString("state")).also {
-        require(cloudRequestId.matches(it.id) && it.state in setOf("starting", "running", "succeeded", "failed", "uncertain"))
+    return CloudTask(row.getString("id"), CloudWork(work.getString("kind"), work.cloudStrings("args")), row.getString("state"),
+        row.optJSONObject("progress")?.let(::parseCloudProgress), row.optBoolean("cancel_supported"), row.optBoolean("cancel_requested")).also {
+        require(cloudRequestId.matches(it.id) && it.state in setOf("starting", "running", "cancelling", "cancelled", "succeeded", "failed", "uncertain"))
         it.work.json()
     }
 }
@@ -160,7 +211,7 @@ internal fun parseCloudSpace(row: JSONObject, now: Long): CloudSpace {
     return CloudSpace(row.getString("id"), token, row.cloudStrings("remove_library"), row.getBoolean("can_release"),
         row.optLong("physical_bytes"), row.optLong("reclaim_estimate_bytes"), row.optLong("retained_known_bytes"),
         row.cloudObjects("remove_paths").map { it.getString("path") }, row.cloudObjects("trees"), row.cloudObjects("library"),
-        row.cloudStrings("blockers"), minOf(now + ttl * 1000, token.substringBefore('-').toLong() * 1000 + 600000)).also {
+        cloudBlockers(row.cloudStrings("blockers")), minOf(now + ttl * 1000, token.substringBefore('-').toLong() * 1000 + 600000)).also {
         require(cloudId.matches(it.id) && cloudToken.matches(token) && it.physical >= 0 && it.estimate >= 0 && it.retained >= 0)
         require(it.selected.all(::validMediaPath) && it.paths.all(::cloudPath))
         require(row.getString("confirmation") == token && (it.selected.isEmpty() || row.getString("library_confirmation") == token))
@@ -181,3 +232,10 @@ internal fun cloudState(entry: CloudEntry, torrent: ServerTorrent?, task: CloudT
     entry.state == "verified" -> "Arquivado"
     else -> "Local"
 }
+
+internal fun cloudBlockers(codes: List<String>): List<String> = codes
+    .filterNot { it == "NO_LOCAL_DATA" && "LOCAL_DIVERGENCE" in codes }
+    .map { code -> when (code) {
+        "LOCAL_DIVERGENCE", "NO_LOCAL_DATA" -> cloudError(JSONObject().put("code", code)).substringBefore(" ($code)")
+        else -> code
+    } }

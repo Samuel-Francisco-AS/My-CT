@@ -479,6 +479,7 @@ def media_lock():
 
 
 def archive(key, remote, data, rpc):
+    common.progress.phase('hashing')
     inventory = inspect(key, rpc)
     need(inventory['can_archive'], 'BLOCKED', 'Arquivamento bloqueado; consulte inspect para os impedimentos.')
     base = Path(inventory['download_dir'])
@@ -505,6 +506,7 @@ def archive(key, remote, data, rpc):
         need(isinstance(quota, dict), 'RCLONE_RESPONSE', 'Resposta de cota inválida.')
         common.rclone('mkdir', remote + 'My-CT-Archive/torrents')
         found = remote_objects(row, partial=True, new=not row['remote_reserved'])
+        common.progress.plan(value['size'] for path, value in objects(row).items() if path not in found)
         remaining = sum(value['size'] for path, value in objects(row).items() if path not in found)
         if 'free' in quota:
             need(type(quota['free']) is int and quota['free'] >= remaining,
@@ -602,6 +604,8 @@ def restore(row, data):
         root.mkdir(parents=True, exist_ok=True, mode=0o700)
         common.safe_path(target)
         reused = target.exists()
+        common.progress.plan([] if reused else [v['size'] for v in objects(row).values()])
+        common.progress.phase('verifying')
         if not reused:
             required = sum(v['size'] for v in objects(row).values()) + 4096 * (len(mf['files']) + len(mf['directories']) + 4)
             need(shutil.disk_usage(root).free >= required, 'LOCAL_SPACE', 'SSD sem espaço para o pacote completo e metadados.')
@@ -642,6 +646,7 @@ def restore(row, data):
 
 
 def recover(row, data, rpc, resume=False, timeout=600):
+    common.progress.phase('verifying')
     release_resolved(row, data)
     key, mf = row['manifest']['infohash'], row['manifest']
     raw = local_bundle_verified(row)
@@ -1181,7 +1186,10 @@ def main():
                   'error': {'code': error.code, 'message': str(error)}}
         if hasattr(error, 'operation'):
             result['operation'] = error.operation
-    except (OSError, ValueError, KeyError, TypeError, RuntimeError, media.MediaError, torrent.Failure, KeyboardInterrupt):
+    except KeyboardInterrupt:
+        result = {'ok': False, 'state': 'failed', 'error': {'code': 'INTERRUPTED',
+                  'message': 'Operação interrompida; preserve os dados e confira o catálogo antes de repetir.'}}
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, media.MediaError, torrent.Failure):
         result = {'ok': False, 'state': 'failed', 'error': {'code': 'LOCAL_OR_INTERRUPTED',
                   'message': 'Operação não confirmada. Preserve os dados e consulte catálogo/Transmission antes de repetir.'}}
     print(json.dumps(result, ensure_ascii=True))

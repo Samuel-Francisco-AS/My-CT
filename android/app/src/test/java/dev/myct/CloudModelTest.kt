@@ -23,6 +23,7 @@ class CloudModelTest {
                     serverTask = cloudTaskJson(query.work, "running").put("id", query.id)
                     JSONObject().put("ok", true).put("task", serverTask).toString()
                 }
+                is CloudQuery.Cancel -> error("Unexpected cancellation")
                 is CloudQuery.Task -> JSONObject().put("ok", true).put("task", serverTask).toString()
             }
         }
@@ -48,6 +49,7 @@ class CloudModelTest {
             val starts = java.util.concurrent.CopyOnWriteArrayList<CloudQuery.Start>()
             val model = CloudModel(scope, { now }) { _, query -> when (query) {
                 CloudQuery.Snapshot -> cloudSnapshot(task)
+                is CloudQuery.Cancel -> error("Unexpected cancellation")
                 is CloudQuery.Task -> JSONObject().put("ok", true).put("task", task).toString()
                 is CloudQuery.Start -> { starts += query; JSONObject().put("ok", true).put("task", cloudTaskJson(query.work, "running").put("id", query.id)).toString() }
             } }
@@ -101,6 +103,7 @@ class CloudModelTest {
         var catalogOk = false
         val model = CloudModel(scope, { CLOUD_NOW }) { _, query -> when (query) {
             CloudQuery.Snapshot -> cloudSnapshot(task, catalogOk = catalogOk)
+            is CloudQuery.Cancel -> error("Unexpected cancellation")
             is CloudQuery.Task -> JSONObject().put("ok", true).put("task", task).toString()
             else -> error("Mutation must stay disabled")
         } }
@@ -137,6 +140,7 @@ class CloudModelTest {
         val task = cloudTaskJson(work, result = cloudPlan())
         val model = CloudModel(scope, { CLOUD_NOW }) { _, query -> when (query) {
             CloudQuery.Snapshot -> cloudSnapshot(task)
+            is CloudQuery.Cancel -> error("Unexpected cancellation")
             is CloudQuery.Task -> JSONObject().put("ok", true).put("task", task).toString()
             is CloudQuery.Start -> { starts++; error("Invalid request must not reach SSH") }
         } }
