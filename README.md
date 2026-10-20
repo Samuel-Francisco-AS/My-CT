@@ -1,6 +1,6 @@
 # My-CT
 
-**MYCT-C1C ACEITA FUNCIONALMENTE NO MOTO G06 (20/10/2026):** Nuvem em
+**MYCT-C1C ACEITA E INTEGRADA À `main` (20/10/2026), [PR #50 MERGED](https://github.com/Samuel-Francisco-AS/My-CT/pull/50), merge `677051c23bdd427a3abcb4fbc79c09f4e1883c4f`:** Nuvem em
 **Downloads → Mídia → Armazenamento**, com arquivo/restore,
 barra de progresso real (%/bytes/taxa/ETA), polling sem piscadas,
 cancelamento guiado de novas cópias, liberação local e trabalhos persistentes
