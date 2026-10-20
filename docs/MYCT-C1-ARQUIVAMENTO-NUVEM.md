@@ -132,3 +132,40 @@ Investigar **Rclone mount + cache local** apenas se houver benefício. Bibliotec
 - [My-CT Media — gerenciamento de armazenamento](MYCT-MEDIA-STORAGE-CLEANUP.md)
 
 **Fechamento C1B-1 (19/10/2026):** Aprovados `inspect`, `archive`, `restore` e `recover` pausado no Fedora/Google Drive/Transmission, com verificação de peças e `seeding_ready:true`, `rpc_status:0`. Sem teste de `--resume`, peers/upload ou liberação de SSD. A biblioteca Jellyfin permaneceu intacta e o torrent terminou apontando para a cópia restaurada, pausado. [Detalhes e evidências](MYCT-C1B-1-RELATORIO.md). C1B-2 e C1C pendentes.
+
+
+
+## MYCT-C1B-2 — entrega unificada: liberar espaço e recuperar biblioteca/seeding
+
+**Decisão do proprietário (19/10/2026):** não dividir a C1B-2 em subetapas 2A/2B/2C. **Uma única branch, uma PR e um fechamento funcional** deverão entregar os componentes abaixo de ponta a ponta. Desenvolvimento, testes simulados, revisão e aceite físico podem ocorrer em sequência dentro da mesma PR, mas não são fases ou PRs separadas.
+
+**Dependência:** C1B-1 integrada à `main` pela [PR #48](https://github.com/Samuel-Francisco-AS/My-CT/pull/48), com arquivamento/restore real e verificação de peças Transmission aceitos; retomada efetiva do seeding ainda não testada. [Relatório](MYCT-C1B-1-RELATORIO.md). C1C Android permanece posterior.
+
+### Resultado único exigido
+
+1. **Inventário e prévia sem efeitos colaterais:** por `archive ID`/infohash, mostrar se os objetos estão verificados no Drive, estado do catálogo e bundle local, situação RPC, árvores originais/restauradas, todos os arquivos e extras, vínculo do Jellyfin, hardlinks por `st_dev/st_ino/st_nlink`, outros links detectáveis, espaço ocupado e **estimativa conservadora de bytes físicos liberáveis**. Identificar claramente bytes ainda retidos por biblioteca/outros nomes, bytes de segunda cópia e impedimentos. Tamanho lógico não equivale a economia real.
+2. **Liberação opcional e guiada:** prévia com fingerprint/identificador efêmero do estado, lista exata de caminhos/efeitos, verificação recente dos objetos remotos (size+MD5) e da integridade do manifesto/metainfo. Aplicar apenas após **confirmação explícita e separada**, com revalidação completa sob locks dos helpers e estado Transmission antes de qualquer mutação. Preservar o Drive, catálogo e `.torrent` necessários à restauração. Não apagar seletivamente arquivos de torrent ainda em uso.
+3. **Jellyfin/hardlinks:** por padrão **preservar links e mídias existentes**; se o usuário optar por liberar também o inode de conteúdo vinculado à biblioteca, mostrar com exatidão o impacto e exigir consentimento específico por todos os links afetados. Nunca remover, trocar ou recriar links cegamente. Se não for possível provar que um inode será realmente liberado, informar `desconhecido/0 garantido`, não anunciar economia fictícia. Links externos não identificáveis ou compartilhamento fora dos diretórios conhecidos devem bloquear a remoção destrutiva do inode.
+4. **Restauração depois da liberação:** usar C1B-1 para recuperar novamente a árvore integral, metainfo e hash/peças; reencontrar ou reinserir entrada no Transmission **pausada** e verificar todos os dados; reconstruir vínculos Jellyfin somente quando ausentes e expressamente solicitados, via mecanismo existente `myct-media.add_one` e estado de mídia consistente. Destino ocupado/divergente deve bloquear, não sobrescrever.
+5. **Retomada de seeding:** expor ação **explícita**, separada, para verificar e iniciar compartilhamento somente depois de `torrent_verify` completo/observado, RPC 100% sem unchecked/erro e fonte correta. Demonstrar em fixture pública/redistribuível sem download de peers; separar claramente `seeding_ready`, status RPC efetivamente observado e existência eventual de peers/tráfego. Não exigir peers para provar a prontidão, nem afirmar upload sem evidência.
+
+### Contrato de segurança e simplicidade
+
+- **Somente uma implementação integrada C1B-2**: aproveitar `ops/myct-archive-torrent`, `ops/myct-media`, `ops/myct-media-cleanup`, `ops/myct-torrent`, Rclone e RPC existentes. Preferir subcomandos nesses helpers ou um adaptador mínimo; sem novo backend, banco, daemon, timer, dependência externa ou mudanças Android/Google OAuth.
+- **Uma única PR draft** com código, testes simulados, documentação e relatório `docs/MYCT-C1B-2-RELATORIO.md`. Não publicar PRs intermediárias. Não usar nomenclatura 2A/2B/2C.
+- Reutilizar proteções existentes de path/symlink, RPC, locks, fingerprint, naming, Media, Rclone e catálogos. Não supor que `myct-media-cleanup.apply` é seguro automaticamente em um torrent restaurado: ele pode chamar `torrent_remove(delete_local_data=true)` e remover links, e a C1B-1 pode ter redirecionado `download_dir` para uma **segunda árvore**, enquanto o original ainda existe. Verificar cada alvo real; não apagar árvore alheia ou assumir economia total.
+- Verificação prévia do Drive não é backup independente nem garante imutabilidade futura. Bloquear em caso de OAuth/rede/cota, hash ausente, arquivo mutável, metainfo/catálogo perdido, cópia remota incompleta/divergente, RPC incerto, links externos ou ambiente não suportado.
+- Falha parcial de operação destrutiva pode não ser reversível: registrar estado e caminhos remanescentes, preservar catálogo, **não repetir RPC ambíguo** e exigir nova prévia/manual se incerto.
+- **Codex: sem operações reais em torrents, mídia, Rclone ou serviços**, sem instalar helpers. Testes somente mocks e diretórios temporários próprios. Os testes reais sobre fixture descartável serão conduzidos pelo proprietário **depois da auditoria da Luna e de autorização específica para cada ação destrutiva**.
+- Preservar **o teste C1B-1 ainda no Fedora**: entrada torrent pausada apontando para a cópia restaurada, original e hardlink Jellyfin presentes, cópia no Drive e catálogo privado. **Não usar nem limpar esse acervo durante implementação/testes**.
+- Somente trabalhar em torrents e dados cuja preservação e eventual redistribuição sejam autorizadas. Não inserir materiais privados, metainfo de tracker, tokens ou caminhos com secrets em PR/logs públicos.
+
+### Critérios de aceite da única PR
+
+- Com mocks/fixtures: cenário de torrent multifile com extras, hardlinks dentro/fora da biblioteca, original + cópia restaurada com inodes distintos, torrent removido/reimportado, estado RPC pausado/ativo, download incompleto, armazenamento remoto divergente, destino ocupado, reentrada e crash/timeout.
+- Demonstrar prévia correta de bytes **efetivamente liberáveis** versus bytes retidos por links, sem alterações no modo de consulta; bloquear casos sem garantia de segurança; fluxo explícito de confirmação não aceitar preview obsoleto.
+- Após autorização real: enviar fixture permitida ao Drive, verificar, liberar somente após confirmação, observar `df`/inodes e integridade da biblioteca, restaurar integralmente, reconstruir link solicitado sem sobrescrever, executar verificação Transmission e retomar explicitamente, sem redownload. **Não apagar dados pessoais/de mídia preexistentes como cobaias.**
+- C1A e C1B-1 não podem regredir; testes de Media/Torrent intactos. Registrar resultados reais separadamente de testes simulados.
+- Após PR draft, **parar e aguardar revisão da Luna e aceite do proprietário**. Merge, release/instalação e limpeza de branch ocorrem apenas no fechamento autorizado. Issue #46 permanece aberta para C1C.
+
+**Registro remoto:** esta definição de escopo será acompanhada na [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46). A branch `gh-pages` e o [guia de infraestrutura](MYCT-INFRA-GOOGLE-CLOUD-DRIVE-OAUTH-PAGES.md) permanecem intocados.
