@@ -1,7 +1,7 @@
 # MYCT-S1D — Acesso às fontes e inclusão de arquivos .torrent
 
 **Planejamento acordado:** 20/10/2026.
-**Status:** candidata implementada; testes automatizados aprovados; **aceite físico e inclusão real pendentes**.
+**Status:** MYCT-S1D 0.9.2/code 43 implementada; testes automatizados aprovados e **ambos os fluxos centrais aceitos fisicamente no Moto G06**; em 20/10/2026, o proprietário **autorizou expressamente o fechamento e merge da PR #52**. Este registro precede a execução do merge.
 **Base confirmada:** `main` commit `382cb7d2faf7ff16472fe109976dfcbb47f246f9`, após PR #50 (C1C/nuvem). Versão Android atual no repositório: `0.9.1-c1c-rc2`, **versionCode 42**, pacote `dev.myct`.
 **Branch:** `myct-s1d-torrent-links` (usar o único checkout local `~/Projetos/My-CT`); **issue:** [#51](https://github.com/Samuel-Francisco-AS/My-CT/issues/51); **PR de implementação:** [#52](https://github.com/Samuel-Francisco-AS/My-CT/pull/52), draft/sem merge até aceite Moto G06.
 **Relacionado:** [MYCT-S1/S2](MYCT-S1-BUSCA-PROWLARR-BITMAGNET.md); MYCT-S1A/B/C já concluídas. **MYCT-S2/Bitmagnet** é opcional, não iniciada.
@@ -263,3 +263,12 @@ Retomada: branch `myct-s1d-torrent-links`, PR #52 draft; instalar helpers soment
 **Ainda não verificado fisicamente nesta conversa:** preservação exata da posição de rolagem após retornar do navegador, duplo toque/duplicata, cancelamento da espera, reconexão, erro de fonte e regressão completa em serviços não relacionados. Não registrar esses cenários como PASS físico. A captura demonstra progresso e peers no instante observado, não conclusão futura do download.
 
 **Estado:** aceite físico **dos dois fluxos principais** confirmado pelo proprietário. **PR #52 permanece draft e sem merge** aguardando instrução explícita para fechamento padrão. Nenhum download foi iniciado pela assistente; toda inclusão foi acionada manualmente pelo proprietário. MYCT-S2/Bitmagnet permanece fora desta etapa.
+
+
+## MYCT-S1D — Autorização de fechamento (20/10/2026)
+
+O proprietário declarou **“Está aprovada, Luna, pode fazer o fechamento, por favor”**, autorizando a integração da implementação S1D na `main`, após receber o resultado dos testes físicos. São considerados aprovados: abertura de páginas públicas no navegador externo e inclusão manual de arquivo `.torrent` no Transmission a partir de resultado da Busca, com estado Baixando, peers e transferência observados no Moto G06. A suíte automatizada apresentou 204 Python PASS, 302 JVM PASS, build PASS e lint sem erros (um warning e dois hints).
+
+**Limites registrados:** não há promessa de compatibilidade universal de todas as fontes/proxies; links redirecionados, páginas HTML, torrent v2/híbrido e erros HTTP permanecem não suportados; duplo toque, cancelamento, reconexão, duplicata e navegação/rolagem em cenários específicos não foram afirmados como testes físicos PASS. Os títulos e conteúdos dos torrents não serão registrados, conforme solicitação do proprietário.
+
+**Procedimento autorizado:** integrar PR #52 na `main`, consolidar fechamento documental, concluir a issue #51 e instruir sincronização local/limpeza de branch. Nenhum download adicional, reinício de serviço, exclusão de dados ou mudança na configuração Fedora é necessário. A branch remota permanece até a sincronização local segura. Bitmagnet/MYCT-S2 continua opcional e separado na issue #43.
