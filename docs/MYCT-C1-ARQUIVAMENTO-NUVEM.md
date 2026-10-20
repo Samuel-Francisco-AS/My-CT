@@ -1,7 +1,7 @@
 # MYCT-C1 — Arquivamento em nuvem e restauração de seeding
 
 **Decisão:** 19/10/2026  
-**Estado atual (19/10/2026): MYCT-C1A aceita e integrada à `main` via [PR #47](https://github.com/Samuel-Francisco-AS/My-CT/pull/47), merge `bbf929886a1c66d2b0927b2ca3f8c46fa25cfe7b`. Rclone configurado no Fedora pelo proprietário, OAuth próprio com acesso Google Drive; 29 testes locais PASS e arquivo de 37 bytes arquivado/restaurado com bytes idênticos. C1B-1 tem candidata não destrutiva com 96 testes simulados aprovados, aguardando auditoria Luna e autorização para fixture real, sem merge. C1B-2/liberação de SSD e C1C/Android seguem não implementadas. Nenhum serviço extra ou exclusão realizados.
+**Estado atual (19/10/2026): MYCT-C1A aceita e integrada à `main` via [PR #47](https://github.com/Samuel-Francisco-AS/My-CT/pull/47), merge `bbf929886a1c66d2b0927b2ca3f8c46fa25cfe7b`. Rclone configurado no Fedora pelo proprietário, OAuth próprio com acesso Google Drive; 29 testes locais PASS e arquivo de 37 bytes arquivado/restaurado com bytes idênticos. C1B-1 foi aceita funcionalmente com upload/restore real (~615 MB), verificação integral das peças pelo Transmission (recuperação pausada) e PR #48 autorizada para merge; **não houve retomada efetiva do seeding**. C1B-2/liberação de SSD e C1C/Android seguem não implementadas. Nenhum serviço extra ou exclusão realizados.
 
 **Acompanhamento:** [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46).  
 **Proprietário:** 400 GB de armazenamento Google por aproximadamente um ano; espaço disponível e data exata de término **a consultar no início da implementação**, nunca presumir 400 GB livres.
@@ -10,10 +10,10 @@
 sem exclusão de originais/remotos, com `status`, catálogo `list`, `archive` e
 `restore`. [Contrato, testes e intervenção humana](MYCT-C1A-CLI-REPORT.md).
 Instalação do Rclone, OAuth, consulta de cota e upload/restore reais foram
-executados pelo proprietário e aprovados. C1B-1 tem candidata em branch separada,
+executados pelo proprietário e aprovados. C1B-1 teve aceite físico de ida/volta e recuperação pausada,
 conforme incremento abaixo; C1B-2/liberação de SSD e Android C1C seguem pendentes.
 
-**Incremento C1B-1 (19/10/2026, sem merge):** `ops/myct-archive-torrent` acrescenta
+**Incremento C1B-1 (19/10/2026, aceite funcional, PR #48):** `ops/myct-archive-torrent` acrescenta
 inspeção integral, archive/restore com `.torrent` e manifesto, hashes e fluxo de
 recuperação pausada/verificação antes de seeding. Catálogo separado preserva C1A.
 Somente testes simulados; nenhum torrent/Drive real alterado. [Relatório, comandos
@@ -130,3 +130,5 @@ Investigar **Rclone mount + cache local** apenas se houver benefício. Bibliotec
 - [MYCT-5C — motor BitTorrent](MYCT-5C-BITTORRENT-REPORT.md)
 - [My-CT Media — hardlinks](MYCT-MEDIA-MVP.md)
 - [My-CT Media — gerenciamento de armazenamento](MYCT-MEDIA-STORAGE-CLEANUP.md)
+
+**Fechamento C1B-1 (19/10/2026):** Aprovados `inspect`, `archive`, `restore` e `recover` pausado no Fedora/Google Drive/Transmission, com verificação de peças e `seeding_ready:true`, `rpc_status:0`. Sem teste de `--resume`, peers/upload ou liberação de SSD. A biblioteca Jellyfin permaneceu intacta e o torrent terminou apontando para a cópia restaurada, pausado. [Detalhes e evidências](MYCT-C1B-1-RELATORIO.md). C1B-2 e C1C pendentes.
