@@ -42,7 +42,7 @@ private class CreateRemoteDocument : ActivityResultContract<String, Uri?>() {
 }
 
 @Composable
-fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
+internal fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier, cloud: CloudModel? = null) {
     val context = LocalContext.current
     val navigationFeedback = rememberNavigationFeedback()
     var notificationsGranted by remember { mutableStateOf(Build.VERSION.SDK_INT < 33 ||
@@ -210,9 +210,16 @@ fun FilesScreen(model: FilesModel, modifier: Modifier = Modifier) {
                 text = { Column(Modifier.verticalScroll(rememberScrollState())) { DetailValue("Arquivo", choice.entry.name); Text("${formatFileSize(choice.entry.size)} · Escolha um novo documento no Android. Nomes existentes são tratados pelo seletor SAF. Se interrompido, o provedor pode manter um arquivo parcial.") } },
                 confirmButton = { Column {
                     MyCtTextButton(onClick = { model.inspectSelected() }) { Text("Verificar arquivo") }
+                    if (cloud != null) MyCtTextButton(onClick = {
+                        model.dismissDownload(); cloud.prepareFile(choice.path)
+                    }) { Text("Arquivar no Drive…") }
                     MyCtTextButton(onClick = { withTransferPermission { download.launch(choice.entry.name) } }) { Text("Escolher destino…") }
                 } },
                 dismissButton = { MyCtTextButton(onClick = { model.dismissDownload() }) { Text("Cancelar") } })
+        }
+        if (cloud != null) {
+            CloudFileArchiveDialog(cloud)
+            if (cloud.tasks.isNotEmpty()) Text(cloud.message, style = MaterialTheme.typography.bodySmall)
         }
         if (model.inspectionVisible) InspectionReport(model)
         link?.let { entry ->

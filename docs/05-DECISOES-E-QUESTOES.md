@@ -430,3 +430,15 @@ reais dependem de auditoria Luna e autorização física específica.
 **Diretriz operacional do proprietário:** evitar autorizações repetidas para operações ordinárias, de risco limitado e verificáveis no escopo de um teste/projeto aprovado. Priorizar execução ágil e resultado funcional; manter proteções para evitar perda catastrófica, interrupção de SSH/Fedora, quebra do My-CT ou remoção de acervo pessoal/arquivamentos sem escopo. Esta decisão **não é** permissão irrestrita para excluir dados reais, alterar serviços/rede nem desativar as proteções da ferramenta. Fixtures descartáveis e operações de baixo risco podem prosseguir dentro do escopo autorizado; em caso de estado incerto, interromper em vez de repetir a operação destrutiva.
 
 **Estado dos testes:** fixture própria foi deixada restaurada, com hardlink reconstruído e Transmission em seeding RPC 6. O acervo pessoal existente da C1B-1 não foi objeto de nenhuma das liberações.
+
+### 20/10/2026 — MYCT-C1C: Android com arquivamento persistente
+
+A integração candidata reutiliza as CLIs C1A/C1B-2 sem alterar seu motor.
+Nuvem fica dentro de Downloads → Mídia → Armazenamento. Um adaptador específico
+`myct-cloud` entrega trabalhos de arquivo/torrent por unidades transitórias
+systemd de usuário; recibo privado anterior ao lançamento permite consultar
+o resultado após perder SSH sem repetir operações ambíguas. Nenhum daemon,
+banco/API novo, serviço global ou dependência Android. A alternativa de esperar
+hashing/transferência no exec de 25 s não atende à continuidade pedida.
+Prévia/token e consentimentos Jellyfin continuam sob decisão final da C1B-2.
+[Relatório, instalação e aceite único no Moto](MYCT-C1C-RELATORIO.md).

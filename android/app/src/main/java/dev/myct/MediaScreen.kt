@@ -15,8 +15,8 @@ import androidx.compose.ui.unit.dp
 
 /** Hybrid workflow: explicit bulk confirmation, ambiguous files require named approval. */
 @Composable
-internal fun MediaScreen(model: MediaModel, modifier: Modifier = Modifier) {
-    var mode by remember { mutableIntStateOf(0) }
+internal fun MediaScreen(model: MediaModel, openFiles: (String) -> Unit, modifier: Modifier = Modifier) {
+    var mode by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) }
     Column(modifier) {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -27,7 +27,7 @@ internal fun MediaScreen(model: MediaModel, modifier: Modifier = Modifier) {
         when (mode) {
             0 -> MediaBatchScreen(model, Modifier.weight(1f))
             1 -> MediaAutomaticScreen(model, Modifier.weight(1f))
-            else -> MediaStorageScreen(model, Modifier.weight(1f))
+            else -> MediaStorageScreen(model, openFiles, Modifier.weight(1f))
         }
     }
 }

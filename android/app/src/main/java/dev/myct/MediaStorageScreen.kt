@@ -19,7 +19,23 @@ internal fun formatCleanupBytes(bytes: Long): String {
 }
 
 @Composable
-internal fun MediaStorageScreen(model: MediaModel, modifier: Modifier = Modifier) {
+internal fun MediaStorageScreen(model: MediaModel, openFiles: (String) -> Unit, modifier: Modifier = Modifier) {
+    var cloud by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    val panels = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    Column(modifier) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(!cloud, { cloud = false }, label = { Text("Biblioteca local") })
+            FilterChip(cloud, { cloud = true }, label = { Text("Nuvem") })
+        }
+        panels.SaveableStateProvider(cloud) {
+            if (cloud) CloudScreen(model.cloud, openFiles, Modifier.fillMaxSize())
+            else MediaLocalStorageScreen(model, Modifier.fillMaxSize())
+        }
+    }
+}
+
+@Composable
+private fun MediaLocalStorageScreen(model: MediaModel, modifier: Modifier = Modifier) {
     val marked = remember { mutableStateMapOf<String, Boolean>() }
     val openFolders = remember { mutableStateMapOf<String, Boolean>() }
     var mode by remember { mutableStateOf("links") }

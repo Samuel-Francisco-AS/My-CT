@@ -1,0 +1,321 @@
+#!/usr/bin/python3
+"""C1C SSH bridge: fixed archive CLI work in transient user units, no daemon.
+
+Catalogs and destructive consent remain exclusively in the existing engines.
+The small private journal records delivery/results, never authorizes a retry.
+"""
+import base64
+from contextlib import contextmanager
+import fcntl
+import importlib.machinery
+import importlib.util
+import json
+import os
+from pathlib import Path
+import re
+import signal
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+
+HERE = Path(__file__).resolve().parent
+ROOT = Path.home() / '.local/share/myct/cloud-jobs'
+ACTIVE = {'starting', 'running', 'uncertain'}
+ID = re.compile('[0-9a-f]{32}')
+ARCHIVE = re.compile('[0-9a-f]{64}')
+TOKEN = re.compile('[0-9]{1,12}-[0-9a-f]{64}')
+LIMIT = 16 * 1024 * 1024
+
+
+class Failure(Exception):
+    def __init__(self, code, message):
+        self.code = code
+        super().__init__(message)
+
+
+def need(ok, code='ARGUMENT', message='Pedido inválido.'):
+    if not ok:
+        raise Failure(code, message)
+
+
+def private_root():
+    ROOT.mkdir(parents=True, mode=0o700, exist_ok=True)
+    need(not ROOT.is_symlink() and ROOT.resolve() == ROOT and
+         ROOT.stat().st_uid == os.getuid() and ROOT.stat().st_mode & 0o077 == 0,
+         'PERMISSIONS', 'O diário deve ser privado (0700) e pertencer ao usuário.')
+
+
+def load(identity):
+    need(ID.fullmatch(identity))
+    path = ROOT / (identity + '.json')
+    need(not path.is_symlink(), 'JOURNAL', 'Diário redirecionado; confira manualmente.')
+    return json.loads(path.read_text())
+
+
+def save(row):
+    with tempfile.NamedTemporaryFile('w', dir=ROOT, delete=False) as stream:
+        json.dump(row, stream, ensure_ascii=True)
+        stream.flush(); os.fsync(stream.fileno())
+    os.replace(stream.name, ROOT / (row['id'] + '.json'))
+    fd = os.open(ROOT, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+@contextmanager
+def locked():
+    fd = os.open(ROOT / 'delivery.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
+
+
+def validate(work):
+    need(isinstance(work, dict) and set(work) == {'kind', 'args'})
+    kind, args = work['kind'], work['args']
+    need(kind in ('torrent', 'file') and isinstance(args, list) and 1 <= len(args) <= 520)
+    need(all(isinstance(a, str) and 0 < len(a.encode()) <= 4096 and
+             not any(ord(c) < 32 or ord(c) == 127 for c in a) for a in args))
+    action = args[0]
+    if kind == 'file':
+        need((action == 'status' and len(args) == 1) or
+             (action in ('archive', 'restore') and len(args) == 2))
+        if action == 'archive':
+            need(args[1].startswith('/') and all(p not in ('.', '..') for p in args[1].split('/')))
+        elif action == 'restore':
+            need(ARCHIVE.fullmatch(args[1]))
+        return work
+    need(action in ('inspect', 'archive', 'space', 'release', 'restore', 'recover', 'relink') and len(args) >= 2)
+    need(re.fullmatch('[0-9a-f]{40}', args[1]) if action in ('inspect', 'archive') else ARCHIVE.fullmatch(args[1]))
+    if action in ('inspect', 'archive', 'restore'):
+        need(len(args) == 2)
+    elif action == 'recover':
+        need(args[2:] in ([], ['--resume']))
+    else:
+        rest, options, paths = args[2:], {}, []
+        allowed = {'space': {'--remove-library'}, 'relink': {'--library'},
+                   'release': {'--preview', '--confirm', '--remove-library', '--confirm-library'}}[action]
+        need(len(rest) % 2 == 0)
+        for flag, value in zip(rest[::2], rest[1::2]):
+            need(flag in allowed)
+            if flag in ('--library', '--remove-library'):
+                need(not value.startswith('/') and '\\' not in value and
+                     value.split('/')[0] in ('Filmes', 'Series', 'Series-TV') and
+                     all(p not in ('', '.', '..') for p in value.split('/')))
+                paths.append(value)
+            else:
+                need(flag not in options and TOKEN.fullmatch(value))
+                options[flag] = value
+        need(len(paths) <= 256 and len(set(paths)) == len(paths))
+        if action == 'relink':
+            need(bool(paths))
+        if action == 'release':
+            need(options.get('--preview') is not None and options.get('--confirm') == options['--preview'])
+            need(not paths or options.get('--confirm-library') == options['--preview'])
+    return work
+
+
+def invoke(kind, args):
+    helper = HERE / ('myct-archive-torrent' if kind == 'torrent' else 'myct-archive' if kind == 'file' else 'myct-torrent')
+    if not helper.is_file() or helper.is_symlink():
+        return {'ok': False, 'error': {'code': 'DEPENDENCIES', 'message': 'Instale todos os helpers complementares no mesmo diretório.'}}
+    # Disk spool avoids unbounded capture of large manifests in RAM. Nothing is logged.
+    with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
+        status = subprocess.call([sys.executable, str(helper), *args], stdout=output, stderr=errors)
+        output.seek(0)
+        raw = output.read(LIMIT + 1)
+    if len(raw) <= LIMIT:
+        try:
+            reply = json.loads(raw)
+            if isinstance(reply, dict):
+                if kind == 'rpc' and status == 0:
+                    return {'ok': True, **reply}
+                if type(reply.get('ok')) is bool:
+                    need(status == 0 or not reply['ok'], 'RESPONSE', 'Código de saída inconsistente.')
+                    return reply
+        except (ValueError, UnicodeError):
+            pass
+    return {'ok': False, 'error': {'code': 'RESPONSE', 'message': 'Helper sem resposta JSON válida; confira instalação e estado antes de repetir.'}}
+
+
+def reconcile(row):
+    if row['state'] not in ('starting', 'running'):
+        return row
+    # A newly accepted start may not yet have reached systemd-run. Never relaunch it.
+    if row['state'] == 'starting' and time.time() - row['created'] < 30:
+        return row
+    check = subprocess.run(['systemctl', '--user', 'show', 'myct-cloud-' + row['id'] + '.service',
+                            '--property=ActiveState', '--value'], capture_output=True, text=True, timeout=5)
+    if check.returncode == 0 and check.stdout.strip() in ('active', 'activating', 'reloading', 'deactivating'):
+        return row
+    # Reread after querying systemd: the worker could have just committed its result.
+    with locked():
+        fresh = load(row['id'])
+        if fresh['state'] in ('starting', 'running'):
+            fresh.update(state='uncertain', finished=time.time())
+            save(fresh)
+        return fresh
+
+
+def rows():
+    return sorted((reconcile(load(p.stem)) for p in ROOT.glob('*.json')),
+                  key=lambda r: r['created'], reverse=True)
+
+
+def summary(row):
+    return {k: row[k] for k in ('id', 'work', 'state', 'created', 'finished') if k in row}
+
+
+def live_library(row):
+    """Use the engine's own target resolver, including links added after upload."""
+    try:
+        helper = HERE / 'myct-archive-torrent'
+        need(helper.is_file() and not helper.is_symlink())
+        loader = importlib.machinery.SourceFileLoader('cloud_torrent_view', str(helper))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        engine = importlib.util.module_from_spec(spec)
+        loader.exec_module(engine)
+        targets = engine.library_targets(row, engine.media.load_state())
+        return [{'path': path, 'source': source} for path, source in targets.items()], True
+    except Exception:
+        return row['manifest']['library_links'], False
+
+
+def snapshot():
+    tasks = rows()
+    # Engines own the catalogs. Projection only, no Android replica or bridge catalog.
+    catalogs = {}
+    for kind in ('torrent', 'file'):
+        reply = invoke(kind, ['list'])
+        if reply.get('ok'):
+            entries = []
+            for row in reply['entries']:
+                fields = ('id', 'name', 'size', 'state', 'created_at', 'verified_at', 'error_code',
+                          'restore', 'recovery', 'last_restore')
+                entry = {k: row[k] for k in fields if k in row}
+                if kind == 'torrent':
+                    mf = row['manifest']
+                    links, checked = live_library(row)
+                    existing, linked = 0, 0
+                    roots = [Path(mf['original_download_dir'])]
+                    if row.get('restore', {}).get('path'):
+                        roots.append(Path(row['restore']['path']))
+                    for link in links:
+                        dest = Path.home() / 'Media' / link['path']
+                        try:
+                            ds = dest.lstat()
+                            if not stat.S_ISREG(ds.st_mode):
+                                continue
+                            existing += 1
+                            for root in roots:
+                                try:
+                                    ss = (root / link['source']).lstat()
+                                except OSError:
+                                    continue
+                                if stat.S_ISREG(ss.st_mode) and (ds.st_dev, ds.st_ino) == (ss.st_dev, ss.st_ino):
+                                    linked += 1
+                                    break
+                        except OSError:
+                            pass
+                    entry.update(library_existing=existing, library_linked=linked, library_checked=checked,
+                                 name=mf['name'], infohash=mf['infohash'], size=mf['total_size'],
+                                 library_links=links,
+                                 local_present=Path(mf['original_download_dir']).is_dir() or
+                                     Path(row.get('restore', {}).get('path', '/nonexistent-myct')).is_dir(),
+                                 release={k: row.get('release', {})[k] for k in ('state', 'at', 'error_code')
+                                          if k in row.get('release', {})})
+                entries.append(entry)
+            catalogs[kind] = {'ok': True, 'entries': entries, 'remote_checked': False}
+        else:
+            catalogs[kind] = reply
+    return {'ok': True, 'tasks': [summary(r) for r in tasks[:40]], 'catalogs': catalogs,
+            'transmission': invoke('rpc', ['list'])}
+
+
+def start(identity, work):
+    need(ID.fullmatch(identity))
+    validate(work)
+    # Reconcile before taking the lock; reconciliation itself may lock/write.
+    rows()
+    with locked():
+        if (ROOT / (identity + '.json')).exists():
+            prior = load(identity)
+            need(prior['work'] == work, 'REQUEST_COLLISION', 'Identificador já usado para outro pedido.')
+            return {'ok': True, 'task': summary(prior), 'duplicate': True}
+        need(not any(load(p.stem)['state'] in ACTIVE for p in ROOT.glob('*.json')),
+             'BUSY', 'Há uma operação em andamento ou incerta. Consulte seu resultado; não a repita.')
+        linger = subprocess.run(['loginctl', 'show-user', str(os.getuid()), '-p', 'Linger', '--value'],
+                                capture_output=True, text=True, timeout=5)
+        need(linger.returncode == 0 and linger.stdout.strip() == 'yes', 'LINGER',
+             'Persistência de usuário indisponível. O proprietário deve conferir linger no Fedora.')
+        row = {'id': identity, 'work': work, 'state': 'starting', 'created': time.time()}
+        save(row)  # Durable receipt before launch: a lost SSH acknowledgment cannot duplicate work.
+        try:
+            run = subprocess.run(['systemd-run', '--user', '--quiet', '--collect',
+                                  '--unit=myct-cloud-' + identity, '--property=Type=exec',
+                                  '--property=UMask=0077', '--property=Nice=10',
+                                  '--property=StandardOutput=null', '--property=StandardError=null',
+                                  '--', sys.executable, str(HERE / 'myct-cloud'), '_work', identity],
+                                 capture_output=True, timeout=8)
+            if run.returncode:
+                row.update(state='uncertain', finished=time.time()); save(row)
+        except (OSError, subprocess.TimeoutExpired):
+            row.update(state='uncertain', finished=time.time()); save(row)
+        return {'ok': True, 'task': summary(row), 'duplicate': False}
+
+
+def worker(identity):
+    with locked():
+        row = load(identity)
+        # Even a manually repeated internal invocation must never repeat a mutation.
+        if row['state'] != 'starting':
+            return
+        validate(row['work'])
+        row['state'] = 'running'; save(row)
+    try:
+        result = invoke(row['work']['kind'], row['work']['args'])
+        row.update(state='succeeded' if result.get('ok') else 'failed', result=result, finished=time.time())
+    except Exception:
+        row.update(state='uncertain', finished=time.time())
+    with locked():
+        save(row)
+
+
+def run(args):
+    private_root()
+    if args == ['snapshot']:
+        return snapshot()
+    if len(args) == 2 and args[0] == 'task':
+        return {'ok': True, 'task': reconcile(load(args[1]))}
+    if len(args) == 3 and args[0] == 'start':
+        need(len(args[2]) <= 200000 and re.fullmatch('[A-Za-z0-9_-]+', args[2]))
+        work = json.loads(base64.urlsafe_b64decode(args[2] + '=' * (-len(args[2]) % 4)))
+        return start(args[1], work)
+    if len(args) == 2 and args[0] == '_work':
+        worker(args[1]); return {'ok': True}
+    raise Failure('USAGE', 'Use snapshot, task ID ou start ID PEDIDO_BASE64URL.')
+
+
+def main():
+    os.umask(0o077)
+    # Delivery must finish its small durable receipt even if SSH disappears.
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    try:
+        result = run(sys.argv[1:])
+    except Failure as error:
+        result = {'ok': False, 'error': {'code': error.code, 'message': str(error)}}
+    except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired):
+        result = {'ok': False, 'error': {'code': 'JOURNAL_OR_SYSTEMD',
+                  'message': 'Não foi possível confirmar o estado. Consulte novamente; não repita automaticamente.'}}
+    print(json.dumps(result, ensure_ascii=True))
+    return 0 if result.get('ok') else 2
+
+
+if __name__ == '__main__':
+    sys.exit(main())

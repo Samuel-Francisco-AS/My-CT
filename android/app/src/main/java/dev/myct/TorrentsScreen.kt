@@ -36,7 +36,7 @@ internal fun DownloadsScreen(http: DownloadsModel, torrents: TorrentsModel, medi
                 when (section) {
                     0 -> HttpDownloadsScreen(http, filesBusy, openFiles, Modifier.fillMaxSize())
                     1 -> TorrentsScreen(torrents, filesBusy, openFiles, Modifier.fillMaxSize())
-                    else -> MediaScreen(media, Modifier.fillMaxSize())
+                    else -> MediaScreen(media, openFiles, Modifier.fillMaxSize())
                 }
             }
         }
