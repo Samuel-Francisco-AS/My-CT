@@ -1,12 +1,21 @@
 # My-CT
 
-**MYCT-C1C candidata (20/10/2026):** Nuvem em **Downloads → Mídia → Armazenamento**,
-com arquivamento/restore, progresso real (barra, %, bytes, taxa e ETA), polling
-silencioso e cancelamento confirmado de cópias novas. Trabalhos no Fedora
-continuam após desconectar SSH. APK **0.9.1-c1c-rc2/code 42**, mesma assinatura;
-**aceite RC2 no Moto G06 pendente, sem merge**. O upload real de ~24,4 GiB e os
-helpers instalados foram preservados; atualizar helpers/APK somente após seu fim
-e conferência remota. [PR #50 draft](https://github.com/Samuel-Francisco-AS/My-CT/pull/50) · [APK candidato](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-c1c-v0.9.1-rc2) · [Relatório, instalação e roteiro único](docs/MYCT-C1C-RELATORIO.md).
+**MYCT-C1C ACEITA FUNCIONALMENTE NO MOTO G06 (20/10/2026):** Nuvem em
+**Downloads → Mídia → Armazenamento**, com arquivo/restore,
+barra de progresso real (%/bytes/taxa/ETA), polling sem piscadas,
+cancelamento guiado de novas cópias, liberação local e trabalhos persistentes
+no Fedora, mesmo saindo do aplicativo. APK **0.9.1-c1c-rc2/code 42**,
+assinatura preservada, instalado sobre o anterior. Aceite físico: temporada
+**S01 de 24,4 GiB arquivada e verificada no Drive**, com 28 hardlinks
+reconhecidos; posteriormente **liberada do SSD pelo app**, mantendo backup
+remoto. Screenshot de Saúde confirmou **50,5 GiB livres no Fedora** (medida
+final, não economia isolada garantida). Upload de arquivo pequeno exibiu
+**20,6%, 26,5/128 MiB, 1,7 MiB/s e ETA 1min02s**; continuou ao sair/voltar.
+**Pendência documentada:** cancelamento remoto e progresso de restauração
+não observados fisicamente, embora com testes automatizados.
+[PR #50](https://github.com/Samuel-Francisco-AS/My-CT/pull/50) ·
+[APK code 42](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-c1c-v0.9.1-rc2) ·
+[Relatório e aceite](docs/MYCT-C1C-RELATORIO.md).
 
 **MYCT-C1B-2 ACEITA e integrada à `main` (20/10/2026), [PR #49 MERGED](https://github.com/Samuel-Francisco-AS/My-CT/pull/49), merge `86df44e0d610a807081c6b7995112c3d45ceced6`:** entrega **unificada** com `space` (inodes/hardlinks e economia estimada), `release` (prévia e confirmação, sem excluir Drive), `restore`, `relink` Jellyfin e `recover [--resume]`. **121 testes PASS no Fedora**, mais ciclo físico com fixture própria de 134 MB: upload/restore, duas liberações consentidas, preservação do link Jellyfin, reconstrução idempotente (`added`/`existing`) e seeding iniciado, `rpc_status:6`. **Sem peers/upload observados**. Variação de espaço livre do Btrfs não confirma economia instantânea; `reclaim_guaranteed_bytes:0` é intencional. A PR #49 é a única integração desta entrega; C1C Android ainda pendente na [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46). [Relatório e evidências reais](docs/MYCT-C1B-2-RELATORIO.md).
 
