@@ -402,3 +402,31 @@ limitações em [MYCT-C1B-1](MYCT-C1B-1-RELATORIO.md).
 ## 19/10/2026 — C1B-1 aceita funcionalmente; C1B-2 segue pendente
 
 Proprietário encerrou e integrou a PR #48 à `main` no merge `fce805ea96bc108a85b466133c6724b4688a329c` após testes físicos no Fedora: `inspect` reconheceu três arquivos e um hardlink Jellyfin; `archive` enviou 614825177 bytes com tamanho/MD5 remoto validados; `restore` reconferiu tamanho, MD5, SHA-256 e metainfo; `recover` observado pelo Transmission terminou em `seeding_ready:true` e `rpc_status:0` (pausado). **Não houve `--resume` ou prova de tráfego/peers**. Transmission foi redirecionado à cópia restaurada; originais/hardlinks intactos. Não excluir nem alterar dados por causa deste fechamento. C1B-2 será prévia do SSD/hardlinks e liberação guiada com autorização específica; C1C continua planejada. [Relatório de aceite](MYCT-C1B-1-RELATORIO.md) · [PR #48](https://github.com/Samuel-Francisco-AS/My-CT/pull/48).
+
+## 19/10/2026 — C1B-2 unificada: nomes reais, consentimento e recuperação
+
+Por decisão expressa do proprietário, uma única branch/PR entrega inventário,
+liberação guiada, restauração, reconstrução de links e retomada explícita. A
+extensão fica no helper C1B-1, sem nova infraestrutura. A liberação retira a
+entrada RPC sem apagar dados pelo Transmission, confirma ausência e só então
+retira nomes das árvores original/restaurada comprovadas. Isso distingue a
+segunda árvore do teste C1B-1 e evita tratar a lista de vídeos como pacote inteiro.
+Links Jellyfin são preservados por padrão; remoção deles exige seleção e
+confirmação distintas, e sua reconstrução usa `myct-media.add_one`/ACL existentes.
+Diário privado bloqueia replay após crash/timeout ou liberação parcial. Blocos
+por inode são estimativa sem economia garantida devido a reflinks/snapshots e
+arquivos abertos. Só fixtures simuladas nesta entrega; instalação e operações
+reais dependem de auditoria Luna e autorização física específica.
+[Relatório da candidata](MYCT-C1B-2-RELATORIO.md).
+
+
+
+## 20/10/2026 — C1B-2: aceite físico, ciclo unificado e regra operacional
+
+**DECIDIDO/ACEITO:** o proprietário validou a C1B-2 como **uma única entrega**, sem subdivisões: inventário `space`, `release` guiado com dupla confirmação opcional para Jellyfin, `restore` completo, `relink` explícito/idempotente e `recover --resume` com verificação. A [PR #49](https://github.com/Samuel-Francisco-AS/My-CT/pull/49) é a unidade de fechamento. A C1C Android continua na [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46).
+
+**Provas reais, Fedora/Google Drive/Transmission:** 121/121 testes locais PASS; fixture própria com três arquivos/134.250.063 bytes, upload remoto tamanho/MD5 validado; hardlink dev:ino compartilhado e nlink=2; dois tipos de liberação consentida (com e sem remover link da biblioteca) e restaurações integrais; `relink` retornou `added` e depois `existing`, mesmo inode/bytes; `recover --resume` retornou seeding iniciado RPC 6, sem peers e sem upload observado. Liberação inicial estimava ~268,48 MB em blocos, mas `df` imediato não mudou; o espaço livre medido após restaurar voltou ~134,24 MB acima do início. Não alegar liberação instantânea ou byte garantido no Btrfs. [Relatório completo](MYCT-C1B-2-RELATORIO.md).
+
+**Diretriz operacional do proprietário:** evitar autorizações repetidas para operações ordinárias, de risco limitado e verificáveis no escopo de um teste/projeto aprovado. Priorizar execução ágil e resultado funcional; manter proteções para evitar perda catastrófica, interrupção de SSH/Fedora, quebra do My-CT ou remoção de acervo pessoal/arquivamentos sem escopo. Esta decisão **não é** permissão irrestrita para excluir dados reais, alterar serviços/rede nem desativar as proteções da ferramenta. Fixtures descartáveis e operações de baixo risco podem prosseguir dentro do escopo autorizado; em caso de estado incerto, interromper em vez de repetir a operação destrutiva.
+
+**Estado dos testes:** fixture própria foi deixada restaurada, com hardlink reconstruído e Transmission em seeding RPC 6. O acervo pessoal existente da C1B-1 não foi objeto de nenhuma das liberações.

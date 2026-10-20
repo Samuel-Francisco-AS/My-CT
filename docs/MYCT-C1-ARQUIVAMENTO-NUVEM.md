@@ -3,6 +3,10 @@
 **Decisão:** 19/10/2026  
 **Estado atual (19/10/2026): MYCT-C1A aceita e integrada à `main` via [PR #47](https://github.com/Samuel-Francisco-AS/My-CT/pull/47), merge `bbf929886a1c66d2b0927b2ca3f8c46fa25cfe7b`. Rclone configurado no Fedora pelo proprietário, OAuth próprio com acesso Google Drive; 29 testes locais PASS e arquivo de 37 bytes arquivado/restaurado com bytes idênticos. C1B-1 foi aceita funcionalmente com upload/restore real (~615 MB), verificação integral das peças pelo Transmission (recuperação pausada) e PR #48 integrada à `main` no merge `fce805ea96bc108a85b466133c6724b4688a329c`; **não houve retomada efetiva do seeding**. C1B-2/liberação de SSD e C1C/Android seguem não implementadas. Nenhum serviço extra ou exclusão realizados.
 
+**Estado de fechamento (20/10/2026): C1B-2 aceita funcionalmente no Fedora e aprovada pelo proprietário.** [PR #49](https://github.com/Samuel-Francisco-AS/My-CT/pull/49) reúne em uma única entrega `space`, liberação guiada `release`, `restore`, `relink` e retomada `recover --resume`. **121 testes PASS** mais fixture própria de 134 MB validaram upload Drive, árvores e hardlinks, liberação padrão e liberação com remoção consentida do vínculo Jellyfin, restauração integral, reconstrução idempotente de hardlink e início explícito do Transmission (`rpc_status:6`). Nenhum peer/upload observado; espaço livre Btrfs pode ser contabilizado com atraso e os 268.476.416 bytes inicialmente estimados não são ganho garantido. A C1B-1 permanece preservada e C1C Android segue pendente na issue #46. [Relatório real de C1B-2](MYCT-C1B-2-RELATORIO.md).
+
+**Nota histórica:** os parágrafos anteriores de 19/10 e os gates da proposta original descrevem o estado **antes** da implementação e dos testes de 20/10; não devem ser lidos como status vigente.
+
 **Acompanhamento:** [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46).  
 **Proprietário:** 400 GB de armazenamento Google por aproximadamente um ano; espaço disponível e data exata de término **a consultar no início da implementação**, nunca presumir 400 GB livres.
 
@@ -136,6 +140,17 @@ Investigar **Rclone mount + cache local** apenas se houver benefício. Bibliotec
 
 
 ## MYCT-C1B-2 — entrega unificada: liberar espaço e recuperar biblioteca/seeding
+
+**Candidata implementada (19/10/2026):** a branch única
+`myct-c1b-storage-lifecycle` estende `myct-archive-torrent` com `space`,
+`release` vinculado à prévia/consentimento e `relink` explícito, integrados a
+`archive`, `restore` e `recover [--resume]`. Catálogo e bundle preservados;
+Jellyfin preservado por padrão; liberação das duas árvores reais conhecidas,
+sem delegar exclusão de dados ao RPC. Economia física sem garantia em presença
+de extents compartilhados/arquivos abertos. [Implementação, testes, limitações
+e roteiro seguro](MYCT-C1B-2-RELATORIO.md). Somente fixtures simuladas; nenhuma
+instalação ou mutação do acervo. Aguardar auditoria Luna e autorização física;
+histórico e gates abaixo continuam válidos, sem subdivisão da entrega.
 
 **Decisão do proprietário (19/10/2026):** não dividir a C1B-2 em subetapas 2A/2B/2C. **Uma única branch, uma PR e um fechamento funcional** deverão entregar os componentes abaixo de ponta a ponta. Desenvolvimento, testes simulados, revisão e aceite físico podem ocorrer em sequência dentro da mesma PR, mas não são fases ou PRs separadas.
 
