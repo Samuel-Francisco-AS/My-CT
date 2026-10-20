@@ -1,6 +1,6 @@
 # MYCT-C1 — Arquivamento em nuvem e restauração de seeding
 
-**Fechamento global C1 (20/10/2026):** C1A, C1B-1 e C1B-2 já
+**Fechamento global C1 (20/10/2026), PR #50 MERGED à `main` no commit `677051c23bdd427a3abcb4fbc79c09f4e1883c4f`:** C1A, C1B-1 e C1B-2 já
 integradas à main; **C1C aceita funcionalmente pelo proprietário no Moto G06**
 na [PR #50](https://github.com/Samuel-Francisco-AS/My-CT/pull/50).
 A interface Nuvem da RC2 (0.9.1/code42) demonstrou catálogo Drive/RPC,
