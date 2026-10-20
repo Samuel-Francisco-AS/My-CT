@@ -610,3 +610,23 @@ Certificado SHA-256 público, igual ao APK anterior code 40:
 A keystore existente foi preservada; material privado não foi distribuído.
 Atualizar sobre a instalação existente. A compatibilidade com o artefato code
 40 está conferida; a atualização no aparelho será comprovada pelo proprietário.
+
+
+## Fechamento remoto — 20/10/2026
+
+**PR [#50](https://github.com/Samuel-Francisco-AS/My-CT/pull/50) MERGED
+na `main`**, commit de merge
+`677051c23bdd427a3abcb4fbc79c09f4e1883c4f`, após aceite do
+proprietário. Uma única PR para toda a C1C, incluindo RC1 e RC2, sem
+subfases. O versionCode final aceito é **42** com APK
+[0.9.1-c1c-rc2](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-c1c-v0.9.1-rc2).
+Nenhum APK foi reconstruído ou reinstalado por esse merge. O Fedora
+segue com helpers RC2 já instalados pelo proprietário; sincronizar a
+`main` via `git pull --ff-only` não exige reinstalar helper.
+
+A [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46)
+corresponde ao marco C1 concluído. Limitações documentadas de UX de
+cancelamento físico e progresso de restauração continuam registradas
+para eventual uso futuro; não foram promovidas a aceite físico
+inexistente. A liberação S01 foi acionada pelo proprietário, e a
+cópia verificada no Drive permanece como fonte de restauração.
