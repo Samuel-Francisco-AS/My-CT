@@ -1,5 +1,13 @@
 # My-CT
 
+**MYCT-SETUP-2 candidata (20/10/2026):** planos opcionais separados para
+Transmission e Prowlarr em **Opções → Configurar servidor**. APK
+**0.11.0-setup2-rc1 / code 45**, aceite físico pendente. Legados do Fedora
+pessoal reconhecidos e preservados. Diagnóstico SETUP-1 já validado no Moto;
+instalação física limpa da Base continua sem aceite.
+[Relatório, evidências e roteiro](docs/MYCT-SETUP-2-RELATORIO.md).
+
+
 **MYCT-SETUP-1 candidata (20/10/2026):** **Opções → Configurar servidor**, diagnóstico
 Fedora por SSH e instalação supervisionada de Core/PostgreSQL. APK
 **0.10.0-setup1-rc1 / code 44**; aceite Moto/Fedora físico limpo pendente.

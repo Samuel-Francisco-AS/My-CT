@@ -1,17 +1,96 @@
 {
   "schema": 1,
-  "release": "myct-setup-1-rc1",
+  "release": "myct-setup-2-rc1",
   "fedora_min": 43,
   "fedora_max": 44,
-  "architectures": ["x86_64", "aarch64"],
-  "packages": ["gcc-c++", "make", "libpq", "libpq-devel", "postgresql", "postgresql-server", "policycoreutils"],
-  "sources": ["server/main.cpp", "server/postgres.cpp", "server/postgres.hpp", "server/Makefile", "server/migrations/001_execution_events.sql"],
-  "components": [
-    {"id": "packages", "privilege": "sudo", "description": "DNF install apenas dos pacotes ausentes; inclui compilador C++20 e libpq. Sem upgrade geral."},
-    {"id": "core", "privilege": "usuário + sudo", "description": "Compilar Core com make -j1; instalar /usr/local/bin/myct-core e unidade myct-core.service. Não substituir instalação existente."},
-    {"id": "postgres", "privilege": "usuário", "description": "Criar cluster privado em ~/.local/share/myct/postgres, peer, sem TCP, 16 MB shared_buffers/10 conexões. Criar banco myct e migração 001 transacional."},
-    {"id": "services", "privilege": "sudo", "description": "Ativar myct-core.service de sistema como usuário SSH e myct-postgres.service de usuário. Habilitar linger nesta conta: mantém o gerenciador de usuário e todas as suas unidades habilitadas após logout/boot, incluindo o banco."},
-    {"id": "verify", "privilege": "usuário", "description": "Verificar saúde loopback, banco/migração, serviços ativos e habilitados. Sem reboot automático."}
+  "architectures": [
+    "x86_64",
+    "aarch64"
   ],
-  "optional": ["Cofre/GNOME Keyring requer provisionamento humano próprio; não criar coleção nem instalar helper com pin específico deste Fedora", "Downloads/Transmission/Prowlarr: SETUP-2", "Rclone/nuvem: SETUP-3", "Backup/restore: SETUP-4", "Antivírus, inspeção de arquivos e mídia não são dependências da Saúde/Core"]
+  "packages": [
+    "gcc-c++",
+    "make",
+    "libpq",
+    "libpq-devel",
+    "postgresql",
+    "postgresql-server",
+    "policycoreutils"
+  ],
+  "sources": [
+    "server/main.cpp",
+    "server/postgres.cpp",
+    "server/postgres.hpp",
+    "server/Makefile",
+    "server/migrations/001_execution_events.sql",
+    "ops/myct-torrent",
+    "ops/torrent/myct-torrent-done",
+    "ops/torrent/myct-transmission.service",
+    "ops/myct-search"
+  ],
+  "components": [
+    {
+      "id": "packages",
+      "privilege": "sudo",
+      "description": "DNF install apenas dos pacotes ausentes; inclui compilador C++20 e libpq. Sem upgrade geral."
+    },
+    {
+      "id": "core",
+      "privilege": "usuário + sudo",
+      "description": "Compilar Core com make -j1; instalar /usr/local/bin/myct-core e unidade myct-core.service. Não substituir instalação existente."
+    },
+    {
+      "id": "postgres",
+      "privilege": "usuário",
+      "description": "Criar cluster privado em ~/.local/share/myct/postgres, peer, sem TCP, 16 MB shared_buffers/10 conexões. Criar banco myct e migração 001 transacional."
+    },
+    {
+      "id": "services",
+      "privilege": "sudo",
+      "description": "Ativar myct-core.service de sistema como usuário SSH e myct-postgres.service de usuário. Habilitar linger nesta conta: mantém o gerenciador de usuário e todas as suas unidades habilitadas após logout/boot, incluindo o banco."
+    },
+    {
+      "id": "verify",
+      "privilege": "usuário",
+      "description": "Verificar saúde loopback, banco/migração, serviços ativos e habilitados. Sem reboot automático."
+    }
+  ],
+  "optional": [
+    "Transmission e Prowlarr têm planos opcionais separados; não são dependências da Base.",
+    "Indexadores e fontes Prowlarr exigem configuração humana por túnel SSH; nenhuma fonte é adicionada pelo instalador.",
+    "Rclone/Drive: SETUP-3, fora desta entrega.",
+    "Backup/recuperação: SETUP-4. Cofre e demais helpers não são provisionados por esta etapa."
+  ],
+  "addons": {
+    "transmission": {
+      "packages": [
+        "transmission-daemon"
+      ],
+      "version_min": "4.1",
+      "port": 19091
+    },
+    "prowlarr": {
+      "packages": [
+        "libicu",
+        "sqlite-libs",
+        "openssl-libs",
+        "zlib-ng-compat",
+        "libstdc++",
+        "ca-certificates"
+      ],
+      "version": "2.6.5.5623",
+      "port": 9696,
+      "artifacts": {
+        "aarch64": {
+          "url": "https://github.com/Prowlarr/Prowlarr/releases/download/v2.6.5.5623/Prowlarr.master.2.6.5.5623.linux-core-arm64.tar.gz",
+          "size": 93683613,
+          "sha256": "6552ac286d8a1213f99779daac685cc283d69fa6ad3144d811af0289ee5f5656"
+        },
+        "x86_64": {
+          "url": "https://github.com/Prowlarr/Prowlarr/releases/download/v2.6.5.5623/Prowlarr.master.2.6.5.5623.linux-core-x64.tar.gz",
+          "size": 96747834,
+          "sha256": "c0824e9f0e9c79e085882f6143041be5c2cde0519baa59e9477d9e4dcbe1b5e3"
+        }
+      }
+    }
+  }
 }

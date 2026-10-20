@@ -1,0 +1,48 @@
+{
+  "fedora": "44",
+  "arch": "x86_64",
+  "base_provisioned": false,
+  "components": {
+    "transmission": {
+      "inventory": {
+        "detected": true,
+        "installed": true,
+        "managed": true,
+        "running": true,
+        "enabled": true,
+        "linger": true,
+        "api_ready": true,
+        "version": "4.1.3 (838877323f)"
+      },
+      "repeat_no_changes": true,
+      "unit_memory": "MemoryCurrent=3674112"
+    },
+    "prowlarr": {
+      "inventory": {
+        "detected": true,
+        "installed": true,
+        "managed": true,
+        "running": true,
+        "enabled": true,
+        "linger": true,
+        "api_ready": true,
+        "version": "2.6.5.5623"
+      },
+      "repeat_no_changes": true,
+      "unit_memory": "MemoryCurrent=99086336"
+    }
+  },
+  "payload_sha256": "49f754318e6df5dbca9b343f24d96de757fde0780545538c4ccc270da29ede32",
+  "failure_resume": true,
+  "torrent_helper_empty_list": true,
+  "search_helper": "no_indexers (expected; no sources added)",
+  "torrent_controls": {
+    "add_pause_resume_remove": true,
+    "preserves_data": true,
+    "offline_fixture": true
+  },
+  "loopback_sockets": true,
+  "no_base_changes": true,
+  "prowlarr_disk": "218M\t/home/tester/.local/opt/Prowlarr\n5.1M\t/home/tester/.local/share/myct/prowlarr",
+  "container_boot": true
+}

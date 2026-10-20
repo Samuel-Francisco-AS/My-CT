@@ -30,6 +30,41 @@ class ServerSetupTest {
         val blocked = fixture().put("can_apply", false).put("blockers", JSONArray().put("intervention: existing cluster"))
         assertFalse(parseSetupPlan(blocked.toString()).canApply)
     }
+    @Test fun optionalPlansAreSeparateAndLegacyNeverAuthorizesInstallation() {
+        for (target in listOf(SetupTarget.transmission, SetupTarget.prowlarr)) {
+            val j = fixture()
+            j.getJSONObject("facts").put("target", target.name)
+            j.put("components", JSONArray(listOf("packages", target.name, "services", "verify").map {
+                JSONObject().put("id", it).put("state", "missing").put("description", "specific plan").put("privilege", "user")
+            }))
+            j.put("inventory", JSONObject().put("detected", false).put("managed", false).put("installed", false)
+                .put("running", false).put("enabled", false).put("linger", false).put("api_ready", false).put("version", ""))
+            val plan = parseSetupPlan(j.toString())
+            assertEquals(target, plan.target); assertTrue(plan.canApply)
+            j.getJSONArray("components").getJSONObject(1).put("state", "unmanaged")
+            j.getJSONObject("inventory").put("detected", true).put("running", true).put("enabled", true).put("api_ready", true)
+            j.put("can_apply", false).put("blockers", JSONArray().put("intervention: instalação anterior preservada"))
+            val legacy = parseSetupPlan(j.toString())
+            assertFalse(legacy.canApply); assertEquals(SetupState.unmanaged, legacy.components[1].state)
+            assertTrue(legacy.inventory!!.running); assertFalse(legacy.inventory.managed)
+            j.getJSONObject("facts").put("target", "base")
+            assertThrows(Exception::class.java) { parseSetupPlan(j.toString()) }
+        }
+    }
+    @Test fun sshCommandsBindTheChosenComponentAndCompressLargeDiagnosticSource() {
+        val source = "print('large-source-safe')\n" + "# filler\n".repeat(15000)
+        for (target in SetupTarget.entries) {
+            val cmd = setupDiagnosticCommand(source.toByteArray(), target)
+            assertTrue(cmd.length < 32000)
+            val p = ProcessBuilder("sh", "-c", cmd).start()
+            assertEquals("large-source-safe\n", p.inputStream.bufferedReader().readText())
+            assertEquals(0, p.waitFor())
+            val receiver = setupReceiverCommand(SetupBundle(byteArrayOf(), byteArrayOf(), "a".repeat(64)), "b".repeat(64), target)
+            val hex = receiver.substringAfter("bytes.fromhex(\"").substringBefore("\")")
+            val python = hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray().toString(Charsets.UTF_8)
+            assertTrue(python.contains("\"--component\",\"${target.name}\""))
+        }
+    }
     @Test fun diagnosticSourceNeverBecomesShellText() {
         val directory = Files.createTempDirectory("setup-diag").toFile()
         try {

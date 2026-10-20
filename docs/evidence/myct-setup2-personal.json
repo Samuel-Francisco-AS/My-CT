@@ -1,0 +1,38 @@
+{
+  "transmission": {
+    "inventory": {
+      "detected": true,
+      "installed": false,
+      "managed": false,
+      "running": true,
+      "enabled": true,
+      "linger": true,
+      "api_ready": true,
+      "version": "4.1.3 (838877323f)"
+    },
+    "can_apply": false,
+    "blockers": [
+      "intervention: Instalação anterior não gerenciada detectada; somente inspeção, sem adoção, reinstalação ou novo serviço."
+    ],
+    "same_service_pid": true,
+    "same_configuration_digest": true
+  },
+  "prowlarr": {
+    "inventory": {
+      "detected": true,
+      "installed": false,
+      "managed": false,
+      "running": true,
+      "enabled": true,
+      "linger": true,
+      "api_ready": true,
+      "version": "2.6.5.5623"
+    },
+    "can_apply": false,
+    "blockers": [
+      "intervention: Instalação anterior não gerenciada detectada; somente inspeção, sem adoção, reinstalação ou novo serviço."
+    ],
+    "same_service_pid": true,
+    "same_configuration_digest": true
+  }
+}

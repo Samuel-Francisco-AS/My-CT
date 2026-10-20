@@ -59,13 +59,13 @@ class SshConnection {
     internal fun antivirus(command: AvCommand): SshExecResult =
         executeSshResult(avCommand(command), { openDownloadExec() })
 
-    internal fun setupDiagnose(bundle: SetupBundle): SetupPlan {
-        val reply = executeSshResult(setupDiagnosticCommand(bundle.diagnostic), { openDownloadExec() }, 120_000)
+    internal fun setupDiagnose(bundle: SetupBundle, target: SetupTarget = SetupTarget.base): SetupPlan {
+        val reply = executeSshResult(setupDiagnosticCommand(bundle.diagnostic, target), { openDownloadExec() }, 120_000)
         check(reply.status == 0)
         return parseSetupPlan(reply.output)
     }
 
-    internal fun setupApply(bundle: SetupBundle, planId: String, password: ByteArray,
+    internal fun setupApply(bundle: SetupBundle, planId: String, password: ByteArray, target: SetupTarget = SetupTarget.base,
                             receive: (org.json.JSONObject) -> Unit) {
         require(Regex("[a-f0-9]{64}").matches(planId))
         require(password.size <= 1024 && password.none { it == 10.toByte() || it == 13.toByte() })
@@ -76,7 +76,7 @@ class SshConnection {
         val wire = bundle.payload + password + byteArrayOf(10)
         // Receiver is fixed APK code; staged bytes execute only after SHA-256 verification.
         try {
-            channel.setCommand(setupReceiverCommand(bundle, planId))
+            channel.setCommand(setupReceiverCommand(bundle, planId, target))
             channel.setInputStream(java.io.ByteArrayInputStream(wire))
             channel.setOutputStream(SetupLines(receive))
             channel.setErrStream(object : OutputStream() { override fun write(b: Int) {} })
