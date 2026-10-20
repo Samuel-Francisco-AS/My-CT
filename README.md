@@ -1,11 +1,6 @@
 # My-CT
 
-**MYCT-C1B-2 candidata para auditoria (19/10/2026):** entrega unificada na branch
-`myct-c1b-storage-lifecycle`: inventário por inode, liberação local com prévia e
-consentimento, preservação padrão do Jellyfin, restore integral, reconstrução
-explícita de hardlinks e verificação antes de retomar seeding. Somente testes
-simulados; sem instalação, exclusão, operação em torrents reais ou merge.
-[Relatório e roteiro de validação](docs/MYCT-C1B-2-RELATORIO.md).
+**MYCT-C1B-2 ACEITA funcionalmente no Fedora (20/10/2026), [PR #49](https://github.com/Samuel-Francisco-AS/My-CT/pull/49):** entrega **unificada** com `space` (inodes/hardlinks e economia estimada), `release` (prévia e confirmação, sem excluir Drive), `restore`, `relink` Jellyfin e `recover [--resume]`. **121 testes PASS no Fedora**, mais ciclo físico com fixture própria de 134 MB: upload/restore, duas liberações consentidas, preservação do link Jellyfin, reconstrução idempotente (`added`/`existing`) e seeding iniciado, `rpc_status:6`. **Sem peers/upload observados**. Variação de espaço livre do Btrfs não confirma economia instantânea; `reclaim_guaranteed_bytes:0` é intencional. A PR #49 é a única integração desta entrega; C1C Android ainda pendente na [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46). [Relatório e evidências reais](docs/MYCT-C1B-2-RELATORIO.md).
 
 **MYCT-C1B-1 ACEITA e integrada à `main` (19/10/2026), [PR #48](https://github.com/Samuel-Francisco-AS/My-CT/pull/48), merge `fce805ea96bc108a85b466133c6724b4688a329c`:** CLI para arquivar pacote torrent integral, preservar metainfo/manifesto, restaurar sem sobrescrita e verificar peças pelo Transmission. Teste físico real no Fedora: ~615 MB enviados ao Google Drive, restaurados com hashes válidos e recuperados pelo Transmission (`seeding_ready:true`, **pausado**). **Seeding efetivo/peers ainda NÃO testados; sem remoções, liberação de SSD ou alteração de hardlinks.** Próximas C1B-2/C1C na [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46). [Relatório e evidências](docs/MYCT-C1B-1-RELATORIO.md).
 
