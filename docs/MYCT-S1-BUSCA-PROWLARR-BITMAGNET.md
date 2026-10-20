@@ -817,8 +817,13 @@ Após atualizar manualmente o helper `myct-search` instalado e instalar a candid
 
 ## MYCT-S1D — Links da fonte e .torrent (planejamento 20/10/2026)
 
-**Planejada, não implementada.** Etapa solicitada pelo proprietário após o fechamento S1C para tornar úteis resultados da Busca sem `infoHash`/magnet. **Base:** `main` `382cb7d2faf7ff16472fe109976dfcbb47f246f9`, após MYCT-C1C/PR #50; versão atual Android `0.9.1-c1c-rc2` (code 42). Trabalho na branch `myct-s1d-torrent-links`, checkout único `~/Projetos/My-CT`. Não iniciada instalação, compilação ou alterações de serviços.
+**Concluída e integrada à `main` pela PR #52, merge `95dfa31d51096cfe7b24cf3edf852aaf5c6a24a1` em 20/10/2026.** Etapa solicitada pelo proprietário após o fechamento S1C para tornar úteis resultados da Busca sem `infoHash`/magnet. **Base:** `main` `382cb7d2faf7ff16472fe109976dfcbb47f246f9`, após MYCT-C1C/PR #50; versão atual Android `0.9.1-c1c-rc2` (code 42). Trabalho na branch `myct-s1d-torrent-links`, checkout único `~/Projetos/My-CT`. Não iniciada instalação, compilação ou alterações de serviços.
 
 Duas ações explícitas no card: **Abrir página da fonte** no navegador Android (somente URL pública segura, sem segredo), e **Adicionar arquivo .torrent** via helper Fedora/Prowlarr/Transmission dedicado quando metadados recuperáveis. URLs proxy autenticadas/passkeys permanecem fora do APK/JSON/logs. Não presumir que toda fonte sem magnet possui .torrent; validar viabilidade pelo Prowlarr real antes de implementar. Preservar 20 itens por página, filtros, diversidade, deduplicação, magnet v1 e demais funcionalidades da S1C/C1C.
 
-**Plano de engenharia:** [MYCT-S1D-LINKS-TORRENT.md](MYCT-S1D-LINKS-TORRENT.md). **Issue:** [#51](https://github.com/Samuel-Francisco-AS/My-CT/issues/51). Candidata futura com versionCode **maior que 42** e mesmo pacote/certificado, PR draft até aceite físico no Moto G06. **MYCT-S2/Bitmagnet permanece opcional e separada**, conforme issue #43.
+**Plano de engenharia:** [MYCT-S1D-LINKS-TORRENT.md](MYCT-S1D-LINKS-TORRENT.md). **Issue:** [#51](https://github.com/Samuel-Francisco-AS/My-CT/issues/51). Candidata **0.9.2-s1d-rc1/code 43** e mesmo pacote/certificado, aceita fisicamente no Moto G06; PR #52 integrada à `main`. **MYCT-S2/Bitmagnet permanece opcional e separada**, conforme issue #43.
+
+
+### Aceite e integração S1D — 20/10/2026
+
+O proprietário comprovou no Moto G06 **Abrir página da fonte** no navegador externo e **Adicionar arquivo torrent** por toque, seguido de aceite do Fedora e status real **Baixando** em Downloads → Torrents (com peers e bytes recebidos). Dados e títulos de torrents não são registrados. Validaram-se 204 testes Python e 302 JVM, build e lint sem erros. **PR #52 merged**, commit `95dfa31d51096cfe7b24cf3edf852aaf5c6a24a1`. Relatório final: [MYCT-S1D-LINKS-TORRENT.md](MYCT-S1D-LINKS-TORRENT.md). A indisponibilidade de alguns resultados/proxies é limitação conhecida, não motivo para declarar suporte universal. **MYCT-S2/Bitmagnet permanece opcional e não iniciada**.
