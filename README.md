@@ -1,5 +1,12 @@
 # My-CT
 
+**MYCT-C1B-2 candidata para auditoria (19/10/2026):** entrega unificada na branch
+`myct-c1b-storage-lifecycle`: inventário por inode, liberação local com prévia e
+consentimento, preservação padrão do Jellyfin, restore integral, reconstrução
+explícita de hardlinks e verificação antes de retomar seeding. Somente testes
+simulados; sem instalação, exclusão, operação em torrents reais ou merge.
+[Relatório e roteiro de validação](docs/MYCT-C1B-2-RELATORIO.md).
+
 **MYCT-C1B-1 ACEITA e integrada à `main` (19/10/2026), [PR #48](https://github.com/Samuel-Francisco-AS/My-CT/pull/48), merge `fce805ea96bc108a85b466133c6724b4688a329c`:** CLI para arquivar pacote torrent integral, preservar metainfo/manifesto, restaurar sem sobrescrita e verificar peças pelo Transmission. Teste físico real no Fedora: ~615 MB enviados ao Google Drive, restaurados com hashes válidos e recuperados pelo Transmission (`seeding_ready:true`, **pausado**). **Seeding efetivo/peers ainda NÃO testados; sem remoções, liberação de SSD ou alteração de hardlinks.** Próximas C1B-2/C1C na [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46). [Relatório e evidências](docs/MYCT-C1B-1-RELATORIO.md).
 
 **MYCT-C1A ACEITA e integrada à main em 19/10/2026:** arquivamento/restauração de arquivo comum por Rclone, Fedora/Google Drive real e 29 testes locais aprovados; fixture de 37 bytes voltou idêntica após conferência MD5/SHA-256 e `cmp`. [PR #47](https://github.com/Samuel-Francisco-AS/My-CT/pull/47) (merge `bbf929886a1c66d2b0927b2ca3f8c46fa25cfe7b`) · [Relatório final](docs/MYCT-C1A-CLI-REPORT.md). **Na C1A ainda não havia integração torrent, seeding, remoção de dados ou painel Android**; próximas fases C1B/C1C na [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46). A sincronização do Fedora e a limpeza de branches continuam manuais.

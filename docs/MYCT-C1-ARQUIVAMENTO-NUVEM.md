@@ -137,6 +137,17 @@ Investigar **Rclone mount + cache local** apenas se houver benefício. Bibliotec
 
 ## MYCT-C1B-2 — entrega unificada: liberar espaço e recuperar biblioteca/seeding
 
+**Candidata implementada (19/10/2026):** a branch única
+`myct-c1b-storage-lifecycle` estende `myct-archive-torrent` com `space`,
+`release` vinculado à prévia/consentimento e `relink` explícito, integrados a
+`archive`, `restore` e `recover [--resume]`. Catálogo e bundle preservados;
+Jellyfin preservado por padrão; liberação das duas árvores reais conhecidas,
+sem delegar exclusão de dados ao RPC. Economia física sem garantia em presença
+de extents compartilhados/arquivos abertos. [Implementação, testes, limitações
+e roteiro seguro](MYCT-C1B-2-RELATORIO.md). Somente fixtures simuladas; nenhuma
+instalação ou mutação do acervo. Aguardar auditoria Luna e autorização física;
+histórico e gates abaixo continuam válidos, sem subdivisão da entrega.
+
 **Decisão do proprietário (19/10/2026):** não dividir a C1B-2 em subetapas 2A/2B/2C. **Uma única branch, uma PR e um fechamento funcional** deverão entregar os componentes abaixo de ponta a ponta. Desenvolvimento, testes simulados, revisão e aceite físico podem ocorrer em sequência dentro da mesma PR, mas não são fases ou PRs separadas.
 
 **Dependência:** C1B-1 integrada à `main` pela [PR #48](https://github.com/Samuel-Francisco-AS/My-CT/pull/48), com arquivamento/restore real e verificação de peças Transmission aceitos; retomada efetiva do seeding ainda não testada. [Relatório](MYCT-C1B-1-RELATORIO.md). C1C Android permanece posterior.

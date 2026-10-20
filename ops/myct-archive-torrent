@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Explicit, non-destructive torrent round trips; no cleanup or background work."""
+"""Explicit torrent archive lifecycle; preview/consent before local release."""
 import base64
 from collections import Counter
 from contextlib import contextmanager
@@ -231,7 +231,9 @@ def complete(row):
     return (row.get('metadata_percent_complete') == 1 and row.get('percent_complete') == 1
             and row.get('left_until_done') == 0 and row.get('error') == 0
             and row.get('have_valid') == row.get('total_size') and row.get('have_unchecked') == 0
-            and bool(files) and all(f.get('bytes_completed') == f.get('length') for f in files))
+            and bool(files) and all(type(f.get('length')) is int and f['length'] >= 0
+                                    and f.get('bytes_completed') == f['length'] for f in files)
+            and row.get('total_size') == sum(f['length'] for f in files))
 
 
 def inspect(key, rpc):
@@ -373,6 +375,15 @@ def load_catalog():
             need(key == row['id'] == archive_id(remote, mf) and type(row['remote_reserved']) is bool
                  and row['state'] in {'pending', 'verified', 'failed'},
                  'CATALOG', 'Registro incompatível.')
+            if 'release' in row:
+                journal = row['release']
+                need(isinstance(journal, dict) and journal.get('state') in {'pending', 'uncertain', 'released'}
+                     and isinstance(journal.get('phase'), str) and isinstance(journal.get('removed'), list)
+                     and journal.get('plan', {}).get('id') == key
+                     and isinstance(journal.get('preview'), str)
+                     and re.fullmatch('[0-9]{1,12}-[0-9a-f]{64}', journal['preview'])
+                     and all(isinstance(p, str) and p in {i['path'] for i in journal['plan']['remove_paths']}
+                             for p in journal['removed']), 'CATALOG', 'Diário de liberação inválido.')
         return data
     except (Failure, ValueError, KeyError, TypeError, AttributeError, media.MediaError):
         raise Failure('CATALOG', 'Catálogo torrent inválido; preserve os registros.') from None
@@ -484,6 +495,7 @@ def archive(key, remote, data, rpc):
     identity = archive_id(remote, mf)
     row = data['entries'].get(identity) or {'id': identity, 'remote': remote, 'manifest': mf,
                                            'remote_reserved': False, 'created_at': common.now()}
+    release_resolved(row, data)
     # First snapshot is immutable on retries, including its original link inventory.
     data['entries'][identity] = row
     row.update(state='pending', error_code=None, previous_status=inventory['status'], pause_confirmed=False)
@@ -559,7 +571,8 @@ def restored_path(row):
 
 
 def local_bundle_verified(row):
-    local = bundle(row)
+    # Also used by read-only inventory: never mkdir/chmod here.
+    local = common.safe_path(common.state_dir() / 'bundles' / row['id'])
     for name in ('manifest.json', 'original.torrent'):
         common.safe_path(local / name); common.private_file(local / name)
     need((local / 'manifest.json').read_bytes() == encoded(row['manifest']), 'INTEGRITY', 'Manifesto local divergente.')
@@ -578,6 +591,7 @@ def local_data_verified(row):
 
 
 def restore(row, data):
+    release_resolved(row, data)
     mf = row['manifest']
     target = restored_path(row)
     row['restore'] = {'state': 'pending', 'path': str(target), 'at': common.now()}
@@ -614,6 +628,7 @@ def restore(row, data):
             for directory in mf['directories']:
                 common.safe_path(target / directory).mkdir(parents=True, exist_ok=True, mode=0o700)
         local_bundle_verified(row); local_data_verified(row)
+        metainfo(local_bundle_verified(row), mf['infohash'], target)
         remote_objects(row)
         row['restore'].update(state='verified', at=common.now())
         common.save_catalog(data)
@@ -627,6 +642,7 @@ def restore(row, data):
 
 
 def recover(row, data, rpc, resume=False, timeout=600):
+    release_resolved(row, data)
     key, mf = row['manifest']['infohash'], row['manifest']
     raw = local_bundle_verified(row)
     before = local_data_verified(row)
@@ -681,13 +697,21 @@ def recover(row, data, rpc, resume=False, timeout=600):
             need(complete(current), 'VERIFY_INCOMPLETE', 'Transmission não comprovou 100% de todo o torrent; não retomar.')
             need(local_data_verified(row) == before, 'SOURCE_CHANGED', 'Dados mudaram durante a verificação.')
             if resume:
+                check = get_torrent(rpc, key)
+                need(check['download_dir'] == target and check['status'] == 0 and complete(check),
+                     'STATE_CHANGED', 'Estado/localização mudou antes do start; mantenha pausado.')
                 rpc.call('torrent_start', {'ids': [key]})
             final = get_torrent(rpc, key)
-            need(complete(final) and final['status'] in (0, 5, 6), 'STATE_CHANGED', 'Estado divergente após verificação; retomada bloqueada.')
+            need(final['download_dir'] == target and complete(final) and final['status'] in (0, 5, 6),
+                 'STATE_CHANGED', 'Estado divergente após verificação; retomada bloqueada.')
             row['recovery'].update(state='verified', at=common.now(), verification_observed=True)
             common.save_catalog(data)
             return {'id': row['id'], 'state': 'verified', 'infohash': key, 'seeding_ready': True,
                     'resume_requested': resume, 'paused': final['status'] == 0, 'rpc_status': final['status'],
+                    'seed_started': final['status'] in (5, 6),
+                    'peers_connected': final.get('peers_connected', 0),
+                    'upload_rate': final.get('rate_upload', 0),
+                    'upload_observed': final.get('rate_upload', 0) > 0,
                     'library_links_modified': False,
                     'message': 'Verificação integral concluída. Consulte o estado real no Transmission.'}
     except (Failure, OSError, KeyboardInterrupt) as error:
@@ -702,15 +726,425 @@ def recover(row, data, rpc, resume=False, timeout=600):
         raise
 
 
+def release_resolved(row, data=None):
+    rows = [row] + list(data['entries'].values()) if data is not None else [row]
+    need(not any(r['manifest']['infohash'] == row['manifest']['infohash'] and
+                 r.get('release', {}).get('state') in ('pending', 'uncertain') for r in rows),
+         'RELEASE_UNCERTAIN', 'Liberação interrompida/ambígua. Confira catálogo, caminhos e RPC; não repetir automaticamente.')
+
+
+def disk_record(path):
+    common.safe_path(path)
+    s = path.lstat()
+    need(stat.S_ISREG(s.st_mode) or stat.S_ISDIR(s.st_mode), 'UNSAFE_PATH', 'Link/arquivo especial recusado.')
+    need(s.st_uid == os.getuid(), 'UNSAFE_PATH', 'Caminho não pertence ao usuário.')
+    return {'path': str(path), 'dev': s.st_dev, 'ino': s.st_ino, 'nlink': s.st_nlink,
+            'size': s.st_size, 'blocks_bytes': s.st_blocks * 512,
+            'mtime_ns': s.st_mtime_ns, 'ctime_ns': s.st_ctime_ns}
+
+
+def library_targets(row, state):
+    key = row['manifest']['infohash']
+    result = {x['path']: x['source'] for x in row['manifest']['library_links']}
+    for path, item in state['links'].items():
+        if isinstance(item, dict) and isinstance(item.get('id'), str) and item['id'].startswith(key + ':'):
+            result[path] = relative(item['id'][41:])
+    for path, source in result.items():
+        relative(path); media.safe_relative(path)
+        need(source in {f['path'] for f in row['manifest']['files']}, 'MEDIA', 'Vínculo não pertence ao pacote arquivado.')
+    return result
+
+
+def check_mounts(root):
+    # Reject nested/bind mounts, including same-device mounts that is_mount()
+    # cannot reliably detect. The normal /home ancestor mount is allowed.
+    for line in Path('/proc/self/mountinfo').read_text().splitlines():
+        value = re.sub(r'\\([0-7]{3})', lambda m: chr(int(m[1], 8)), line.split()[4])
+        mounted = Path(value)
+        need(not mounted.is_relative_to(root), 'UNSAFE_PATH', 'Árvore contém ponto de montagem; liberação recusada.')
+
+
+def storage_inventory(row, rpc, selected=()):
+    """Read only, including when blocked. No locks, directories or catalog writes."""
+    mf, key = row['manifest'], row['manifest']['infohash']
+    selected = sorted(set(selected))
+    blockers, trees, paths, directories = [], [], [], []
+    result = {'id': row['id'], 'infohash': key, 'name': mf['name'],
+              'catalog_verified': row['state'] == 'verified',
+              'catalog_path': str(common.state_dir() / 'catalog.json'),
+              'bundle_path': str(common.state_dir() / 'bundles' / row['id']),
+              'package_logical_bytes': mf['total_size'],
+              'extra_files': [f['path'] for f in mf['files'] if f['path'] not in {t['path'] for t in mf['torrent_files']}],
+              'remote': {'verified': False}, 'metainfo_available': False, 'trees': trees,
+              'library': [], 'inodes': [], 'remove_paths': [], 'directories': directories,
+              'remove_library': selected, 'blockers': blockers}
+    result['release'] = {k: row['release'][k] for k in ('state', 'phase', 'error_code', 'removed')
+                         if k in row.get('release', {})}
+
+    def blocked(code):
+        if code not in blockers:
+            blockers.append(code)
+
+    try:
+        release_resolved(row, load_catalog())
+    except Failure as error:
+        blocked(error.code)
+    try:
+        remote_objects(row)  # Covers data AND canonical manifest AND metainfo, size/MD5.
+        result['remote'] = {'verified': True, 'checks': ['size', 'md5', 'manifest', 'metainfo']}
+    except (Failure, OSError) as error:
+        result['remote']['error_code'] = common.failure_code(error)
+        blocked(common.failure_code(error))
+    try:
+        local_bundle_verified(row)
+        result['metainfo_available'] = True
+    except (Failure, OSError) as error:
+        blocked(common.failure_code(error))
+    try:
+        state = media.load_state()
+        targets = library_targets(row, state)
+        result['media_fingerprint'] = hashlib.sha256(encoded(state)).hexdigest()
+    except (Failure, media.MediaError, OSError, ValueError, TypeError, KeyError):
+        blocked('MEDIA'); state = {'links': {}, 'ignored': []}; targets = {}
+    original = Path(mf['original_download_dir'])
+    roots = list(dict.fromkeys([original, restored_path(row)]))
+    for root in roots:
+        try:
+            common.safe_path(root)
+            need(root.parent == torrent.destination() and
+                 (root.name == key or torrent.safe_named_component(root.name, key)),
+                 'UNMANAGED', 'Árvore fora do diretório isolado deste torrent.')
+            present = root.exists()
+            info = {'path': str(root), 'role': 'original' if root == original else 'restored', 'present': present}
+            trees.append(info)
+            if not present:
+                continue
+            check_mounts(root)
+            files, dirs, _ = digest_tree(root)
+            info['verified'] = files == mf['files'] and dirs == mf['directories']
+            need(info['verified'], 'LOCAL_DIVERGENCE', 'Árvore local mudou; nova auditoria necessária.')
+            for f in files:
+                paths.append({**disk_record(root / f['path']), 'source': f['path'],
+                              'role': info['role'], 'remove': True})
+            directories.extend(disk_record(root / d) for d in dirs + [''])
+        except (Failure, OSError) as error:
+            blocked(common.failure_code(error))
+    current = None
+    try:
+        current = get_torrent(rpc, key, optional=True)
+        result['torrent'] = None if current is None else {
+            'status': current['status'], 'download_dir': current['download_dir'], 'complete': complete(current),
+            'files': current['files'], 'file_stats': current['file_stats']}
+        if current:
+            need(current['download_dir'] in [str(p) for p in roots] and complete(current)
+                 and current['status'] in (0, 5, 6), 'TORRENT_STATE', 'Torrent incompatível/incompleto/ocupado.')
+            need(any(t['present'] and t['path'] == current['download_dir'] and t.get('verified') for t in trees),
+                 'TORRENT_STATE', 'Diretório RPC ausente ou divergente.')
+            need([{'path': f['name'], 'size': f['length']} for f in current['files']] ==
+                 [{'path': f['path'], 'size': f['size']} for f in mf['torrent_files']],
+                 'TORRENT_STATE', 'Estrutura RPC divergente.')
+        # A different torrent can reference the SAME paths without adding nlinks.
+        all_rows = rpc.call('torrent_get', {'fields': ['hash_string', 'download_dir', 'files']}).get('torrents')
+        need(isinstance(all_rows, list), 'RPC', 'Inventário RPC inválido.')
+        for other in all_rows:
+            if other['hash_string'].lower() == key:
+                continue
+            base = Path(other['download_dir'])
+            need(not any(base == p or base.is_relative_to(p) or p.is_relative_to(base) for p in roots),
+                 'SHARED_TORRENT', 'Outra entrada Transmission compartilha a árvore.')
+            for item in other.get('files', []):
+                p = base / relative(item['name'])
+                need(not any(p == r or p.is_relative_to(r) for r in roots),
+                     'SHARED_TORRENT', 'Outra entrada Transmission referencia estes dados.')
+    except (Failure, OSError, KeyError, TypeError, ValueError) as error:
+        blocked(error.code if isinstance(error, Failure) else 'RPC')
+    # Scan all regular library files, not only videos/active RPC sources. Matching
+    # dev+ino discovers aliases even while RPC points to an independent restore.
+    by_inode = {}
+    for p in paths:
+        by_inode.setdefault((p['dev'], p['ino']), set()).add(p['source'])
+    try:
+        root = common.safe_path(media.media_root())
+        check_mounts(root)
+        count = 0
+        for category in cleanup.LIBRARIES:
+            base = root / category
+            common.safe_path(base)
+            if not base.exists():
+                continue
+            for folder, dirs, names in os.walk(base, followlinks=False):
+                dirs[:] = [d for d in dirs if not (Path(folder) / d).is_symlink()]
+                for name in names:
+                    count += 1
+                    need(count <= media.LIMIT, 'LIMIT', 'Biblioteca excede limite de inspeção.')
+                    file = Path(folder) / name
+                    if file.is_symlink():
+                        continue
+                    s = file.lstat()
+                    rel = file.relative_to(root).as_posix()
+                    candidates = by_inode.get((s.st_dev, s.st_ino), set())
+                    source = None
+                    item = state['links'].get(rel, {})
+                    recorded = item.get('id', '')
+                    if candidates:
+                        source = recorded[41:] if recorded.startswith(key + ':') and recorded[41:] in candidates else sorted(candidates)[0]
+                    elif rel in targets:
+                        # Original names may already have been released. The library
+                        # inode still consumes SSD and must remain visible in space.
+                        expected = next(f for f in mf['files'] if f['path'] == targets[rel])
+                        measured, _ = common.fingerprint(file)
+                        if measured == {k: expected[k] for k in measured}:
+                            source = targets[rel]
+                    if source is None:
+                        continue
+                    relative(rel); media.safe_relative(rel)
+                    managed = item == {'id': key + ':' + source, 'dev': s.st_dev, 'ino': s.st_ino}
+                    paths.append({**disk_record(file), 'source': source, 'role': 'library',
+                                  'relative': rel, 'managed': managed, 'remove': rel in selected})
+                    targets.setdefault(rel, source)
+        for rel, source in sorted(targets.items()):
+            file = common.safe_path(root / rel)
+            matching = next((p for p in paths if p['path'] == str(file)), None)
+            item = {'path': rel, 'source': source, 'present': file.exists(),
+                    'linked_to_package': matching is not None, 'selected': rel in selected,
+                    'ignored': key + ':' + source in state['ignored']}
+            result['library'].append(item)
+            if rel in selected:
+                need(matching is not None and matching['managed'], 'LIBRARY_SELECTION',
+                     'Selecione somente hardlinks gerenciados e comprovados do pacote.')
+        need(set(selected) <= set(targets), 'LIBRARY_SELECTION', 'Seleção de biblioteca desconhecida.')
+    except (Failure, media.MediaError, OSError, ValueError, KeyError, TypeError) as error:
+        blocked(error.code if isinstance(error, Failure) else 'MEDIA')
+    groups = {}
+    for p in paths:
+        groups.setdefault((p['dev'], p['ino']), []).append(p)
+    for (dev, ino), aliases in sorted(groups.items()):
+        first = aliases[0]
+        unknown = first['nlink'] - len(aliases)
+        removed = [p['path'] for p in aliases if p['remove']]
+        item = {'dev': dev, 'ino': ino, 'nlink': first['nlink'], 'logical_bytes': first['size'],
+                'physical_bytes': first['blocks_bytes'], 'known_paths': [p['path'] for p in aliases],
+                'remove_paths': removed, 'unknown_links': max(unknown, 0),
+                'reclaim_candidate_bytes': first['blocks_bytes'] if len(removed) == first['nlink'] else 0}
+        result['inodes'].append(item)
+        if unknown != 0 or any(p['nlink'] != first['nlink'] for p in aliases):
+            blocked('UNKNOWN_LINKS')
+    result['remove_paths'] = [p for p in paths if p['remove']]
+    result['physical_bytes'] = sum(i['physical_bytes'] for i in result['inodes'])
+    result['reclaim_estimate_bytes'] = sum(i['reclaim_candidate_bytes'] for i in result['inodes'])
+    result['retained_known_bytes'] = result['physical_bytes'] - result['reclaim_estimate_bytes']
+    # st_blocks cannot prove unique extents (Btrfs reflinks/snapshots), nor absence
+    # of open descriptors. Never advertise a guaranteed SSD saving from nlink.
+    result['reclaim_guaranteed_bytes'] = 0
+    result['estimate_kind'] = 'inode_blocks_upper_bound_not_guaranteed'
+    result['estimate_note'] = 'st_blocks por inode, sem diretórios; reflinks, snapshots e arquivos abertos podem reter blocos. Economia garantida: 0.'
+    result['effects'] = {'torrent_entry_removed': current is not None,
+                         'seeding_stops': True, 'library_preserved': not selected,
+                         'drive_and_metainfo_preserved': True}
+    if not result['remove_paths']:
+        blocked('NO_LOCAL_DATA')
+    result['can_release'] = not blockers
+    return result
+
+
+def preview_token(plan, issued):
+    return str(issued) + '-' + hashlib.sha256(encoded([issued, plan])).hexdigest()
+
+
+def space(row, rpc, selected=()):
+    plan = storage_inventory(row, rpc, selected)
+    token = preview_token(plan, int(time.time()))
+    return {**plan, 'preview': token, 'expires_in_seconds': 600,
+            'confirmation': token, 'library_confirmation': token if selected else None}
+
+
+def open_parent(path):
+    """Open each ancestor with NOFOLLOW, including intermediate components."""
+    common.safe_path(path)
+    fd = os.open('/', os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for component in path.parent.parts[1:]:
+            child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            os.close(fd); fd = child
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def release(row, data, rpc, token, confirmation, selected=(), library_confirmation=None):
+    need(isinstance(token, str) and re.fullmatch('[0-9]{1,12}-[0-9a-f]{64}', token)
+         and confirmation == token, 'CONFIRMATION', 'Confirme explicitamente o identificador da prévia.')
+    need(not selected or library_confirmation == token, 'LIBRARY_CONFIRMATION',
+         'Remover a seleção da biblioteca exige confirmação específica da mesma prévia.')
+    release_resolved(row, data)
+    previous = row.get('release', {})
+    if previous.get('state') == 'released' and previous.get('preview') == token:
+        # An exact replay is a no-op, never another destructive attempt.
+        return {'id': row['id'], 'state': 'released', 'already_released': True, 'mutations_repeated': False}
+    issued = int(token.split('-', 1)[0])
+    need(0 <= time.time() - issued <= 600, 'STALE_PREVIEW', 'Prévia expirada; consulte space novamente.')
+    key = row['manifest']['infohash']
+    with torrent.naming_lock(key), media_lock():
+        plan = storage_inventory(row, rpc, selected)
+        need(plan['can_release'], 'BLOCKED', 'Liberação bloqueada; consulte space para os impedimentos.')
+        need(preview_token(plan, issued) == token, 'STALE_PREVIEW', 'Estado/seleção mudou; consulte nova prévia.')
+        journal = {'state': 'pending', 'phase': 'validated', 'preview': token, 'at': common.now(),
+                   'plan': plan, 'removed': []}
+        row['release'] = journal
+        common.save_catalog(data)  # Crash/timeout after this point forbids automatic retry.
+        try:
+            if plan['torrent'] is not None:
+                journal['phase'] = 'pausing'; common.save_catalog(data)
+                rpc.call('torrent_stop', {'ids': [key]})
+                paused = wait_paused(rpc, key)
+                need(paused['download_dir'] == plan['torrent']['download_dir'] and complete(paused),
+                     'STATE_CHANGED', 'Estado mudou durante a pausa; dados preservados.')
+                journal['phase'] = 'removing_entry'; common.save_catalog(data)
+                rpc.call('torrent_remove', {'ids': [key], 'delete_local_data': False})
+                need(get_torrent(rpc, key, optional=True) is None, 'RPC', 'Remoção da entrada não confirmada; não excluir dados.')
+            # Revalidate every local inode, full content and remote after RPC,
+            # immediately before first unlink. Ignore only the expected RPC absence.
+            fresh = storage_inventory(row, rpc, selected)
+            fresh['blockers'] = [b for b in fresh['blockers'] if b != 'RELEASE_UNCERTAIN']
+            need(not fresh['blockers'] and fresh['torrent'] is None and
+                 fresh['remove_paths'] == plan['remove_paths'] and fresh['directories'] == plan['directories']
+                 and fresh['inodes'] == plan['inodes'] and fresh['media_fingerprint'] == plan['media_fingerprint'],
+                 'STATE_CHANGED', 'Dados/vínculos mudaram após RPC; nenhuma exclusão autorizada.')
+            journal['phase'] = 'unlinking'; common.save_catalog(data)
+            removed_by_inode = Counter()
+            expected_hashes = {f['path']: f for f in row['manifest']['files']}
+            for item in plan['remove_paths']:
+                need(get_torrent(rpc, key, optional=True) is None, 'STATE_CHANGED',
+                     'Torrent reapareceu durante a liberação; pare e audite os dados remanescentes.')
+                path = Path(item['path'])
+                now = disk_record(path)
+                inode = (item['dev'], item['ino'])
+                need(all(now[f] == item[f] for f in ('dev', 'ino', 'size', 'mtime_ns'))
+                     and now['nlink'] == item['nlink'] - removed_by_inode[inode],
+                     'SOURCE_CHANGED', 'Arquivo/vínculo alterado; pare e audite a liberação parcial.')
+                measured, _ = common.fingerprint(path)
+                need(measured == {k: expected_hashes[item['source']][k] for k in measured},
+                     'SOURCE_CHANGED', 'Conteúdo alterado antes da exclusão.')
+                # Descriptor-relative unlink; never follow a replaced parent symlink.
+                common.safe_path(path.parent)
+                fd = open_parent(path)
+                try:
+                    s = os.stat(path.name, dir_fd=fd, follow_symlinks=False)
+                    need((s.st_dev, s.st_ino, s.st_nlink, s.st_size, s.st_mtime_ns) ==
+                         (now['dev'], now['ino'], now['nlink'], now['size'], now['mtime_ns']),
+                         'SOURCE_CHANGED', 'Alvo alterado; exclusão recusada.')
+                    os.unlink(path.name, dir_fd=fd)
+                    os.fsync(fd)
+                finally:
+                    os.close(fd)
+                removed_by_inode[inode] += 1
+                journal['removed'].append(str(path)); common.save_catalog(data)
+            for item in sorted(plan['directories'], key=lambda x: len(Path(x['path']).parts), reverse=True):
+                path = Path(item['path'])
+                fd = open_parent(path)
+                try:
+                    s = os.stat(path.name, dir_fd=fd, follow_symlinks=False)
+                    need(stat.S_ISDIR(s.st_mode) and (s.st_dev, s.st_ino) == (item['dev'], item['ino']),
+                         'SOURCE_CHANGED', 'Diretório mudou.')
+                    os.rmdir(path.name, dir_fd=fd)  # Empty, explicitly inventoried package directories only.
+                    os.fsync(fd)
+                finally:
+                    os.close(fd)
+            journal.update(state='released', phase='complete', at=common.now())
+            common.save_catalog(data)
+            return {'id': row['id'], 'state': 'released', 'removed_paths': journal['removed'],
+                    'library_removed': sorted(set(selected)), 'library_preserved': not selected,
+                    'torrent_entry_removed': True, 'seeding_active': False,
+                    'reclaim_estimate_bytes': plan['reclaim_estimate_bytes'], 'reclaim_guaranteed_bytes': 0,
+                    'message': 'Dados locais selecionados removidos. Drive, catálogo, metainfo e vínculos não selecionados preservados.'}
+        except (Failure, OSError, KeyboardInterrupt) as error:
+            journal.update(state='uncertain', error_code=common.failure_code(error), at=common.now())
+            common.save_catalog(data)
+            failure = Failure('RELEASE_UNCERTAIN', 'Liberação não confirmada; não repetir. Consulte space, catálogo e Transmission para auditoria manual.')
+            failure.operation = {'id': row['id'], 'phase': journal['phase'], 'removed_paths': journal['removed'],
+                                 'cause': journal['error_code'], 'automatic_retry': False}
+            raise failure from None
+
+
+def relink(row, data, rpc, selected, acl=None):
+    release_resolved(row, data)
+    need(selected and len(selected) == len(set(selected)), 'LIBRARY_SELECTION', 'Selecione caminhos de biblioteca distintos.')
+    key, target = row['manifest']['infohash'], restored_path(row)
+    with torrent.naming_lock(key), media_lock():
+        local_data_verified(row); metainfo(local_bundle_verified(row), key, target)
+        current = get_torrent(rpc, key)
+        need(row.get('recovery', {}).get('state') == 'verified' and current['status'] == 0
+             and current['download_dir'] == str(target) and complete(current),
+             'RECOVERY_REQUIRED', 'Execute recover sem --resume e mantenha pausado antes de reconstruir vínculos.')
+        state = media.load_state()
+        targets = library_targets(row, state)
+        actions, ignored = [], []
+        for rel in selected:
+            relative(rel); media.safe_relative(rel)
+            need(rel in targets, 'LIBRARY_SELECTION', 'Destino não registrado para este arquivamento.')
+            source = targets[rel]; identity = key + ':' + source
+            if identity in state['ignored']:
+                ignored.append(rel); continue
+            file = common.safe_path(target / source)
+            need(file.suffix.lower() in media.VIDEO, 'MEDIA', 'Reconstrução restrita aos vídeos da biblioteca existente.')
+            dest = common.safe_path(media.media_root() / rel)
+            item = state['links'].get(rel)
+            need(item is None or item.get('id') == identity, 'MEDIA', 'Destino registrado para outra mídia.')
+            if dest.exists():
+                a, b = file.stat(), dest.lstat()
+                need(stat.S_ISREG(b.st_mode) and (a.st_dev, a.st_ino) == (b.st_dev, b.st_ino),
+                     'DEST_EXISTS', 'Biblioteca ocupada por outro inode; não substituir.')
+            actions.append((rel, {'id': identity, 'source': file, 'torrent': key, 'name': file.name}))
+        outcomes = []
+        for rel, candidate in actions:
+            # Existing ACL mechanism grants Jellyfin read/traverse; no global config.
+            try:
+                outcome = media.add_one(candidate, rel, state, acl=acl or media.ensure_access)
+            except (media.MediaError, OSError, media.subprocess.CalledProcessError):
+                raise Failure('MEDIA', 'Falha ao reconstruir vínculo/acesso Jellyfin; consulte os caminhos e o estado de mídia antes de repetir.') from None
+            s = candidate['source'].stat()
+            state['links'][rel] = {'id': candidate['id'], 'dev': s.st_dev, 'ino': s.st_ino}
+            media.save_state(state)  # Keep partial successes idempotent after interruption.
+            outcomes.append({'path': rel, 'outcome': outcome})
+        return {'id': row['id'], 'state': 'verified', 'library': outcomes, 'ignored': ignored,
+                'paused': True, 'seeding_started': False}
+
+
+def lifecycle_args(argv):
+    action, identity, *rest = argv
+    options, selected = {}, []
+    while rest:
+        need(len(rest) >= 2, 'USAGE', 'Opção exige valor.')
+        option, value, *rest = rest
+        allowed = {'space': {'--remove-library'},
+                   'release': {'--preview', '--confirm', '--remove-library', '--confirm-library'},
+                   'relink': {'--library'}}[action]
+        need(option in allowed, 'USAGE', 'Opção inválida para esta ação.')
+        if option in ('--remove-library', '--library'):
+            relative(value); media.safe_relative(value); selected.append(value)
+        else:
+            need(option not in options, 'USAGE', 'Opção repetida.')
+            options[option] = value
+    need(len(selected) == len(set(selected)) and len(selected) <= cleanup.MAX_PATHS,
+         'LIBRARY_SELECTION', 'Seleção repetida ou excessiva.')
+    return options, selected
+
+
 def run(argv, rpc=None):
     remote = common.remote_name(os.environ.get('MYCT_ARCHIVE_REMOTE', 'myct-gdrive:'))
     if len(argv) >= 2 and argv[0] == '--remote':
         remote = common.remote_name(argv[1]); argv = argv[2:]
-    valid = (len(argv) == 1 and argv[0] in ('list', 'status') or len(argv) == 2 and argv[0] in ('inspect', 'archive', 'restore', 'recover')
+    lifecycle = len(argv) >= 2 and argv[0] in ('space', 'release', 'relink')
+    valid = (lifecycle or len(argv) == 1 and argv[0] in ('list', 'status') or len(argv) == 2 and argv[0] in ('inspect', 'archive', 'restore', 'recover')
              or len(argv) == 3 and argv[0] == 'recover' and argv[2] == '--resume')
-    need(valid, 'USAGE', 'Uso: myct-archive-torrent [--remote NOME:] inspect HASH|archive HASH|list|status|restore ID|recover ID [--resume]')
+    need(valid, 'USAGE', 'Uso: myct-archive-torrent [--remote NOME:] inspect HASH|archive HASH|list|status|restore ID|recover ID [--resume]|space ID [--remove-library CAMINHO]|release ID --preview TOKEN --confirm TOKEN [--remove-library CAMINHO --confirm-library TOKEN]|relink ID --library CAMINHO')
     if argv[0] == 'inspect':
         return inspect(hash_key(argv[1]), rpc or Rpc())  # No catalog/lock/directory writes.
+    if lifecycle:
+        options, selected = lifecycle_args(argv)
+        if argv[0] == 'space':
+            return space(entry(load_catalog(), argv[1], remote), rpc or Rpc(), selected)
     with common.catalog_lock():
         data = load_catalog()
         if argv[0] == 'list':
@@ -723,6 +1157,12 @@ def run(argv, rpc=None):
         if argv[0] == 'archive':
             return archive(hash_key(argv[1]), remote, data, rpc or Rpc())
         row = entry(data, argv[1], remote)
+        if argv[0] == 'release':
+            return release(row, data, rpc or Rpc(), options.get('--preview'), options.get('--confirm'),
+                           selected, options.get('--confirm-library'))
+        if argv[0] == 'relink':
+            return relink(row, data, rpc or Rpc(), selected)
+        release_resolved(row, data)
         return restore(row, data) if argv[0] == 'restore' else recover(row, data, rpc or Rpc(), len(argv) == 3)
 
 
@@ -735,7 +1175,9 @@ def main():
     except Failure as error:
         result = {'ok': False, 'state': 'blocked' if error.code in {
             'HASH', 'ID', 'USAGE', 'BLOCKED', 'NOT_FOUND', 'NOT_VERIFIED', 'UNMANAGED', 'INCOMPATIBLE',
-            'LOCAL_SPACE', 'DEST_EXISTS', 'UNSAFE_PATH', 'CATALOG', 'MANIFEST', 'META', 'BUSY'} else 'failed',
+            'LOCAL_SPACE', 'DEST_EXISTS', 'UNSAFE_PATH', 'CATALOG', 'MANIFEST', 'META', 'BUSY',
+            'CONFIRMATION', 'LIBRARY_CONFIRMATION', 'STALE_PREVIEW', 'LIBRARY_SELECTION',
+            'RECOVERY_REQUIRED', 'RELEASE_UNCERTAIN'} else 'failed',
                   'error': {'code': error.code, 'message': str(error)}}
         if hasattr(error, 'operation'):
             result['operation'] = error.operation

@@ -402,3 +402,19 @@ limitações em [MYCT-C1B-1](MYCT-C1B-1-RELATORIO.md).
 ## 19/10/2026 — C1B-1 aceita funcionalmente; C1B-2 segue pendente
 
 Proprietário encerrou e integrou a PR #48 à `main` no merge `fce805ea96bc108a85b466133c6724b4688a329c` após testes físicos no Fedora: `inspect` reconheceu três arquivos e um hardlink Jellyfin; `archive` enviou 614825177 bytes com tamanho/MD5 remoto validados; `restore` reconferiu tamanho, MD5, SHA-256 e metainfo; `recover` observado pelo Transmission terminou em `seeding_ready:true` e `rpc_status:0` (pausado). **Não houve `--resume` ou prova de tráfego/peers**. Transmission foi redirecionado à cópia restaurada; originais/hardlinks intactos. Não excluir nem alterar dados por causa deste fechamento. C1B-2 será prévia do SSD/hardlinks e liberação guiada com autorização específica; C1C continua planejada. [Relatório de aceite](MYCT-C1B-1-RELATORIO.md) · [PR #48](https://github.com/Samuel-Francisco-AS/My-CT/pull/48).
+
+## 19/10/2026 — C1B-2 unificada: nomes reais, consentimento e recuperação
+
+Por decisão expressa do proprietário, uma única branch/PR entrega inventário,
+liberação guiada, restauração, reconstrução de links e retomada explícita. A
+extensão fica no helper C1B-1, sem nova infraestrutura. A liberação retira a
+entrada RPC sem apagar dados pelo Transmission, confirma ausência e só então
+retira nomes das árvores original/restaurada comprovadas. Isso distingue a
+segunda árvore do teste C1B-1 e evita tratar a lista de vídeos como pacote inteiro.
+Links Jellyfin são preservados por padrão; remoção deles exige seleção e
+confirmação distintas, e sua reconstrução usa `myct-media.add_one`/ACL existentes.
+Diário privado bloqueia replay após crash/timeout ou liberação parcial. Blocos
+por inode são estimativa sem economia garantida devido a reflinks/snapshots e
+arquivos abertos. Só fixtures simuladas nesta entrega; instalação e operações
+reais dependem de auditoria Luna e autorização física específica.
+[Relatório da candidata](MYCT-C1B-2-RELATORIO.md).
