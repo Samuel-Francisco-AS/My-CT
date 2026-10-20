@@ -814,3 +814,11 @@ Após atualizar manualmente o helper `myct-search` instalado e instalar a candid
 **Implantação:** proprietário confirmou atualização do helper Fedora e APK candidato 0.8.1/code 40. Não houve modificação de configuração ou restart de Transmission, Jellyfin, Prowlarr, PostgreSQL ou SSH no fechamento. A sincronização do checkout local `main` e remoção da branch devem ser feitas por procedimento Git seguro, com árvore limpa e verificação de ancestralidade do commit de merge.
 
 **Próxima trilha:** MYCT-S2/Bitmagnet é **opcional, não iniciada e não é requisito de conclusão da S1C**. Issue #43 preservada em aberto para a decisão futura sobre S2.
+
+## MYCT-S1D — Links da fonte e .torrent (planejamento 20/10/2026)
+
+**Planejada, não implementada.** Etapa solicitada pelo proprietário após o fechamento S1C para tornar úteis resultados da Busca sem `infoHash`/magnet. **Base:** `main` `382cb7d2faf7ff16472fe109976dfcbb47f246f9`, após MYCT-C1C/PR #50; versão atual Android `0.9.1-c1c-rc2` (code 42). Trabalho na branch `myct-s1d-torrent-links`, checkout único `~/Projetos/My-CT`. Não iniciada instalação, compilação ou alterações de serviços.
+
+Duas ações explícitas no card: **Abrir página da fonte** no navegador Android (somente URL pública segura, sem segredo), e **Adicionar arquivo .torrent** via helper Fedora/Prowlarr/Transmission dedicado quando metadados recuperáveis. URLs proxy autenticadas/passkeys permanecem fora do APK/JSON/logs. Não presumir que toda fonte sem magnet possui .torrent; validar viabilidade pelo Prowlarr real antes de implementar. Preservar 20 itens por página, filtros, diversidade, deduplicação, magnet v1 e demais funcionalidades da S1C/C1C.
+
+**Plano de engenharia:** [MYCT-S1D-LINKS-TORRENT.md](MYCT-S1D-LINKS-TORRENT.md). **Issue:** [#51](https://github.com/Samuel-Francisco-AS/My-CT/issues/51). Candidata futura com versionCode **maior que 42** e mesmo pacote/certificado, PR draft até aceite físico no Moto G06. **MYCT-S2/Bitmagnet permanece opcional e separada**, conforme issue #43.
