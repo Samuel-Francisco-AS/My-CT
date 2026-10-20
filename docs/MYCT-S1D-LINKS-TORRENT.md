@@ -246,3 +246,20 @@ b788958be4c919889fc30813f13f1aceb5b6b69670514c82e16288f4b60b83b3
 ```
 
 Retomada: branch `myct-s1d-torrent-links`, PR #52 draft; instalar helpers somente por operação manual revisada, instalar APK por atualização e executar o roteiro físico acima. A ausência de prova binária real sem infohash permanece uma limitação explícita. Não fazer merge nem encerrar o gate como aceito antes da observação do proprietário.
+
+## MYCT-S1D — Aceite físico dos fluxos principais no Moto G06 (20/10/2026)
+
+**Origem da evidência:** proprietário comunicou diretamente na conversa e compartilhou capturas reais do aplicativo My-CT 0.9.2-s1d-rc1/code 43 em operação no Moto G06. **Omitir dos relatórios os títulos e nomes dos torrents exibidos nas capturas**, conforme solicitação do proprietário; os nomes não são necessários para comprovar o fluxo.
+
+**Fluxos funcionais observados:**
+
+1. **Abrir página da fonte:** proprietário tocou na ação da Busca e confirmou que o navegador externo abriu a página corretamente.
+2. **Adicionar arquivo torrent:** proprietário declarou explicitamente ter tocado no botão `Adicionar arquivo torrent`; a interface da Busca exibiu **`Torrent aceito pelo Fedora (ID 47). Consulte o estado real.`** e ofereceu navegação para Downloads → Torrents.
+3. **Confirmação no Transmission real:** uma captura da aba **Downloads → Torrents** após a inclusão mostrou o item no estado **Baixando**, com **2 peers**, **9,4 MB recebidos** e taxa momentânea de aproximadamente **622,6 KB/s**. Isso confirma inclusão e transferência efetiva, além da aceitação da CLI.
+4. **Interface de resultados:** capturas mostram ações independentes para magnet, arquivo torrent e abertura da página; a Busca continua apresentando vários cards sem se tornar uma inclusão automática. Os títulos dos cards não serão reproduzidos neste documento.
+
+**Conclusão:** o fluxo principal de abertura de página e **inclusão de arquivo .torrent por ação manual no Moto G06 → SSH → Fedora → Prowlarr → Transmission** teve **uma execução real bem-sucedida**, superando a ausência de demonstração real da entrega inicial `f138142`. Essa comprovação não torna todo indexador compatível nem garante que todo proxy entregue metainfo: os redirects/erros da investigação continuam limitações válidas por fonte e resultado.
+
+**Ainda não verificado fisicamente nesta conversa:** preservação exata da posição de rolagem após retornar do navegador, duplo toque/duplicata, cancelamento da espera, reconexão, erro de fonte e regressão completa em serviços não relacionados. Não registrar esses cenários como PASS físico. A captura demonstra progresso e peers no instante observado, não conclusão futura do download.
+
+**Estado:** aceite físico **dos dois fluxos principais** confirmado pelo proprietário. **PR #52 permanece draft e sem merge** aguardando instrução explícita para fechamento padrão. Nenhum download foi iniciado pela assistente; toda inclusão foi acionada manualmente pelo proprietário. MYCT-S2/Bitmagnet permanece fora desta etapa.
