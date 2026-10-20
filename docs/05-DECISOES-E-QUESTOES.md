@@ -418,3 +418,15 @@ por inode são estimativa sem economia garantida devido a reflinks/snapshots e
 arquivos abertos. Só fixtures simuladas nesta entrega; instalação e operações
 reais dependem de auditoria Luna e autorização física específica.
 [Relatório da candidata](MYCT-C1B-2-RELATORIO.md).
+
+
+
+## 20/10/2026 — C1B-2: aceite físico, ciclo unificado e regra operacional
+
+**DECIDIDO/ACEITO:** o proprietário validou a C1B-2 como **uma única entrega**, sem subdivisões: inventário `space`, `release` guiado com dupla confirmação opcional para Jellyfin, `restore` completo, `relink` explícito/idempotente e `recover --resume` com verificação. A [PR #49](https://github.com/Samuel-Francisco-AS/My-CT/pull/49) é a unidade de fechamento. A C1C Android continua na [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46).
+
+**Provas reais, Fedora/Google Drive/Transmission:** 121/121 testes locais PASS; fixture própria com três arquivos/134.250.063 bytes, upload remoto tamanho/MD5 validado; hardlink dev:ino compartilhado e nlink=2; dois tipos de liberação consentida (com e sem remover link da biblioteca) e restaurações integrais; `relink` retornou `added` e depois `existing`, mesmo inode/bytes; `recover --resume` retornou seeding iniciado RPC 6, sem peers e sem upload observado. Liberação inicial estimava ~268,48 MB em blocos, mas `df` imediato não mudou; o espaço livre medido após restaurar voltou ~134,24 MB acima do início. Não alegar liberação instantânea ou byte garantido no Btrfs. [Relatório completo](MYCT-C1B-2-RELATORIO.md).
+
+**Diretriz operacional do proprietário:** evitar autorizações repetidas para operações ordinárias, de risco limitado e verificáveis no escopo de um teste/projeto aprovado. Priorizar execução ágil e resultado funcional; manter proteções para evitar perda catastrófica, interrupção de SSH/Fedora, quebra do My-CT ou remoção de acervo pessoal/arquivamentos sem escopo. Esta decisão **não é** permissão irrestrita para excluir dados reais, alterar serviços/rede nem desativar as proteções da ferramenta. Fixtures descartáveis e operações de baixo risco podem prosseguir dentro do escopo autorizado; em caso de estado incerto, interromper em vez de repetir a operação destrutiva.
+
+**Estado dos testes:** fixture própria foi deixada restaurada, com hardlink reconstruído e Transmission em seeding RPC 6. O acervo pessoal existente da C1B-1 não foi objeto de nenhuma das liberações.
