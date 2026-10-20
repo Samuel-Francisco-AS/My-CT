@@ -1,6 +1,6 @@
 # MYCT-C1B-1 — torrent integral: arquivar, restaurar e preparar seeding
 
-**19/10/2026 — candidata para auditoria da Luna, sem aceite físico/merge.**
+**19/10/2026 — Fechamento: C1B-1 aceita funcionalmente para inspect/archive/restore/recover pausado no Fedora, PR #48 autorizada para merge. Retomada de seeding efetivo NÃO testada.**
 Branch `myct-c1b-torrent-roundtrip`, criada da `main` sincronizada em `a831b87`,
 árvore inicialmente limpa. A C1A/PR #47 permanece aceita e intacta.
 Planejamento e continuidade: [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46)
@@ -16,8 +16,7 @@ Antes de codificar, os critérios foram: inventariar o pacote completo; manter
 extras, `.torrent`, seleção e manifesto; não sobrescrever originais/remotos;
 validar tamanho/hashes; restaurar em árvore isolada; só permitir retomada após
 verificação integral observada. Testes simulados não substituem teste físico.
-**Nenhum torrent do proprietário foi pausado, reiniciado, enviado ou restaurado
-nesta entrega. Nenhum arquivamento real foi executado.**
+> **Histórico anterior ao gate real:** quando o Codex publicou a candidata nenhum torrent real havia sido transferido. Esse estado foi superado pelo aceite físico documentado no fechamento abaixo.
 
 ## Arquitetura e persistência
 
@@ -215,7 +214,7 @@ Ambiente: Python 3.14.7, Rclone 1.74.3 já instalado, Git 2.55.0, Fedora 44.
 Não foi executado Rclone real além de `version`; cota/OAuth/throughput real não
 foram retestados. APK/build Android não executados por não fazerem parte do escopo.
 
-## Limitações e primeiro teste controlado — somente após Luna + autorização
+## Limitações e roteiro histórico de teste (pré-aceite)
 
 - Máximo 1000 arquivos e 1000 diretórios; cache `.torrent` até 4 MiB; RPC herdado
   limita respostas a 256 KiB. Só torrents gerenciados My-CT, metadados v1 e
@@ -230,7 +229,7 @@ foram retestados. APK/build Android não executados por não fazerem parte do es
 - O teste físico de Drive/Transmission, observação de verificação rápida, arquivo
   grande, custo real e recuperação de seeding permanecem pendentes. Não liberar SSD.
 
-Pré-requisito futuro: o proprietário escolhe e conclui um torrent **pequeno,
+**Texto histórico do roteiro antes do aceite real; não repetir automaticamente no acervo atual.** O proprietário escolhe e conclui um torrent **pequeno,
 público, permitido e descartável**, dedicado ao teste, sem usar filmes/séries ou
 pacotes existentes como cobaias. Não remover entradas/dados para preparar o teste.
 Após revisão da Luna e autorização explícita, no checkout revisado:
@@ -261,3 +260,31 @@ Referências técnicas consultadas: [RPC Transmission 4.1.3](https://github.com/
 [implementação verify](https://github.com/transmission/transmission/blob/4.1.3/libtransmission/torrent.cc),
 [Rclone lsjson](https://rclone.org/commands/rclone_lsjson/),
 [copyto](https://rclone.org/commands/rclone_copyto/).
+
+
+## Fechamento funcional real no Fedora — 19/10/2026
+
+**Decisão do proprietário:** encerrar e integrar C1B-1. Aceite funcional de inventário, upload, restauração e recuperação pausada; **não houve execução de `recover --resume`, início comprovado do seeding, peers ou tráfego de upload**. C1B-2 e C1C não implementadas.
+
+### Evidência física fornecida no diálogo
+
+- Codex informou **96 testes simulados PASS** (25 C1B, 29 C1A, 17 Torrent, 25 Media). O proprietário compartilhou apenas o trecho final da execução local (`Ran 25 tests in 0.078s / OK`), não os logs completos dos outros 71 testes. A revisão estática da Luna não substitui execução independente da suíte.
+- `status` respondeu do Drive real: `remote:myct-gdrive:`, quota total 429496729600 bytes, livre 428768951945 bytes no instante da consulta. `list` retornou catálogo local C1B inicialmente vazio (`entries:[]`), com `remote_checked:false`.
+- `inspect`: torrent v1 gerenciado, com três arquivos (vídeo principal e dois arquivos auxiliares), 614775873 bytes totais, completo e em status RPC 6 (seeding). Metainfo `.torrent` recuperável de 47512 bytes, um hardlink gerenciado do vídeo para biblioteca Jellyfin, nenhum link externo apontado; `blockers:[]` e `can_archive:true`.
+- `archive`: `ok:true`, `state:verified`; 614825177 bytes no Google Drive contando dados, metainfo e manifesto; verificação remota de tamanho/MD5, SHA-256 registrado localmente; `original_preserved:true`, `hardlinks_preserved:true`, `paused:true`. Nenhuma exclusão local ou remota.
+- `restore`: espaço livre reportado antes da operação: 27 GB no filesystem `/home`. Restauração isolada retornou `state:verified`, `reused:false`, com comparação de tamanho/MD5/SHA-256 e metainfo/infohash. `seeding_ready:false` nessa etapa era esperado.
+- `recover` **sem `--resume`**: `ok:true`, `state:verified`, `seeding_ready:true`, `resume_requested:false`, `paused:true`, `rpc_status:0` e `library_links_modified:false`. A CLI observou a verificação de peças pelo Transmission sobre a árvore restaurada e indicou que os bytes são válidos sem download dos peers. **Não comprova seeding ativo.**
+
+### Estado pós-teste e limitações do aceite
+
+- Entrada Transmission fica **pausada** e passou a referenciar a **árvore restaurada** com `move:false`. O original e seu hardlink Jellyfin permanecem intactos. As duas árvores ocupam SSD; não apagar nenhuma por dedução de economia.
+- Cópia Drive permanece arquivada. A restauração depende do catálogo **e bundle locais privados** `~/.local/share/myct/archive-torrents/`; salvar backup privado, sem publicar `.torrent` ou credenciais Google/Rclone no Git.
+- Não foi autorizado remover arquivo original, destruir torrent, alterar hardlinks, limpar nuvem, habilitar cron ou modificar serviço. Nenhuma dessas ações faz parte do merge.
+- A retomada real (`--resume` e tráfego/peers) permanece como **gate pendente**, preferencialmente com torrent livremente redistribuível. Não prometer que já voltou a compartilhar.
+- Torrent v1 gerenciado, estrutura de caminhos original, limite de 1000 arquivos/dirs e metainfo até 4 MiB continuam sendo as restrições deste incremento.
+
+### Próximo trabalho: C1B-2
+
+Implementar primeiro **prévia operacional de ocupação real do SSD** (inodes/hardlinks, originais, biblioteca, cópia restaurada e Transmission), sem exclusões. Depois avaliar liberação guiada de pacotes já verificados com autorização separada, sem danificar o Jellyfin e sem confundir unlink com espaço recuperado. A reconstrução de hardlinks deve reutilizar o mecanismo Media existente, sem sobrescrever links. Validar a retomada efetiva usando conteúdo autorizado. Android C1C segue etapa posterior.
+
+**Fechamento remoto:** PR #48 será integrada à `main` após registrar estas evidências. A issue #46 deve permanecer aberta. Preservar a branch `gh-pages`, a infraestrutura Google OAuth e a [documentação correspondente](MYCT-INFRA-GOOGLE-CLOUD-DRIVE-OAUTH-PAGES.md).
