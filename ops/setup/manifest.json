@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "release": "myct-setup-1-rc1",
+  "fedora_min": 43,
+  "fedora_max": 44,
+  "architectures": ["x86_64", "aarch64"],
+  "packages": ["gcc-c++", "make", "libpq", "libpq-devel", "postgresql", "postgresql-server", "policycoreutils"],
+  "sources": ["server/main.cpp", "server/postgres.cpp", "server/postgres.hpp", "server/Makefile", "server/migrations/001_execution_events.sql"],
+  "components": [
+    {"id": "packages", "privilege": "sudo", "description": "DNF install apenas dos pacotes ausentes; inclui compilador C++20 e libpq. Sem upgrade geral."},
+    {"id": "core", "privilege": "usuário + sudo", "description": "Compilar Core com make -j1; instalar /usr/local/bin/myct-core e unidade myct-core.service. Não substituir instalação existente."},
+    {"id": "postgres", "privilege": "usuário", "description": "Criar cluster privado em ~/.local/share/myct/postgres, peer, sem TCP, 16 MB shared_buffers/10 conexões. Criar banco myct e migração 001 transacional."},
+    {"id": "services", "privilege": "sudo", "description": "Ativar myct-core.service de sistema como usuário SSH e myct-postgres.service de usuário. Habilitar linger nesta conta: mantém o gerenciador de usuário e todas as suas unidades habilitadas após logout/boot, incluindo o banco."},
+    {"id": "verify", "privilege": "usuário", "description": "Verificar saúde loopback, banco/migração, serviços ativos e habilitados. Sem reboot automático."}
+  ],
+  "optional": ["Cofre/GNOME Keyring requer provisionamento humano próprio; não criar coleção nem instalar helper com pin específico deste Fedora", "Downloads/Transmission/Prowlarr: SETUP-2", "Rclone/nuvem: SETUP-3", "Backup/restore: SETUP-4", "Antivírus, inspeção de arquivos e mídia não são dependências da Saúde/Core"]
+}

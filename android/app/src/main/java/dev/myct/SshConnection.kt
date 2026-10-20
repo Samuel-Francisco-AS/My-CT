@@ -59,6 +59,41 @@ class SshConnection {
     internal fun antivirus(command: AvCommand): SshExecResult =
         executeSshResult(avCommand(command), { openDownloadExec() })
 
+    internal fun setupDiagnose(bundle: SetupBundle): SetupPlan {
+        val reply = executeSshResult(setupDiagnosticCommand(bundle.diagnostic), { openDownloadExec() }, 120_000)
+        check(reply.status == 0)
+        return parseSetupPlan(reply.output)
+    }
+
+    internal fun setupApply(bundle: SetupBundle, planId: String, password: ByteArray,
+                            receive: (org.json.JSONObject) -> Unit) {
+        require(Regex("[a-f0-9]{64}").matches(planId))
+        require(password.size <= 1024 && password.none { it == 10.toByte() || it == 13.toByte() })
+        val channel = synchronized(downloadChannels) {
+            check(!closed && session?.isConnected == true)
+            (session!!.openChannel("exec") as ChannelExec).also { downloadChannels.add(it) }
+        }
+        val wire = bundle.payload + password + byteArrayOf(10)
+        // Receiver is fixed APK code; staged bytes execute only after SHA-256 verification.
+        try {
+            channel.setCommand(setupReceiverCommand(bundle, planId))
+            channel.setInputStream(java.io.ByteArrayInputStream(wire))
+            channel.setOutputStream(SetupLines(receive))
+            channel.setErrStream(object : OutputStream() { override fun write(b: Int) {} })
+            channel.connect(10_000)
+            val deadline = System.nanoTime() + 3_600_000L * 1_000_000
+            while (!channel.isClosed) {
+                if (Thread.currentThread().isInterrupted || System.nanoTime() >= deadline) throw InterruptedException()
+                Thread.sleep(100)
+            }
+            check(channel.exitStatus == 0) { "Instalação requer diagnóstico." }
+        } finally {
+            wire.fill(0); password.fill(0)
+            channel.disconnect()
+            synchronized(downloadChannels) { downloadChannels.remove(channel) }
+        }
+    }
+
     private fun openDownloadExec(keepInput: Boolean = false): DownloadExec {
         val channel = synchronized(downloadChannels) {
             check(!closed && session?.isConnected == true)

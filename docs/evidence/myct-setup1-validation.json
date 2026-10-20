@@ -1,0 +1,51 @@
+[
+  {
+    "scenario": "A-clean+B-repeat",
+    "container": "myct-setup1-7d7ff2160b",
+    "complete": true,
+    "repeat_no_changes": true,
+    "sentinel_preserved": true,
+    "migration_count": 1,
+    "postgres_tcp": false,
+    "versions": {
+      "gcc": "16.2.1",
+      "postgres": "postgres (PostgreSQL) 18.6",
+      "libpq": "PostgreSQL 18beta1",
+      "systemd": "systemd 259 (259.10-1.fc44)",
+      "dnf": "dnf5 version 5.4.6.0"
+    },
+    "payload_sha256": "106b2cbbe3a6fe6d7dd23baf302321ed55a9b943170fcf7c113e675365c44b8e",
+    "service_memory": {
+      "core": "MemoryCurrent=1208320",
+      "postgres": "MemoryCurrent=31768576"
+    },
+    "linger": "yes",
+    "cluster_disk": "42M\t/home/tester/.local/share/myct/postgres",
+    "container_boot_and_event_persistence": true
+  },
+  {
+    "scenario": "C-resume",
+    "container": "myct-setup1-86bb7be8f8",
+    "partial_core_preserved": true,
+    "complete": true,
+    "repeat_no_changes": true,
+    "sentinel_preserved": true,
+    "migration_count": 1,
+    "postgres_tcp": false,
+    "versions": {
+      "gcc": "16.2.1",
+      "postgres": "postgres (PostgreSQL) 18.6",
+      "libpq": "PostgreSQL 18beta1",
+      "systemd": "systemd 259 (259.10-1.fc44)",
+      "dnf": "dnf5 version 5.4.6.0"
+    },
+    "payload_sha256": "106b2cbbe3a6fe6d7dd23baf302321ed55a9b943170fcf7c113e675365c44b8e",
+    "service_memory": {
+      "core": "MemoryCurrent=1212416",
+      "postgres": "MemoryCurrent=31666176"
+    },
+    "linger": "yes",
+    "cluster_disk": "42M\t/home/tester/.local/share/myct/postgres",
+    "container_boot_and_event_persistence": true
+  }
+]
