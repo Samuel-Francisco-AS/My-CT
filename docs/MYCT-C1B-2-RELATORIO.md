@@ -334,3 +334,8 @@ Observações do espaço livre de `/home` em bytes: antes `27925688320`; **imedi
 - **C1C Android é a próxima fase**: expor de modo adequado na interface móvel os comandos e confirmações agora validados na CLI, na mesma linha de engenharia enxuta. A issue #46 deve permanecer aberta para acompanhar C1C.
 
 **Estado:** C1B-2 **funcionalmente aceita** após testes reais; PR #49 é o único veículo de integração.
+
+
+## Fechamento remoto — 20/10/2026
+
+**PR [#49](https://github.com/Samuel-Francisco-AS/My-CT/pull/49) MERGED na `main`**, commit de merge `86df44e0d610a807081c6b7995112c3d45ceced6`, depois do aceite físico documentado acima. Relatórios, implementação e testes C1B-2 foram incorporados; não foi criada release/APK nem instalados helpers nesta operação remota. O Fedora permanece sujeito à sincronização `git pull --ff-only` pelo proprietário, com preservação do serviço e dados existentes. A issue #46 fica aberta para a C1C Android. A remoção de branches é uma ação Git separada e só será feita após verificar a sincronização local.
