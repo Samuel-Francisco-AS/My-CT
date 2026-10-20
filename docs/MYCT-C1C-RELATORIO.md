@@ -1,6 +1,6 @@
 # MYCT-C1C — Nuvem no Android
 
-Candidata de **20/10/2026**, branch única `myct-c1c-cloud-android`, vinculada à
+Candidata de **20/10/2026**, [PR única #50 draft](https://github.com/Samuel-Francisco-AS/My-CT/pull/50), branch única `myct-c1c-cloud-android`, vinculada à
 [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46). **Sem merge e
 sem aceite físico Android declarado.** A C1B-2 continua aceita; seu motor não
 foi alterado nem seus testes físicos repetidos.

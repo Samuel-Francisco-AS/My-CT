@@ -4,7 +4,7 @@
 com arquivamento/restore, liberação guiada, recuperação pausada, retomada explícita
 de seeding e hardlinks Jellyfin pelas CLIs já aceitas. Trabalhos em unidades
 transitórias de usuário continuam após desconectar SSH. APK **0.9.0-c1c-rc1/code 41**;
-**aceite Moto G06 pendente, sem merge**. [Relatório, instalação e roteiro único](docs/MYCT-C1C-RELATORIO.md).
+**aceite Moto G06 pendente, sem merge**. [PR #50 draft](https://github.com/Samuel-Francisco-AS/My-CT/pull/50) · [APK candidato](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-c1c-v0.9.0-rc1) · [Relatório, instalação e roteiro único](docs/MYCT-C1C-RELATORIO.md).
 
 **MYCT-C1B-2 ACEITA e integrada à `main` (20/10/2026), [PR #49 MERGED](https://github.com/Samuel-Francisco-AS/My-CT/pull/49), merge `86df44e0d610a807081c6b7995112c3d45ceced6`:** entrega **unificada** com `space` (inodes/hardlinks e economia estimada), `release` (prévia e confirmação, sem excluir Drive), `restore`, `relink` Jellyfin e `recover [--resume]`. **121 testes PASS no Fedora**, mais ciclo físico com fixture própria de 134 MB: upload/restore, duas liberações consentidas, preservação do link Jellyfin, reconstrução idempotente (`added`/`existing`) e seeding iniciado, `rpc_status:6`. **Sem peers/upload observados**. Variação de espaço livre do Btrfs não confirma economia instantânea; `reclaim_guaranteed_bytes:0` é intencional. A PR #49 é a única integração desta entrega; C1C Android ainda pendente na [issue #46](https://github.com/Samuel-Francisco-AS/My-CT/issues/46). [Relatório e evidências reais](docs/MYCT-C1B-2-RELATORIO.md).
 
