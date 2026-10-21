@@ -120,6 +120,16 @@ sem conexão ao banco pessoal. Contêineres criados para os testes foram removid
 | Moto G06 | Aceite funcional code48 informado pelo proprietário antes desta missão; nenhum teste físico novo pelo agente |
 | Provisionamento completo Fedora físico limpo | **NÃO VALIDADO / NÃO EXECUTADO**, por decisão do proprietário |
 
+Os dois SKIP são `FedoraHandshakeTest.realHostKeyMismatchAndTrustedNegotiationBeforeAuthentication`
+e `IdeFedoraSftpTest.disposableFedoraFileThroughActualJschSftpRoundTripAndConflict`:
+as opções de ambiente `MYCT_TEST_LOCAL_SSH=1` e `MYCT_TEST_LOCAL_SFTP=1` não foram
+habilitadas. A primeira usa SSH localhost:22/host key do sistema; a segunda usa
+fixture SFTP local. Não foram chamados de PASS. Não bloqueiam esta consolidação
+de código idêntico à candidata aceita, porque nenhuma implementação SSH/SFTP foi
+alterada pela resolução e a cobertura mínima autorizada já prevê dois ignorados.
+Sua execução futura deve usar endpoint/fixture descartável apropriado, sem
+habilitar indiscriminadamente testes contra o SSH do servidor pessoal.
+
 Comandos: `python3 -m unittest discover -s ops/setup/tests -p 'test_*.py' -v`;
 `python3 ops/setup/tests/validate_audit_fix_container.py artifacts/setup-integration`;
 `python3 ops/setup/tests/validate_recovery_container.py artifacts/setup-integration/recovery-fedora.json`;
