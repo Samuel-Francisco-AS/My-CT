@@ -6,6 +6,7 @@ import kotlinx.coroutines.*
 import org.json.JSONObject
 
 internal class BackupSetupModel(private val assets: AssetManager) {
+    val credential = SetupCredential()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var connection: SshConnection? = null
     private var generation = 0
@@ -21,6 +22,7 @@ internal class BackupSetupModel(private val assets: AssetManager) {
     var database by mutableStateOf(false); private set
     var catalogs by mutableStateOf(false); private set
     fun attach(value: SshConnection?) {
+        credential.connectionChanged()
         generation++; connection = value; connected = value != null; busy = false; reply = null
         destination = ""; packagePath = ""; mediaRoot = ""; recipient = ""; database = false; catalogs = false
         message = "Consulte o estado real. Nenhum pedido anterior será repetido."

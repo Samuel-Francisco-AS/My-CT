@@ -62,12 +62,7 @@ def cloud_config_metadata(selection):
 
 
 def cloud_guard(path):
-    for candidate in (path,*path.parents):
-        if candidate == Path.home().parent:
-            break
-        if candidate.is_symlink() or (candidate.exists() and (candidate.stat().st_uid!=os.getuid() or candidate.stat().st_mode & 0o022)):
-            return False
-    return True
+    return user_path_safe(path)
 
 
 def cloud_diagnose(selection=None, ignore_lock=False):
@@ -118,10 +113,7 @@ def cloud_diagnose(selection=None, ignore_lock=False):
         if not cloud_guard(path):
             blockers.append('intervention: Caminho privado redirecionado ou com proprietário divergente; preservado.')
             break
-    if not ignore_lock and (state.parent/'lock').is_file() and cloud_guard(state.parent/'lock'):
-        with (state.parent/'lock').open() as lock:
-            try: fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-            except BlockingIOError: blockers.append('intervention: Outra instalação em execução; aguarde.')
+    inspect_setup_lock(blockers, ignore_lock)
     missing_tools=[tool for tool in ('python3','systemctl','systemd-run','loginctl') if not shutil.which(tool)]
     manager=ok(['systemctl','--user','show','--property=Version']) if not missing_tools else False
     linger=out(['loginctl','show-user',user,'--property=Linger','--value'])=='yes'
@@ -170,26 +162,19 @@ class CloudInstaller(AddonInstaller):
         self.state=cloud_paths()[0]
 
     def apply(self):
-        parent=self.state.parent
-        if not cloud_guard(parent) or not cloud_guard(parent/'lock'):
-            raise SetupError('Caminho do lock divergente; preservar e revisar manualmente.')
-        parent.mkdir(parents=True,mode=0o700,exist_ok=True)
-        fd=os.open(parent/'lock',os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW,0o600)
-        with os.fdopen(fd,'a') as lock:
+        with setup_lock_file() as lock:
             try: fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
             except BlockingIOError: raise SetupError('Outra instalação em execução.') from None
             fresh=cloud_diagnose(self.plan['facts']['selection'],ignore_lock=True)
             if fresh['plan_id']!=self.plan['plan_id'] or not fresh['can_apply']:
                 raise SetupError('Plano mudou; diagnostique e aprove novamente. Nenhuma instalação iniciada.')
-            self.state.mkdir(mode=0o700,exist_ok=True)
             owner=self.state/'owned.json'
             if not owner.exists():
-                with owner.open('x') as file:
-                    file.write(json.dumps({'schema':1,'component':'rclone','user':fresh['facts']['user']},sort_keys=True))
+                atomic_user_write(owner, json.dumps({'schema':1,'component':'rclone','user':fresh['facts']['user']},sort_keys=True).encode())
             try:
                 if fresh['facts']['missing_packages']:
                     self.event('packages','running','Instalando Rclone pelo DNF com verificação GPG.')
-                    self.sudo(['/usr/bin/dnf','install','-y','--setopt=gpgcheck=1','--setopt=*.gpgcheck=1','--setopt=localpkg_gpgcheck=1','--setopt=install_weak_deps=False','rclone'])
+                    self.packages(['rclone'])
                     self.event('packages','installed','Pacote instalado; configuração OAuth permanece humana.')
                 after=cloud_diagnose(fresh['facts']['selection'],ignore_lock=True)
                 if after['blockers'] or not after['facts']['version']:

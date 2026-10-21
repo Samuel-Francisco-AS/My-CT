@@ -94,9 +94,10 @@ class RecoveryTests(unittest.TestCase):
         self.assertFalse((self.home/'backups').exists())
     def test_partial_export_not_published_and_can_retry(self):
         request={'path':str(self.home/'backups/b.zip')};request['approved']=self.m.rec_export_plan(request)['plan_id']
-        with patch.object(self.m.os,'link',side_effect=OSError('synthetic interruption')):
+        # Failure at the new no-replace publication syscall, before the final name exists.
+        with patch.object(self.m,'rename_noreplace',side_effect=OSError('synthetic interruption')):
             with self.assertRaises(OSError):self.m.rec_export(request)
-        self.assertFalse(Path(request['path']).exists());self.assertFalse(list((self.home/'backups').glob('.myct-backup-*')))
+        self.assertFalse(Path(request['path']).exists());self.assertFalse(list((self.home/'backups').glob('.myct-stage-*')))
         self.m.rec_export(request)
     def test_partial_restore_resumes_without_overwriting_and_conflicts_block(self):
         self.config();_,backup=self.export();request,_=self.target(backup['path'])

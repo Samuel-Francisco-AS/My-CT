@@ -5,6 +5,7 @@ import androidx.compose.runtime.*
 import kotlinx.coroutines.*
 
 internal class ServerSetupModel(private val assets: AssetManager) {
+    val credential = SetupCredential()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var connection: SshConnection? = null
     private var generation = 0
@@ -57,6 +58,7 @@ internal class ServerSetupModel(private val assets: AssetManager) {
     var events by mutableStateOf<List<String>>(emptyList()); private set
     private val bundle by lazy { SetupBundle.load(assets) }
     fun attach(value: SshConnection?) {
+        credential.connectionChanged()
         backup.attach(value)
         generation++; connection = value; connected = value != null
         plan = null; busy = false; events = emptyList(); onlineMessage = ""; oauthTunnel = false; cloudEdited = false; cloudRemote = "myct-gdrive:"; cloudConfig = ""

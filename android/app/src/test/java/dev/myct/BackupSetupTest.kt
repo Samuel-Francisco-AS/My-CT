@@ -48,4 +48,20 @@ class BackupSetupTest {
         assertTrue(key.all { it == 0.toByte() })
     }
 
+    @Test fun restoreCloudPreviewShowsSourceCustomPathResultAndActivation() {
+        val preview = JSONObject().put("source", JSONObject().put("remote", "alternate:").put("config", "/home/old/private/custom.conf"))
+            .put("result", JSONObject().put("remote", "alternate:").put("config", "/home/new/private/custom.conf"))
+            .put("active_before", JSONObject.NULL).put("status", "apply").put("will_apply", true)
+        val parsed = parseBackupCloudPreview(preview)
+        assertEquals("alternate:", parsed.source.remote)
+        assertEquals("/home/old/private/custom.conf", parsed.source.config)
+        assertEquals("/home/new/private/custom.conf", parsed.result!!.config)
+        assertTrue(parsed.willApply); assertNull(parsed.activeBefore)
+        preview.put("will_apply", false)
+        assertThrows(Exception::class.java) { parseBackupCloudPreview(preview) }
+        preview.put("status", "historical").put("result", JSONObject.NULL)
+        assertFalse(parseBackupCloudPreview(preview).willApply)
+        assertNull(parseBackupCloudPreview(preview).result)
+    }
+
 }

@@ -21,6 +21,8 @@ class GuardTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(prefix='myct-setup-tests-')
         self.addCleanup(self.tmp.cleanup)
         self.home = Path(self.tmp.name)
+        home = patch.object(setup.Path, 'home', return_value=self.home)
+        home.start(); self.addCleanup(home.stop)
         self.bundle = self.home / 'bundle'
         build_bundle.build(self.bundle)
         with zipfile.ZipFile(self.bundle / 'payload.pyz') as file:

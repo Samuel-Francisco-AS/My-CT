@@ -3,6 +3,9 @@
 No shell execution, remote downloads, arbitrary command or persistent credential.
 """
 import argparse
+from contextlib import contextmanager
+import ctypes
+import errno
 import fcntl
 import hashlib
 import json
@@ -13,6 +16,7 @@ import pwd
 import re
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -24,6 +28,125 @@ MANIFEST = None  # injected by build_bundle.py
 
 class SetupError(Exception):
     pass
+
+# Per-invocation RPM policy. Do not change repo_gpgcheck or persistent repo files.
+DNF_RPM_POLICY = ['--setopt=gpgcheck=1', '--setopt=*.gpgcheck=1', '--setopt=localpkg_gpgcheck=1']
+
+def user_path_safe(path):
+    path, home = Path(path), Path.home()
+    if not path.is_absolute() or (path != home and home not in path.parents) or path.resolve() != path:
+        return False
+    try:
+        for candidate in (path, *path.parents):
+            if candidate.exists() or candidate.is_symlink():
+                info = candidate.lstat()
+                if (info.st_uid != os.getuid() or info.st_mode & 0o022 or
+                    not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)) or
+                    (stat.S_ISREG(info.st_mode) and info.st_nlink != 1)):
+                    return False
+            if candidate == home:
+                break
+        return True
+    except OSError:
+        return False
+
+def check_user_fd(fd, directory=False):
+    info = os.fstat(fd)
+    if (info.st_uid != os.getuid() or info.st_mode & 0o022 or
+        not (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode)) or
+        (not directory and info.st_nlink != 1)):
+        raise SetupError('Caminho/descritor privado inseguro; preservar e revisar manualmente.')
+    return info
+
+@contextmanager
+def user_parent(path, create=False):
+    """Walk from HOME with openat/O_NOFOLLOW; never chmod an existing directory."""
+    path = Path(path)
+    if not user_path_safe(path):
+        raise SetupError('Caminho privado com link, dono ou permissão insegura; preservado.')
+    fd = os.open(Path.home(), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        check_user_fd(fd, directory=True)
+        for part in path.parent.relative_to(Path.home()).parts:
+            if create:
+                try: os.mkdir(part, 0o700, dir_fd=fd)
+                except FileExistsError: pass
+            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=fd)
+            os.close(fd); fd = child
+            check_user_fd(fd, directory=True)
+        yield fd
+    finally:
+        os.close(fd)
+
+def open_user_file(path, flags, mode=0o600):
+    with user_parent(path, create=bool(flags & os.O_CREAT)) as parent:
+        fd = os.open(Path(path).name, flags | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, mode, dir_fd=parent)
+        try: check_user_fd(fd)
+        except BaseException: os.close(fd); raise
+        return fd
+
+def setup_lock_file(create=True):
+    flags = os.O_RDWR | os.O_CREAT if create else os.O_RDONLY
+    return os.fdopen(open_user_file(paths()[1] / 'lock', flags), 'a' if create else 'r')
+
+def inspect_setup_lock(blockers, ignore_lock=False):
+    path = paths()[1] / 'lock'
+    if not user_path_safe(path):
+        blockers.append('intervention: Lock/caminho privado inseguro; preservar e revisar manualmente.')
+    elif not ignore_lock and path.exists():
+        try:
+            with setup_lock_file(create=False) as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            blockers.append('intervention: Outra instalação em execução; aguarde e consulte novamente.')
+        except (OSError, SetupError):
+            blockers.append('intervention: Lock privado inválido; revisar manualmente.')
+
+def rename_noreplace(parent, temporary, name):
+    # Linux/glibc, supported by Fedora ext4/btrfs/tmpfs/overlay. Fail closed,
+    # never fall back to replacing a destination or a two-link publication.
+    libc = ctypes.CDLL(None, use_errno=True)
+    try: rename = libc.renameat2
+    except AttributeError: raise SetupError('Publicação atômica sem sobrescrita indisponível neste ambiente.') from None
+    rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    rename.restype = ctypes.c_int
+    if rename(parent, os.fsencode(temporary), parent, os.fsencode(name), 1) != 0:
+        error = ctypes.get_errno()
+        if error in (errno.ENOSYS, errno.EINVAL, errno.EOPNOTSUPP):
+            raise SetupError('Filesystem sem publicação atômica segura; nenhuma substituição permitida.')
+        raise OSError(error, os.strerror(error))
+
+def atomic_user_write(path, data, mode=0o600, replace_state=False):
+    """Only complete, fsynced bytes reach the final name. Orphan staging files
+    after abrupt death are private and never treated as installed artifacts.
+    replace_state is reserved for the installer's own mutable receipts.
+    """
+    path = Path(path)
+    with user_parent(path, create=True) as parent:
+        temporary = '.myct-stage-' + os.urandom(16).hex()
+        fd = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=parent)
+        try:
+            with os.fdopen(fd, 'w+b') as file:
+                os.fchmod(file.fileno(), mode)
+                file.write(data); file.flush(); os.fsync(file.fileno())
+                check_user_fd(file.fileno())
+                file.seek(0)
+                if hashlib.sha256(file.read()).digest() != hashlib.sha256(data).digest():
+                    raise SetupError('Integridade do temporário divergente; publicação recusada.')
+            if not user_path_safe(path):
+                raise SetupError('Destino mudou ou tornou-se inseguro; publicação recusada.')
+            current = os.stat(path.parent, follow_symlinks=False)
+            opened = os.fstat(parent)
+            if (current.st_dev, current.st_ino) != (opened.st_dev, opened.st_ino):
+                raise SetupError('Diretório mudou durante publicação; diagnostique novamente.')
+            if replace_state:
+                os.replace(temporary, path.name, src_dir_fd=parent, dst_dir_fd=parent)
+            else:
+                rename_noreplace(parent, temporary, path.name)
+            os.fsync(parent)
+        finally:
+            try: os.unlink(temporary, dir_fd=parent)
+            except FileNotFoundError: pass
 
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
@@ -147,12 +270,7 @@ def diagnose(ignore_lock=False):
         blockers.append('incompatible: GCC instalado não atende ao C++20; atualização manual requer revisão.')
     if available < 768 * 1024**2 or min(free, free_system) < 2 * 1024**3:
         blockers.append('intervention: Requer ao menos 768 MiB RAM disponíveis e 2 GiB livres para compilar a base.')
-    if not ignore_lock and (state / 'lock').is_file():
-        try:
-            with (state / 'lock').open('r') as lock:
-                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            blockers.append('intervention: Instalação ainda em execução; aguarde e consulte novamente.')
+    inspect_setup_lock(blockers, ignore_lock)
     # Refuse ownership/symlink surprises and every foreign installation. Existing healthy legacy is diagnostic only.
     guarded = {root, state, root / 'data', root / 'run', root / 'setup.conf', root / 'data/postgresql.conf',
                state / 'owned.json', state / 'artifacts.json', state / 'events.jsonl', state / 'lock'}
@@ -160,7 +278,7 @@ def diagnose(ignore_lock=False):
     for target in (root, state, unit_path('myct-postgres').parent):
         guarded.update(p for p in target.parents if p != Path.home() and Path.home() in p.parents)
     for path in sorted(guarded):
-        if path.is_symlink() or (path.exists() and path.stat().st_uid != os.getuid()):
+        if not user_path_safe(path):
             blockers.append('intervention: Diretório privado com dono/link inesperado: ' + str(path))
     core_present = Path('/usr/local/bin/myct-core').exists() or Path('/etc/systemd/system/myct-core.service').exists() or units['myct-core']['LoadState'] == 'loaded'
     core_healthy = health()
@@ -255,7 +373,7 @@ class Installer:
 
     def event(self, component, state, message):
         event = {'component': component, 'state': state, 'message': message, 'time': int(time.time())}
-        with (self.state / 'events.jsonl').open('a') as log:
+        with os.fdopen(open_user_file(self.state / 'events.jsonl', os.O_CREAT | os.O_WRONLY | os.O_APPEND), 'a') as log:
             log.write(json.dumps(event) + '\n')
             log.flush()
             os.fsync(log.fileno())
@@ -266,13 +384,20 @@ class Installer:
         return checked(['sudo', '-k', '-S', '-p', '', '--', *map(str, args)], timeout=1800,
                        input=bytes(self.password) + b'\n')
 
+    def packages(self, missing):
+        if not missing:
+            return
+        try:
+            self.sudo(['/usr/bin/dnf', 'install', '-y', *DNF_RPM_POLICY,
+                       '--setopt=install_weak_deps=False', *missing])
+        except SetupError:
+            raise SetupError('DNF não confirmou a instalação com assinatura RPM obrigatória. Revise privadamente assinatura/chaves confiáveis dos repositórios, rede e dependências; não desabilite verificações. A política de assinatura dos metadados foi preservada. Diagnostique o estado parcial antes de retomar.') from None
+
     def install_file(self, source, destination, mode):
         registry = self.state / 'artifacts.json'
         artifacts = json.loads(read(registry) or '{}')
         artifacts[str(destination)] = hashlib.sha256(source.read_bytes()).hexdigest()
-        temporary = registry.with_suffix('.tmp')
-        temporary.write_text(json.dumps(artifacts, sort_keys=True))
-        temporary.replace(registry)
+        atomic_user_write(registry, json.dumps(artifacts, sort_keys=True).encode(), replace_state=True)
         # -T/no-clobber through hardlink: never overwrite a pre-existing installation.
         if destination.exists() or destination.is_symlink():
             if destination.is_symlink() or source.read_bytes() != destination.read_bytes():
@@ -289,8 +414,7 @@ class Installer:
         self.sudo(['/usr/sbin/restorecon', destination])
 
     def apply(self):
-        self.state.mkdir(parents=True, mode=0o700, exist_ok=True)
-        with (self.state / 'lock').open('a') as lock:
+        with setup_lock_file() as lock:
             try:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
@@ -298,11 +422,9 @@ class Installer:
             fresh = diagnose(ignore_lock=True)
             if fresh['plan_id'] != self.plan['plan_id'] or not fresh['can_apply']:
                 raise SetupError('Estado mudou desde a aprovação. Diagnostique e aprove um plano novo.')
-            self.state.chmod(0o700)
             owner = self.state / 'owned.json'
             if not owner.exists():
-                with owner.open('x') as file:
-                    file.write(json.dumps({'schema': 1, 'user': fresh['facts']['user'], 'root': str(self.root)}, sort_keys=True))
+                atomic_user_write(owner, json.dumps({'schema': 1, 'user': fresh['facts']['user'], 'root': str(self.root)}, sort_keys=True).encode())
             with tempfile.TemporaryDirectory(prefix='myct-setup-') as work:
                 work = Path(work)
                 with zipfile.ZipFile(sys.argv[0]) as bundle:
@@ -328,8 +450,7 @@ class Installer:
 
     def step_packages(self, work):
         missing = [p for p in MANIFEST['packages'] if not ok(['rpm', '-q', p])]
-        if missing:
-            self.sudo(['/usr/bin/dnf', 'install', '-y', '--setopt=install_weak_deps=False', '--setopt=gpgcheck=True', *missing])
+        self.packages(missing)
         if not all(ok(['rpm', '-q', p]) for p in MANIFEST['packages']):
             raise SetupError('Pacotes ausentes após DNF.')
 
@@ -342,8 +463,7 @@ class Installer:
         self.install_file(unit, Path('/etc/systemd/system/myct-core.service'), '0644')
 
     def step_postgres(self, work):
-        self.root.mkdir(parents=True, mode=0o700, exist_ok=True)
-        self.root.chmod(0o700)
+        with user_parent(self.root / 'data', create=True): pass
         data = self.root / 'data'
         (self.root / 'run').mkdir(mode=0o700, exist_ok=True)
         if not data.exists():
@@ -354,7 +474,8 @@ class Installer:
                     f"unix_socket_directories = '{self.root}/run'\n")
         if config.exists() and config.read_text() != expected:
             raise SetupError('Configuração privada divergente preservada.')
-        config.write_text(expected)
+        if not config.exists():
+            atomic_user_write(config, expected.encode())
         main = data / 'postgresql.conf'
         include = "include = '../setup.conf'\n"
         if include not in main.read_text():
@@ -369,8 +490,7 @@ class Installer:
             if destination.read_bytes() != unit.read_bytes():
                 raise SetupError('Unidade de usuário existente divergente preservada.')
         else:
-            with destination.open('xb') as file:
-                file.write(unit.read_bytes())
+            atomic_user_write(destination, unit.read_bytes())
         checked(['systemctl', '--user', 'daemon-reload'])
         checked(['systemctl', '--user', 'enable', '--now', 'myct-postgres.service'])
         for _ in range(30):

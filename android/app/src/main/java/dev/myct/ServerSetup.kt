@@ -178,5 +178,19 @@ internal fun validateBackupReply(j: JSONObject): JSONObject {
     require(j.getInt("schema") == 1)
     require(j.optString("operation") in listOf("inventory", "plan-export", "export", "inspect", "restore") || j.optString("state") == "failure")
     if (j.optString("operation") in listOf("plan-export", "inspect")) require(Regex("[a-f0-9]{64}").matches(j.getString("plan_id")))
+    j.optJSONObject("facts")?.optJSONObject("cloud_selection")?.let { parseBackupCloudPreview(it) }
     return j
+}
+
+internal data class BackupCloudPreview(val source: SetupCloudSelection, val result: SetupCloudSelection?,
+    val activeBefore: SetupCloudSelection?, val status: String, val willApply: Boolean)
+
+internal fun parseBackupCloudPreview(j: JSONObject): BackupCloudPreview {
+    fun selection(key: String) = j.optJSONObject(key)?.let { SetupCloudSelection(it.getString("remote"), it.getString("config")) }
+    val status = j.getString("status").also { require(it in listOf("apply", "existing", "conflict", "historical")) }
+    val willApply = j.getBoolean("will_apply")
+    require(willApply == (status == "apply"))
+    val result = selection("result")
+    require((result == null) == (status == "historical"))
+    return BackupCloudPreview(checkNotNull(selection("source")), result, selection("active_before"), status, willApply)
 }

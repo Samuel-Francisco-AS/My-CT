@@ -15,10 +15,9 @@ import androidx.compose.ui.unit.dp
 internal fun ServerSetupSection(model: ServerSetupModel, onOAuthTerminal: () -> Unit = {}) {
     var onlineApprove by remember { mutableStateOf(false) }
     val uri = androidx.compose.ui.platform.LocalUriHandler.current
-    var approve by remember { mutableStateOf(false) }
-    var password by remember { mutableStateOf("") }
+    val credential = model.credential
+    SetupCredentialLifecycle(credential)
     LaunchedEffect(model.connected) { if (model.connected) model.diagnose() }
-    DisposableEffect(Unit) { onDispose { password = "" } }
     ScreenHeading("Configurar servidor", "Base Fedora e componentes opcionais. Diagnóstico sem alterar configurações. Requer Fedora tradicional 43/44, SSH e python3. Nenhuma IA é necessária.")
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         SetupTarget.entries.forEach { value ->
@@ -109,7 +108,7 @@ internal fun ServerSetupSection(model: ServerSetupModel, onOAuthTerminal: () -> 
             MyCtTextButton(onClick = { onlineApprove = true }, enabled = plan.cloud?.configured == true && !model.busy) { Text("Verificar acesso online…") }
             if (model.onlineMessage.isNotEmpty()) StatusNotice(model.onlineMessage)
         }
-        MyCtTextButton(onClick = { password = ""; approve = true }, enabled = plan.canApply && !model.busy) { Text("Revisar e aprovar instalação") }
+        MyCtTextButton(onClick = { credential.text = ""; credential.confirmation = true }, enabled = plan.canApply && !model.busy) { Text("Revisar e aprovar instalação") }
     }
     if (model.events.isNotEmpty()) ExpandDetails("Progresso desta execução") { model.events.forEach { Text(it) } }
     if (onlineApprove) AlertDialog(onDismissRequest = { onlineApprove = false },
@@ -117,7 +116,7 @@ internal fun ServerSetupSection(model: ServerSetupModel, onOAuthTerminal: () -> 
         text = { Text("Consulta disponibilidade/cota e somente a pasta My-CT-Archive, sem listar seu conteúdo. O Rclone pode renovar OAuth e escrever tokens no rclone.conf. Não transfere arquivos, não verifica integridade do acervo e não comprova recuperação. Só prossiga se autorizar esses efeitos na conta selecionada.") },
         confirmButton = { MyCtTextButton(onClick = { onlineApprove = false; model.verifyCloud() }) { Text("Autorizar verificação online") } },
         dismissButton = { MyCtTextButton(onClick = { onlineApprove = false }) { Text("Cancelar") } })
-    if (approve) AlertDialog(onDismissRequest = { approve = false; password = "" },
+    if (credential.confirmation) AlertDialog(onDismissRequest = { credential.confirmation = false; credential.text = "" },
         title = { Text("Aprovar alterações no Fedora?") },
         text = { Column(Modifier.verticalScroll(rememberScrollState())) {
             Text(if (model.target == SetupTarget.rclone)
@@ -127,13 +126,13 @@ internal fun ServerSetupSection(model: ServerSetupModel, onOAuthTerminal: () -> 
                 else "Autoriza somente as etapas ausentes de ${model.target.label}: pacotes, arquivos privados, helper e sua unidade de usuário. Não instala ou altera a Base nem o outro componente opcional.")
             Text("Se necessário, habilita linger nesta conta, mantendo também suas outras unidades já habilitadas após logout/boot. Instalações anteriores não serão adotadas. Se o estado mudar, o pedido será recusado.")
             Text("Senha sudo desta conta, somente se exigida. Uso temporário no SSH, sem salvar. Deixe vazia para NOPASSWD.")
-            OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Senha sudo") },
+            OutlinedTextField(value = credential.text, onValueChange = { credential.text = it }, label = { Text("Senha sudo") },
                 visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false), singleLine = true)
             Text("Se o SSH cair, reconecte e diagnostique antes de retomar.")
         } },
         confirmButton = { MyCtTextButton(onClick = {
-            val bytes = password.toByteArray(Charsets.UTF_8)
-            password = ""; approve = false; model.apply(bytes)
+            val bytes = credential.text.toByteArray(Charsets.UTF_8)
+            credential.text = ""; credential.confirmation = false; model.apply(bytes)
         }, enabled = model.plan?.canApply == true && !model.busy) { Text("Aprovar e instalar") } },
-        dismissButton = { MyCtTextButton(onClick = { password = ""; approve = false }) { Text("Cancelar") } })
+        dismissButton = { MyCtTextButton(onClick = { credential.text = ""; credential.confirmation = false }) { Text("Cancelar") } })
 }

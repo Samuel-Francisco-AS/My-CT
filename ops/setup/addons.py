@@ -126,6 +126,15 @@ def addon_processes(name):
     return result
 
 
+def known_helper(path, source):
+    try:
+        with os.fdopen(open_user_file(path, os.O_RDONLY), 'rb') as file:
+            data = file.read(1024*1024+1)
+        return len(data)<=1024*1024 and os.access(path,os.X_OK) and hashlib.sha256(data).hexdigest()==MANIFEST['sha256'][source]
+    except (OSError,SetupError):
+        return False
+
+
 def addon_diagnose(name, ignore_lock=False):
     p = addon_paths(name)
     user = pwd.getpwuid(os.getuid()).pw_name
@@ -160,17 +169,26 @@ def addon_diagnose(name, ignore_lock=False):
         paths += [p['config']/ 'settings.json',Path.home()/ '.local/bin/myct-torrent-done',Path.home()/ 'Downloads/My-CT/Torrents']
     else:
         paths += [p['program'],p['config']/ 'config.xml',p['program']/ 'Prowlarr',p['program']/ 'Prowlarr.dll']
-    guarded = set(paths)
+    guarded = set(paths) | {p['state'].parent / 'lock'}
     for path in paths:
         guarded.update(parent for parent in path.parents if Path.home() in parent.parents)
     for path in guarded:
-        if path.is_symlink() or (path.exists() and path.stat().st_uid != os.getuid()):
+        if not user_path_safe(path):
             blockers.append('intervention: Caminho privado com link/dono inesperado: ' + str(path))
     for file, expected in registry.items():
         path = Path(file)
         if path.exists() and (not path.is_file() or path.is_symlink() or hashlib.sha256(path.read_bytes()).hexdigest() != expected):
             blockers.append('intervention: Artefato existente divergente preservado: ' + str(path))
-    detectable = any(path.exists() or path.is_symlink() for path in paths if path != p['state'] and p['state'] not in path.parents)
+    # SETUP-3 can publish this exact companion before Transmission is selected.
+    # A known helper alone is not a daemon/configuration and grants no ownership.
+    helper_known = known_helper(p['helper'], 'ops/' + p['helper'].name)
+    if managed and p['helper'].exists() and not helper_known:
+        blockers.append('intervention: Helper divergente ou sem permissão de execução; preservado.')
+    hook=Path.home()/'.local/bin/myct-torrent-done'
+    if managed and name=='transmission' and hook.exists() and not known_helper(hook,'ops/torrent/myct-torrent-done'):
+        blockers.append('intervention: Hook divergente ou sem permissão de execução; preservado.')
+    detectable = any(path.exists() or path.is_symlink() for path in paths
+                     if path != p['state'] and p['state'] not in path.parents and not (path == p['helper'] and helper_known))
     detectable |= service['LoadState'] not in ('not-found','')
     alternate = ([Path.home()/'.config/transmission-daemon',Path.home()/'.config/transmission'] if name == 'transmission' else
                  [Path('/opt/Prowlarr'),Path('/usr/lib/prowlarr'),Path.home()/'.config/Prowlarr'])
@@ -207,12 +225,7 @@ def addon_diagnose(name, ignore_lock=False):
         if not re.search(r'\b4\.[1-9]\d*\b',version):
             blockers.append('incompatible: Helpers exigem Transmission 4.1+; atualização manual de versão antiga requer revisão.')
     linger = out(['loginctl','show-user',user,'--property=Linger','--value']) == 'yes'
-    if not ignore_lock and (Path.home()/'.local/state/myct-setup/lock').is_file():
-        try:
-            with (Path.home()/'.local/state/myct-setup/lock').open('r') as lock:
-                fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        except BlockingIOError:
-            blockers.append('intervention: Outra instalação está em execução; aguarde e consulte novamente.')
+    inspect_setup_lock(blockers, ignore_lock)
     free = shutil.disk_usage(Path.home()).free
     memory = int(next((line.split()[1] for line in read('/proc/meminfo').splitlines() if line.startswith('MemAvailable:')), '0')) * 1024
     if not managed and (free < 1024**3 or memory < 512*1024**2):
@@ -302,19 +315,20 @@ class AddonInstaller(Installer):
         self.state=self.p['state']
 
     def publish(self, destination, data, mode=0o700):
-        self.state.mkdir(parents=True,mode=0o700,exist_ok=True)
+        with user_parent(self.state / 'files.json', create=True): pass
         registry=self.state/'files.json'
         files=json.loads(read(registry) or '{}')
-        files[str(destination)]=hashlib.sha256(data).hexdigest()
-        temporary=registry.with_suffix('.tmp'); temporary.write_text(json.dumps(files,sort_keys=True)); temporary.replace(registry)
-        destination.parent.mkdir(parents=True,mode=0o700,exist_ok=True)
+        if not user_path_safe(destination):
+            raise SetupError('Destino privado inseguro; arquivo preservado.')
         if destination.exists() or destination.is_symlink():
-            if destination.is_symlink() or not destination.is_file() or destination.read_bytes()!=data:
+            with os.fdopen(open_user_file(destination,os.O_RDONLY),'rb') as file:
+                existing=file.read(len(data)+1)
+            if existing!=data:
                 raise SetupError('Arquivo existente divergente preservado: '+str(destination))
-            return
-        # Exclusive final name; partial files after interruption remain blocked rather than overwritten.
-        with destination.open('xb') as file:
-            os.fchmod(file.fileno(),mode); file.write(data); file.flush(); os.fsync(file.fileno())
+        else:
+            atomic_user_write(destination, data, mode)
+        files[str(destination)]=hashlib.sha256(data).hexdigest()
+        atomic_user_write(registry, json.dumps(files,sort_keys=True).encode(), replace_state=True)
 
     def component(self, work):
         if addon_diagnose(self.name,ignore_lock=True)['blockers']:
@@ -326,36 +340,33 @@ class AddonInstaller(Installer):
             self.publish(Path.home()/'.local/bin/myct-torrent-done',(work/'ops/torrent/myct-torrent-done').read_bytes())
             config=p['config']/'settings.json'
             if not config.exists():
-                config.parent.mkdir(parents=True,mode=0o700,exist_ok=True)
-                with config.open('x') as file:
-                    json.dump(transmission_settings(),file,indent=2)
-            (Path.home()/'Downloads/My-CT/Torrents').mkdir(parents=True,mode=0o700,exist_ok=True)
+                atomic_user_write(config, json.dumps(transmission_settings(),indent=2).encode())
+            with user_parent(Path.home()/'Downloads/My-CT/Torrents'/'placeholder', create=True): pass
         else:
             if not p['program'].exists():
                 archive=work/'prowlarr.tar.gz'
                 artifact=MANIFEST['addons']['prowlarr']['artifacts'][platform.machine()]
                 download_official(artifact,archive)
-                p['program'].parent.mkdir(parents=True,mode=0o700,exist_ok=True)
+                with user_parent(p['program'], create=True): pass
                 # Stage on destination filesystem: /tmp can be a separate tmpfs.
                 with tempfile.TemporaryDirectory(prefix='.myct-prowlarr-',dir=p['program'].parent) as staging:
                     extracted=Path(staging)
                     extract_official(archive,extracted)
                     if p['program'].exists() or p['program'].is_symlink():
                         raise SetupError('Diretório Prowlarr surgiu durante instalação; preservado.')
-                    os.rename(extracted/'Prowlarr',p['program'])
+                    with user_parent(p['program']) as parent:
+                        rename_noreplace(parent, str(extracted/'Prowlarr'), p['program'].name)
             for binary in ('Prowlarr','Prowlarr.dll'):
                 path=p['program']/binary
                 self.publish(path,path.read_bytes(),0o700 if binary=='Prowlarr' else 0o600)
             config=p['config']/'config.xml'
             if not config.exists():
-                p['config'].mkdir(parents=True,mode=0o700,exist_ok=True)
                 row=ET.Element('Config')
                 for key,value in {'BindAddress':'127.0.0.1','Port':'9696','EnableSsl':'False','LaunchBrowser':'False',
                                   'ApiKey':secrets.token_hex(16),'AuthenticationMethod':'Forms','AuthenticationRequired':'DisabledForLocalAddresses',
                                   'UpdateAutomatically':'False','AnalyticsEnabled':'False','LogLevel':'warn','InstanceName':'My-CT Prowlarr'}.items():
                     ET.SubElement(row,key).text=value
-                with config.open('xb') as file:
-                    os.fchmod(file.fileno(),0o600);file.write(ET.tostring(row))
+                atomic_user_write(config, ET.tostring(row))
         self.publish(p['unit'],addon_unit(self.name).encode(),0o600)
 
     def services(self):
@@ -370,9 +381,7 @@ class AddonInstaller(Installer):
             checked(['systemctl','--user','start',unit])
 
     def apply(self):
-        parent=self.state.parent
-        parent.mkdir(parents=True,mode=0o700,exist_ok=True)
-        with (parent/'lock').open('a') as lock:
+        with setup_lock_file() as lock:
             try:
                 fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
             except BlockingIOError:
@@ -380,11 +389,9 @@ class AddonInstaller(Installer):
             fresh=addon_diagnose(self.name,ignore_lock=True)
             if fresh['plan_id']!=self.plan['plan_id'] or not fresh['can_apply']:
                 raise SetupError('Estado mudou desde a aprovação; diagnostique e aprove novo plano.')
-            self.state.mkdir(mode=0o700,exist_ok=True)
             owner=self.state/'owned.json'
             if not owner.exists():
-                with owner.open('x') as file:
-                    file.write(json.dumps({'schema':1,'component':self.name,'user':fresh['facts']['user']},sort_keys=True))
+                atomic_user_write(owner, json.dumps({'schema':1,'component':self.name,'user':fresh['facts']['user']},sort_keys=True).encode())
             with tempfile.TemporaryDirectory(prefix='myct-setup-') as temporary:
                 work=Path(temporary)
                 with zipfile.ZipFile(sys.argv[0]) as bundle:
@@ -400,8 +407,7 @@ class AddonInstaller(Installer):
                     self.event(component,'running',row['description'])
                     try:
                         if component=='packages':
-                            if fresh['facts']['missing_packages']:
-                                self.sudo(['/usr/bin/dnf','install','-y','--setopt=install_weak_deps=False','--setopt=gpgcheck=True',*fresh['facts']['missing_packages']])
+                            self.packages(fresh['facts']['missing_packages'])
                             if not all(ok(['rpm','-q',package]) for package in MANIFEST['addons'][self.name]['packages']):
                                 raise SetupError('Pacotes ausentes após DNF.')
                         elif component==self.name:

@@ -21,7 +21,7 @@ def rec_bytes(path,limit=REC_ITEM):
     path=Path(path)
     if path.resolve()!=path:
         raise SetupError('Caminho redirecionado recusado; preservar origem/destino.')
-    fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+    fd=open_user_file(path,os.O_RDONLY)
     with os.fdopen(fd,'rb') as file:
         info=os.fstat(file.fileno())
         if not stat.S_ISREG(info.st_mode) or info.st_uid!=os.getuid() or info.st_nlink!=1 or info.st_size>limit:
@@ -192,7 +192,7 @@ def rec_validate_basic(value):
     origin=value['origin']
     if not isinstance(origin,dict) or set(origin)!={'home','user','arch','fedora'} or not re.fullmatch('/[A-Za-z0-9_./-]+',origin['home']) or '..' in Path(origin['home']).parts or not re.fullmatch('[a-z_][a-z0-9_-]*\\$?',origin['user']):
         raise SetupError('Origem incompatível; revisar remapeamento manualmente.')
-    if not isinstance(value['release'],str) or not re.fullmatch('myct-setup-[1-4]-rc1',value['release']) or not re.fullmatch('[a-f0-9]{64}',value['manifest_sha256']): raise SetupError('Versão do inventário desconhecida.')
+    if not isinstance(value['release'],str) or not re.fullmatch('myct-setup-(?:[1-4]-rc1|4-fix1-rc1)',value['release']) or not re.fullmatch('[a-f0-9]{64}',value['manifest_sha256']): raise SetupError('Versão do inventário desconhecida.')
     if origin['arch'] not in MANIFEST['architectures'] or origin['fedora'] not in ('43','44'): raise SetupError('Origem Fedora/arquitetura incompatível.')
     receipts=value['setup_receipts_present']
     if not isinstance(receipts,dict) or set(receipts)!={'base','transmission','prowlarr','rclone'} or any(type(v)!=bool for v in receipts.values()): raise SetupError('Inventário SETUP inválido.')
@@ -299,21 +299,10 @@ def rec_export_plan(request):
 
 
 def rec_publish(path,data):
-    if not cloud_guard(path.parent): raise SetupError('Diretório redirecionado; publicação recusada.')
-    path.parent.mkdir(parents=True,mode=0o700,exist_ok=True)
+    with user_parent(path,create=True): pass
     rec_private_parent(path)
     if not cloud_guard(path) or path.exists() or path.is_symlink(): raise SetupError('Destino existente/redirecionado preservado.')
-    fd,temporary=tempfile.mkstemp(prefix='.myct-backup-',dir=path.parent)
-    try:
-        with os.fdopen(fd,'wb') as file:
-            os.fchmod(file.fileno(),0o600);file.write(data);file.flush();os.fsync(file.fileno())
-        # Atomic no-clobber publication on the same filesystem.
-        os.link(temporary,path,follow_symlinks=False)
-        dirfd=os.open(path.parent,os.O_RDONLY|os.O_DIRECTORY)
-        try: os.fsync(dirfd)
-        finally: os.close(dirfd)
-    finally:
-        if os.path.exists(temporary): os.unlink(temporary)
+    atomic_user_write(path,data)
 
 
 def rec_export(request):
@@ -380,7 +369,7 @@ def rec_unpack(raw,encrypted=False):
         basic=json.loads(files['basic.json']);rec_validate_basic(basic)
         if meta['origin']!=basic['origin'] or meta['migration']!=MANIFEST['sha256']['server/migrations/001_execution_events.sql']:
             raise SetupError('Origem/migração incompatível com esta candidata.')
-        if not re.fullmatch('myct-setup-[1-4]-rc1',meta['release']): raise SetupError('Versão de pacote desconhecida.')
+        if not re.fullmatch('myct-setup-(?:[1-4]-rc1|4-fix1-rc1)',meta['release']): raise SetupError('Versão de pacote desconhecida.')
     except (ValueError,KeyError,TypeError): raise SetupError('Manifesto, conteúdo ou SHA-256 inválido; pacote recusado.') from None
     return meta,files,basic
 
@@ -399,7 +388,7 @@ def rec_open(request,identity):
     return meta,files,basic,package_sha
 
 
-def rec_restore_plan(request,identity):
+def rec_restore_plan(request,identity,ignore_lock=False):
     rec_environment()
     meta,files,basic,package_sha=rec_open(request,identity)
     identity_id=digest(meta)
@@ -411,12 +400,17 @@ def rec_restore_plan(request,identity):
     for name,data in files.items():
         if name.startswith('catalogs/'): destinations[root/name]=data
     cloud=basic['preferences'].get('rclone')
+    cloud_preview=None
     warnings=['Unidades não são importadas. Reconstrua Base/Transmission/Prowlarr/Rclone pelos alvos SETUP-1/2/3, após aprovação própria.',
               'Preferências Transmission/Prowlarr recuperadas como receita; aplicação automática pendente. Nenhuma configuração ativa será substituída.',
               'Catálogos recuperados são históricos, sem ativação no motor. Caminhos originais preservados; remapeamento separado.',
               'Mídias, dados de seeding e objetos Drive não foram incluídos/verificados. OAuth, API keys e credenciais exigem configuração humana.']
     if cloud:
         mapped=dict(cloud)
+        current=None
+        if cloud_selection_file().exists():
+            try: current=cloud_selection()
+            except CloudConfigError: pass # The destination comparison below blocks invalid/different files.
         old=mappings['old_home']
         if mapped['config'].startswith(old+'/'): mapped['config']=str(Path.home())+mapped['config'][len(old):]
         elif mapped['config']:
@@ -428,7 +422,12 @@ def rec_restore_plan(request,identity):
         if mapped:
             cloud_validate_selection(**mapped)
             destinations[cloud_selection_file()]=(json.dumps(mapped,sort_keys=True)+'\n').encode()
+        exists=cloud_selection_file().exists() or cloud_selection_file().is_symlink()
+        same=bool(mapped and user_path_safe(cloud_selection_file()) and read(cloud_selection_file())==destinations[cloud_selection_file()].decode())
+        status='historical' if mapped is None else 'existing' if same else 'conflict' if exists else 'apply'
+        cloud_preview={'source':cloud,'result':mapped,'active_before':current,'status':status,'will_apply':status=='apply'}
     blockers=[];rows=[]
+    inspect_setup_lock(blockers,ignore_lock)
     for path,data in destinations.items():
         rec_path(str(path))
         if not cloud_guard(path): blockers.append('Caminho de destino redirecionado ou com permissão/dono divergentes: '+str(path));state='conflict'
@@ -455,7 +454,7 @@ def rec_restore_plan(request,identity):
     for service in basic['services']:
         target=addon_service(service['name'],service['scope']=='user')
         comparison.append({'name':service['name'],'source_present':service['present'],'target_present':target['LoadState']=='loaded','desired_boot':service['enabled'],'target_boot':target['UnitFileState']=='enabled'})
-    facts={'source_pg_major':meta['pg_major'],'target_pg_major':target_major,'components':comparison,'package_sha256':package_sha,'manifest_id':identity_id,'mapping':mappings,'destinations':rows,'database':db,
+    facts={'source_pg_major':meta['pg_major'],'target_pg_major':target_major,'components':comparison,'package_sha256':package_sha,'manifest_id':identity_id,'mapping':mappings,'destinations':rows,'database':db,'cloud_selection':cloud_preview,
            'events_sha256':digest(events) if events is not None else '', 'release':MANIFEST['release']}
     return {'schema':1,'operation':'inspect','plan_id':digest(facts),'facts':facts,'can_apply':not blockers,
        'blockers':blockers,'warnings':warnings,'summary':['Origem: '+mappings['old_user']+' · '+mappings['old_home'],'Destino: '+mappings['new_user']+' · '+mappings['new_home'],
@@ -466,15 +465,11 @@ def rec_restore_plan(request,identity):
 def rec_restore(request,identity):
     plan,destinations,events=rec_restore_plan(request,identity)
     if request.get('approved')!=plan['plan_id'] or not plan['can_apply']: raise SetupError('Prévia ausente, alterada ou com conflitos; nada restaurado.')
-    lockroot=Path.home()/'.local/state/myct-setup'
-    if not cloud_guard(lockroot) or not cloud_guard(lockroot/'lock'): raise SetupError('Lock de instalação divergente.')
-    lockroot.mkdir(parents=True,mode=0o700,exist_ok=True)
-    fd=os.open(lockroot/'lock',os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW,0o600)
     completed=[]
-    with os.fdopen(fd,'a') as lock:
+    with setup_lock_file() as lock:
         try: fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         except BlockingIOError: raise SetupError('Outra instalação/recuperação em execução.') from None
-        fresh,destinations,events=rec_restore_plan(request,identity)
+        fresh,destinations,events=rec_restore_plan(request,identity,ignore_lock=True)
         if fresh['plan_id']!=plan['plan_id'] or not fresh['can_apply']: raise SetupError('Estado mudou sob lock; refaça a inspeção.')
         for path,data in destinations.items():
             if path.exists(): completed.append('existing');continue

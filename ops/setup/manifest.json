@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "release": "myct-setup-4-rc1",
+  "release": "myct-setup-4-fix1-rc1",
   "fedora_min": 43,
   "fedora_max": 44,
   "architectures": [
