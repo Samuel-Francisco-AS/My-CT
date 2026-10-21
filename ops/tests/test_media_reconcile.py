@@ -1,4 +1,4 @@
-"""Disposable metadata reanchoring. No apply command, installed helper or live RPC."""
+"""Disposable reanchoring plan/transformation; no installed helper or live RPC."""
 import copy
 import json
 import os
@@ -154,7 +154,7 @@ class ReconcileTests(unittest.TestCase):
         self.f.state['links'][rel] = None
         self.assertEqual('INVALID_RECORD', self.plan()['entries'][0]['reason'])
 
-    def test_cli_plan_does_not_open_lock_or_write_and_has_no_apply_command(self):
+    def test_cli_plan_does_not_open_lock_or_write_and_apply_needs_arguments(self):
         self.add(); self.m.save_state(self.f.state)
         before = self.m.state_path().read_bytes()
         plan = self.m.run(['reconcile-plan'], self.f.rows)

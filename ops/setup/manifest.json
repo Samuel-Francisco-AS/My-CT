@@ -31,6 +31,7 @@
     "ops/myct-cloud",
     "ops/myct_cloud_progress.py",
     "ops/myct_cloud_config.py",
+    "ops/myct_media_reconcile.py",
     "ops/myct-media",
     "ops/myct-media-cleanup"
   ],
@@ -113,6 +114,7 @@
       "myct-cloud",
       "myct_cloud_progress.py",
       "myct_cloud_config.py",
+      "myct_media_reconcile.py",
       "myct-media",
       "myct-media-cleanup",
       "myct-torrent"

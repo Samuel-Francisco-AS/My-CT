@@ -107,7 +107,8 @@ def read_torrents(include_files=False, rows=None):
     loader = importlib.machinery.SourceFileLoader('myct_torrent_for_media', str(cli))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     module = importlib.util.module_from_spec(spec)
-    loader.exec_module(module)
+    # A read-only preview must not create __pycache__ beside installed helpers.
+    exec(compile(cli.read_bytes(), str(cli), 'exec'), module.__dict__)
     if include_files:
         module.FIELDS = module.FIELDS + ['files']
     class SnapshotRpc:
@@ -273,11 +274,9 @@ def reconciliation_plan(rows=None, state=None):
 
 
 def reconciled_state(state, plan, fresh, confirmation, accept_legacy=False):
-    """Pure proposed state for a future supervised writer. No filesystem mutation.
+    """Pure transformation; only myct_media_reconcile may persist its proposal.
 
-    There is intentionally NO apply CLI in R1. A future writer must hold naming /
-    Media locks, back up privately, reread RPC and state, rebuild fresh, then save
-    atomically. This pure function does not implement or substitute those duties.
+    This function does not implement or substitute transaction/backup/lock duties.
     """
     digest = hashlib.sha256(json.dumps({k: v for k, v in fresh.items() if k != 'fingerprint'}, sort_keys=True).encode()).hexdigest()
     if plan != fresh or confirmation != digest or digest != fresh['fingerprint']:
@@ -485,6 +484,14 @@ def remove_one(relative, state):
 def run(argv, rows=None, acl=ensure_access):
     if argv == ['reconcile-plan']:
         return reconciliation_plan(rows=rows)
+    if argv and argv[0] in {'reconcile-preview', 'reconcile-apply', 'reconcile-recover'}:
+        source = Path(__file__).with_name('myct_media_reconcile.py')
+        if source.is_symlink() or not source.is_file():
+            raise MediaError('Instale o módulo auditado myct_media_reconcile.py junto do helper.')
+        spec = importlib.util.spec_from_file_location('myct_media_transaction', source)
+        module = importlib.util.module_from_spec(spec)
+        exec(compile(source.read_bytes(), str(source), 'exec'), module.__dict__)
+        return module.run(sys.modules[__name__] if __name__ in sys.modules else _module_view(), argv)
     if not argv or argv[0] not in {'scan', 'sync', 'list', 'approve', 'skip', 'remove'}:
         raise MediaError('Uso: myct-media reconcile-plan|scan|sync|list|skip ID|remove RELPATH|approve ID series TITULO TEMP EP|approve ID movie TITULO ANO')
     action = argv[0]
@@ -530,6 +537,11 @@ def run(argv, rows=None, acl=ensure_access):
         if action == 'sync':
             save_state(state)
         return report
+
+def _module_view():
+    # SourceFileLoader callers may not register their module in sys.modules.
+    from types import SimpleNamespace
+    return SimpleNamespace(**globals())
 
 def main():
     os.umask(0o077)

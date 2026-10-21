@@ -47,7 +47,7 @@ dependencies {
 val setupAssets = layout.buildDirectory.dir("generated/setupAssets")
 val buildSetupBundle by tasks.registering(Exec::class) {
     inputs.files(fileTree("../../ops/setup") { include("*.py", "manifest.json") },
-        fileTree("../../ops") { include("myct-archive", "myct-archive-torrent", "myct-cloud", "myct_cloud_progress.py", "myct_cloud_config.py", "myct-media", "myct-media-cleanup", "myct-torrent", "myct-search", "torrent/myct-torrent-done", "torrent/myct-transmission.service") },
+        fileTree("../../ops") { include("myct-archive", "myct-archive-torrent", "myct-cloud", "myct_cloud_progress.py", "myct_cloud_config.py", "myct_media_reconcile.py", "myct-media", "myct-media-cleanup", "myct-torrent", "myct-search", "torrent/myct-torrent-done", "torrent/myct-transmission.service") },
         fileTree("../../server") { include("main.cpp", "postgres.cpp", "postgres.hpp", "Makefile", "migrations/*.sql") })
     outputs.dir(setupAssets)
     commandLine("python3", "../../ops/setup/build_bundle.py", setupAssets.get().dir("myct-setup").asFile.absolutePath)

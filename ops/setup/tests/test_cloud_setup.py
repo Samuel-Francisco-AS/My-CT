@@ -46,6 +46,8 @@ class CloudTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256((first/'payload.pyz').read_bytes()).hexdigest(),integrity['payload_sha256'])
         self.assertEqual(hashlib.sha256((first/'diagnose.py').read_bytes()).hexdigest(),integrity['diagnose_sha256'])
         root=Path(__file__).resolve().parents[3]
+        self.assertIn('ops/myct_media_reconcile.py',self.m.MANIFEST['sources'])
+        self.assertIn('myct_media_reconcile.py',self.m.MANIFEST['cloud']['helpers'])
         with zipfile.ZipFile(first/'payload.pyz') as archive:
             self.assertEqual({'__main__.py',*self.m.MANIFEST['sources']},set(archive.namelist()))
             for name in self.m.MANIFEST['sources']:
