@@ -1,9 +1,12 @@
 # My-CT
 
-**MYCT-CLOUD-R1 candidata para auditoria (21/10/2026):** seleção Jellyfin por
-pacote e progresso real de leitura na consulta de espaço. APK somente local
-**0.13.2-cloud-r1-rc1/code 49**; sem implantação, release ou aceite físico R1.
-[Relatório e testes](docs/MYCT-CLOUD-R1-RELATORIO.md).
+**MYCT-CLOUD-R1 candidata publicada (21/10/2026):** seleção Jellyfin por pacote,
+correção de Atualizar durante `space` e progresso real de leitura.
+[Pre-release 0.13.2-cloud-r1-rc1/code 49](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-cloud-r1-v0.13.2-rc1),
+commit auditado `f239bee`; helpers atualizados sob autorização e backup privado.
+**Aceite Moto pendente; PR #60 permanece draft, sem merge.**
+[Publicação, implantação e roteiro físico](docs/MYCT-CLOUD-R1-DEPLOY-RELATORIO.md) ·
+[Implementação e testes](docs/MYCT-CLOUD-R1-RELATORIO.md).
 
 **MYCT-SETUP integrada à `main` (21/10/2026):** [PR #59 MERGED](https://github.com/Samuel-Francisco-AS/My-CT/pull/59),
 marco `567d51409b10f2ca01c0f822942efd8c0baaf21e`, reúne documentação,

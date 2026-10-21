@@ -1,5 +1,11 @@
 # MYCT-CLOUD-R1 — seleção e progresso da consulta de espaço
 
+**Registro posterior (21/10/2026):** a reauditoria estática da Luna liberou o
+commit `f239bee` para candidata de teste; APK publicada como pre-release e
+helpers atualizados sob autorização, ainda sem aceite físico ou merge.
+[Publicação, hashes atuais, backup e roteiro Moto](MYCT-CLOUD-R1-DEPLOY-RELATORIO.md).
+As seções abaixo preservam a evidência histórica da implementação e correção A01.
+
 21/10/2026. Candidata para auditoria independente da Luna, **sem aceite físico
 R1 no Moto G06**. Branch `fix/myct-cloud-r1`, baseada em
 `54618d91182efbd81c5c1c3124ab8a418d89ebe7` (`origin/main` conferida após fetch).
