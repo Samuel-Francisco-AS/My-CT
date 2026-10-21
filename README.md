@@ -1,5 +1,13 @@
 # My-CT
 
+**MYCT-SETUP-AUDIT-FIX-1 candidata (21/10/2026):** correções pós-auditoria de
+assinatura RPM, publicação/retomada, caminhos/locks, ordem dos componentes,
+prévia Rclone e retenção de campos secretos. APK **0.13.1-setup-audit-fix1-rc1 /
+code 48**, atualização `dev.myct` com o certificado anterior. PR #58 continua
+draft; nenhuma integração ou implantação pessoal. Revisão da Luna e testes
+físicos desta candidata pendentes; Fedora físico limpo **NÃO EXECUTADO**.
+[Correções, testes e riscos residuais](docs/MYCT-SETUP-AUDIT-FIX-1-RELATORIO.md).
+
 **MYCT-SETUP-4 candidata (20/10/2026):** **Backup / Recuperação** em
 Opções → Configurar servidor. Pacote básico sem segredos; banco e catálogos
 selecionados exigem `age`. Dump lógico PostgreSQL e restauração limitada à
