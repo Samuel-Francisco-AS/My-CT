@@ -32,6 +32,7 @@ def load(name):
 
 try:
     common = load('myct-archive')
+    from myct_cloud_progress import SpaceProgress
     torrent = load('myct-torrent')
     cleanup = load('myct-media-cleanup')
 except Exception:
@@ -309,13 +310,20 @@ def inspect(key, rpc):
             'blockers': blockers, 'can_archive': not blockers}
 
 
-def digest_tree(root):
+def digest_tree(root, telemetry=None):
+    if telemetry:
+        telemetry.phase('local_inventory')
     paths, directories = tree(root)
+    if telemetry:
+        telemetry.reading(sum(file.stat().st_size for file in paths.values()))
     files, snapshots = [], {}
     for path, file in paths.items():
-        value, snapshot = common.fingerprint(file)
+        value, snapshot = (common.fingerprint(file, on_read=telemetry.advance) if telemetry
+                           else common.fingerprint(file))
         files.append({'path': path, **value})
         snapshots[path] = snapshot
+    if telemetry:
+        telemetry.end_read()
     return files, directories, snapshots
 
 
@@ -769,7 +777,7 @@ def check_mounts(root):
         need(not mounted.is_relative_to(root), 'UNSAFE_PATH', 'Árvore contém ponto de montagem; liberação recusada.')
 
 
-def storage_inventory(row, rpc, selected=()):
+def storage_inventory(row, rpc, selected=(), telemetry=None):
     """Read only, including when blocked. No locks, directories or catalog writes."""
     mf, key = row['manifest'], row['manifest']['infohash']
     selected = sorted(set(selected))
@@ -794,12 +802,16 @@ def storage_inventory(row, rpc, selected=()):
         release_resolved(row, load_catalog())
     except Failure as error:
         blocked(error.code)
+    if telemetry:
+        telemetry.phase('remote_check')
     try:
         remote_objects(row)  # Covers data AND canonical manifest AND metainfo, size/MD5.
         result['remote'] = {'verified': True, 'checks': ['size', 'md5', 'manifest', 'metainfo']}
     except (Failure, OSError) as error:
         result['remote']['error_code'] = common.failure_code(error)
         blocked(common.failure_code(error))
+    if telemetry:
+        telemetry.phase('local_inventory')
     try:
         local_bundle_verified(row)
         result['metainfo_available'] = True
@@ -825,7 +837,7 @@ def storage_inventory(row, rpc, selected=()):
             if not present:
                 continue
             check_mounts(root)
-            files, dirs, _ = digest_tree(root)
+            files, dirs, _ = digest_tree(root, telemetry)
             info['verified'] = files == mf['files'] and dirs == mf['directories']
             need(info['verified'], 'LOCAL_DIVERGENCE', 'Árvore local mudou; nova auditoria necessária.')
             for f in files:
@@ -834,6 +846,8 @@ def storage_inventory(row, rpc, selected=()):
             directories.extend(disk_record(root / d) for d in dirs + [''])
         except (Failure, OSError) as error:
             blocked(common.failure_code(error))
+    if telemetry:
+        telemetry.phase('transmission_check')
     current = None
     try:
         current = get_torrent(rpc, key, optional=True)
@@ -863,6 +877,8 @@ def storage_inventory(row, rpc, selected=()):
                      'SHARED_TORRENT', 'Outra entrada Transmission referencia estes dados.')
     except (Failure, OSError, KeyError, TypeError, ValueError) as error:
         blocked(error.code if isinstance(error, Failure) else 'RPC')
+    if telemetry:
+        telemetry.phase('library_inventory')
     # Scan all regular library files, not only videos/active RPC sources. Matching
     # dev+ino discovers aliases even while RPC points to an independent restore.
     by_inode = {}
@@ -897,7 +913,13 @@ def storage_inventory(row, rpc, selected=()):
                         # Original names may already have been released. The library
                         # inode still consumes SSD and must remain visible in space.
                         expected = next(f for f in mf['files'] if f['path'] == targets[rel])
-                        measured, _ = common.fingerprint(file)
+                        if telemetry:
+                            telemetry.reading(s.st_size, library=True)
+                        measured, _ = (common.fingerprint(file, on_read=telemetry.advance) if telemetry
+                                       else common.fingerprint(file))
+                        if telemetry:
+                            telemetry.end_read()
+                            telemetry.phase('library_inventory')
                         if measured == {k: expected[k] for k in measured}:
                             source = targets[rel]
                     if source is None:
@@ -920,6 +942,8 @@ def storage_inventory(row, rpc, selected=()):
         need(set(selected) <= set(targets), 'LIBRARY_SELECTION', 'Seleção de biblioteca desconhecida.')
     except (Failure, media.MediaError, OSError, ValueError, KeyError, TypeError) as error:
         blocked(error.code if isinstance(error, Failure) else 'MEDIA')
+    if telemetry:
+        telemetry.phase('finalizing')
     groups = {}
     for p in paths:
         groups.setdefault((p['dev'], p['ino']), []).append(p)
@@ -957,7 +981,9 @@ def preview_token(plan, issued):
 
 
 def space(row, rpc, selected=()):
-    plan = storage_inventory(row, rpc, selected)
+    telemetry = SpaceProgress(common.progress)
+    plan = storage_inventory(row, rpc, selected, telemetry=telemetry)
+    telemetry.phase('finalizing')
     token = preview_token(plan, int(time.time()))
     return {**plan, 'preview': token, 'expires_in_seconds': 600,
             'confirmation': token, 'library_confirmation': token if selected else None}

@@ -13,6 +13,7 @@ internal fun cloudPath(path: String) = path.toByteArray().size in 1..4096 && pat
 internal data class CloudWork(val kind: String, val args: List<String>) {
     val action get() = args.first()
     val target get() = args.getOrNull(1).orEmpty()
+    val librarySelection get() = args.drop(2).chunked(2).filter { it.first() == "--remove-library" }.map { it[1] }.sorted()
     val title get() = when (action) {
         "archive" -> "Arquivar"; "space" -> "Consultar espaço"; "release" -> "Liberar espaço"
         "restore" -> "Restaurar"; "recover" -> if ("--resume" in args) "Retomar seeding" else "Recuperar torrent"
@@ -135,14 +136,21 @@ internal fun parseCloudEntries(json: JSONObject, kind: String): List<CloudEntry>
 }
 internal data class CloudProgress(val phase: String, val bytesDone: Long, val bytesTotal: Long?,
     val percent: Double?, val speed: Double?, val eta: Double?, val updatedAt: Double,
-    val fileIndex: Int?, val totalFiles: Int?) {
+    val fileIndex: Int?, val totalFiles: Int?, val metric: String? = null, val readPass: Int? = null) {
     val label get() = when (phase) {
         "uploading" -> "Enviando"; "downloading" -> "Baixando"; "hashing" -> "Calculando hashes"
+        "remote_check" -> "Verificando Google Drive"
+        "local_inventory" -> "Inventariando arquivos locais"
+        "local_read" -> "Verificando arquivos locais"
+        "library_inventory" -> "Inventariando hardlinks"
+        "library_read" -> "Verificando vínculo local"
+        "transmission_check" -> "Consultando Transmission"
+        "finalizing" -> "Concluindo consulta"
         "verifying" -> "Conferindo integridade"; "done" -> "Concluído"; "failed" -> "Falhou"
         else -> "Preparando"
     }
     fun fresh(now: Long) = now / 1000.0 - updatedAt in -5.0..8.0
-    fun transferring(now: Long) = phase in setOf("uploading", "downloading") && fresh(now)
+    fun transferring(now: Long) = (phase in setOf("uploading", "downloading") || (metric == "read" && phase in setOf("local_read", "library_read"))) && fresh(now)
     fun estimate(now: Long): String {
         if (!transferring(now) || eta == null || speed == null || speed <= 0) return "Tempo estimado indisponível"
         val seconds = kotlin.math.ceil(eta).toLong()
@@ -151,7 +159,7 @@ internal data class CloudProgress(val phase: String, val bytesDone: Long, val by
             seconds >= 60 -> "${seconds / 60} min ${seconds % 60} s"
             else -> "$seconds s"
         }
-        return "Tempo estimado: $duration"
+        return if (metric == "read") "Tempo estimado desta leitura: $duration" else "Tempo estimado: $duration"
     }
 }
 internal fun parseCloudProgress(row: JSONObject): CloudProgress? = try {
@@ -162,15 +170,21 @@ internal fun parseCloudProgress(row: JSONObject): CloudProgress? = try {
     }
     fun integer(key: String): Long? = value(key)?.also { require(it % 1 == 0.0) }?.toLong()
     val phase = row.getString("phase")
-    require(phase in setOf("preparing", "hashing", "uploading", "downloading", "verifying", "done", "failed"))
+    require(phase in setOf("preparing", "hashing", "uploading", "downloading", "verifying", "done", "failed",
+        "remote_check", "local_inventory", "local_read", "library_inventory", "library_read", "transmission_check", "finalizing"))
+    val metric = if (row.isNull("metric")) null else row.getString("metric").also {
+        require(it == "read" && row.getString("scope") == "phase")
+    }
+    if (metric == "read") require(phase !in setOf("uploading", "downloading", "hashing", "verifying"))
+    require(phase !in setOf("remote_check", "local_inventory", "local_read", "library_inventory", "library_read", "transmission_check", "finalizing") || metric == "read")
     val done = requireNotNull(integer("bytes_done"))
     val total = integer("bytes_total")
     val percent = value("percent")
     require(total == null || done <= total)
-    require(percent == null || (total != null && total > 0 && percent <= 100 && (percent < 100 || phase == "done")))
+    require(percent == null || (total != null && total > 0 && percent <= 100 && (percent < 100 || (phase == "done" && metric != "read"))))
     CloudProgress(phase, done, total, percent, value("speed_bps"), value("eta_seconds"),
         requireNotNull(value("updated_at")), integer("current_file_index")?.also { require(it <= Int.MAX_VALUE) }?.toInt(),
-        integer("total_files")?.also { require(it <= Int.MAX_VALUE) }?.toInt())
+        integer("total_files")?.also { require(it <= Int.MAX_VALUE) }?.toInt(), metric, integer("read_pass")?.also { require(it <= Int.MAX_VALUE) }?.toInt())
 } catch (_: Exception) { null }
 
 internal data class CloudTask(val id: String, val work: CloudWork, val state: String, val progress: CloudProgress? = null,
@@ -197,7 +211,7 @@ internal data class CloudSpace(val id: String, val token: String, val selected: 
     val canRelease: Boolean, val physical: Long, val estimate: Long, val retained: Long,
     val paths: List<String>, val trees: List<JSONObject>, val library: List<JSONObject>,
     val blockers: List<String>, val expiresAt: Long) {
-    fun valid(now: Long) = canRelease && now < expiresAt
+    fun valid(now: Long) = canRelease && blockers.isEmpty() && now < expiresAt
     fun release(libraryConfirmed: Boolean, now: Long): CloudWork {
         require(valid(now) && (selected.isEmpty() || libraryConfirmed))
         return CloudWork("torrent", listOf("release", id, "--preview", token, "--confirm", token) +
@@ -213,7 +227,7 @@ internal fun parseCloudSpace(row: JSONObject, now: Long): CloudSpace {
         row.cloudObjects("remove_paths").map { it.getString("path") }, row.cloudObjects("trees"), row.cloudObjects("library"),
         cloudBlockers(row.cloudStrings("blockers")), minOf(now + ttl * 1000, token.substringBefore('-').toLong() * 1000 + 600000)).also {
         require(cloudId.matches(it.id) && cloudToken.matches(token) && it.physical >= 0 && it.estimate >= 0 && it.retained >= 0)
-        require(it.selected.all(::validMediaPath) && it.paths.all(::cloudPath))
+        require(it.selected.size <= 256 && it.selected.distinct().size == it.selected.size && it.selected.all(::validMediaPath) && it.paths.all(::cloudPath))
         require(row.getString("confirmation") == token && (it.selected.isEmpty() || row.getString("library_confirmation") == token))
     }
 }

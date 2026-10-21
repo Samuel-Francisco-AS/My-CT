@@ -224,7 +224,7 @@ def remote_json(*args):
         raise Failure('RCLONE_RESPONSE', 'Resposta JSON inválida do Rclone.') from error
 
 
-def fingerprint(path):
+def fingerprint(path, on_read=None):
     safe_path(path)
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     before = os.fstat(fd)
@@ -237,6 +237,8 @@ def fingerprint(path):
         while block := stream.read(1024 * 1024):
             md5.update(block)
             sha256.update(block)
+            if on_read is not None:
+                on_read(len(block))
         after = os.fstat(stream.fileno())
     snapshot = lambda s: (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns, s.st_ctime_ns)
     if snapshot(before) != snapshot(after) or snapshot(after) != snapshot(path.stat()):

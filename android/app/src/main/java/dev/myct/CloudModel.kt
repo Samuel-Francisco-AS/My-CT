@@ -23,6 +23,20 @@ internal class CloudModel(
     private var needsSnapshot = true
     private var pending: String? = null
     private var handled: String? = null
+    // Ephemeral UI choices: survive composition/navigation, never process/SSH identity changes.
+    private val linkSelections = mutableStateMapOf<String, Set<String>>()
+    private val linkChoices = mutableStateMapOf<String, List<String>>()
+    private var previewRequest: Pair<String, CloudWork>? = null
+    private var authorized: CloudSpace? = null
+    fun selectedLinks(key: String) = linkSelections[key].orEmpty()
+    fun libraryChoices(key: String) = linkChoices[key].orEmpty()
+    fun toggleLink(key: String, path: String) {
+        if (!actionsEnabled || key != selected || path !in libraryChoices(key)) return
+        val current = selectedLinks(key)
+        if (path !in current && current.size >= 256) return
+        linkSelections[key] = if (path in current) current - path else current + path
+        invalidatePreview()
+    }
     var connected by mutableStateOf(false); private set
     var busy by mutableStateOf(false); private set
     var stale by mutableStateOf(true); private set
@@ -45,26 +59,29 @@ internal class CloudModel(
         ssh = connection; connected = connection != null; busy = false; stale = true
         catalogsReady = false; needsSnapshot = true
         // Keep the last view marked stale until the next authoritative snapshot.
-        space = null; inspection = null; selectedFile = null; result = null; resultWork = null
+        invalidatePreview(); linkSelections.clear(); linkChoices.clear()
+        inspection = null; selectedFile = null; result = null; resultWork = null
         // The server journal, not this memory, survives process death/reconnection.
         pending = null; handled = null
         message = if (connected) "Atualize para consultar a Nuvem no Fedora." else "SSH desconectado. Trabalhos aceitos continuam no Fedora."
     }
     fun select(key: String?) {
-        if (selected != key) { selected = key; space = null; inspection = null; result = null; resultWork = null }
+        if (selected != key) { selected = key; invalidatePreview(); inspection = null; result = null; resultWork = null }
     }
     fun prepareFile(path: String) {
         require(cloudPath(path)); selectedFile = path
         if (!busy) refresh()
     }
     fun dismissFile() { selectedFile = null }
-    fun invalidatePreview() { space = null }
-    fun canRelease(plan: CloudSpace, paths: List<String>) = actionsEnabled && space === plan &&
-        selected == plan.id && plan.selected == paths.sorted() && plan.valid(clock())
+    fun invalidatePreview() { space = null; authorized = null; previewRequest = null }
+    fun previewAuthorized(plan: CloudSpace) = authorized === plan
+    fun canRelease(plan: CloudSpace, paths: List<String>) = actionsEnabled && space === plan && authorized === plan &&
+        selected == plan.id && selectedLinks(plan.id).sorted() == paths.sorted() &&
+        plan.selected == paths.sorted() && plan.valid(clock())
 
     fun release(plan: CloudSpace, paths: List<String>, libraryConfirmed: Boolean) {
         if (!canRelease(plan, paths) || (paths.isNotEmpty() && !libraryConfirmed)) {
-            space = null; message = "Confirmação obsoleta. Consulte espaço novamente."; return
+            invalidatePreview(); message = "Confirmação obsoleta. Consulte espaço novamente."; return
         }
         start(plan.release(libraryConfirmed, clock()))
     }
@@ -76,9 +93,13 @@ internal class CloudModel(
             message = "Pedido inválido. Confira o arquivo ou a seleção antes de enviar."
             return
         }
-        space = null; inspection = null; result = null; resultWork = null
+        if (work.action == "space" && (selected != work.target || work.librarySelection != selectedLinks(work.target).sorted())) {
+            message = "A seleção mudou. Confira os links e consulte espaço novamente."; return
+        }
+        invalidatePreview(); inspection = null; result = null; resultWork = null
         val id = UUID.randomUUID().toString().replace("-", "")
         pending = id; handled = null
+        if (work.action == "space") previewRequest = id to work
         request { call ->
             val reply = cloudReply(call(CloudQuery.Start(id, work)))
             val task = parseCloudTask(reply.getJSONObject("task"))
@@ -207,9 +228,24 @@ internal class CloudModel(
         message = "${current.work.title}: concluído."
         when (current.work.action) {
             "space" -> {
-                // Old results may be inspected but never become a new consent window.
                 val plan = parseCloudSpace(reply, clock())
-                if (selected == plan.id) space = plan
+                if (plan.id != current.work.target || plan.selected.sorted() != current.work.librarySelection) {
+                    invalidatePreview()
+                    message = "Seleção divergente entre pedido e resultado. Liberação bloqueada; consulte espaço novamente."
+                    return
+                }
+                // Choices may be displayed from history; history cannot grant deletion consent.
+                linkChoices[plan.id] = plan.library.filter { it.optBoolean("present") && it.optBoolean("linked_to_package") }
+                    .map { it.getString("path") }
+                if (selected == plan.id) {
+                    space = plan
+                    if (current.state == "succeeded" && previewRequest == (current.id to current.work) &&
+                        plan.selected.sorted() == selectedLinks(plan.id).sorted()) authorized = plan
+                    else {
+                        authorized = null
+                        message = "Prévia para consulta. Seleção preservada; consulte espaço novamente para autorizar a liberação."
+                    }
+                }
             }
             "inspect" -> if (selected == current.work.target || entries.any { it.id == selected && it.hash == current.work.target }) inspection = reply
             "recover" -> message = if (reply.optBoolean("seed_started"))
@@ -226,13 +262,18 @@ internal class CloudModel(
             try {
                 // All blocking transport calls are serialized, with no main-thread SSH.
                 transport.withLock {
-                    block { query -> runInterruptible(Dispatchers.IO) { execute(connection, query) } }
+                    block { query ->
+                        val response = runInterruptible(Dispatchers.IO) { execute(connection, query) }
+                        currentCoroutineContext().ensureActive()
+                        check(generation == epoch)
+                        response
+                    }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
                 if (generation == epoch) {
-                    stale = true; space = null; inspection = null
+                    stale = true; invalidatePreview(); inspection = null
                     message = (failure as? DownloadFailure)?.safeMessage
                         ?: "Falha de rede/SSH ou resposta inválida. Atualize para consultar o resultado; o pedido não será repetido."
                 }

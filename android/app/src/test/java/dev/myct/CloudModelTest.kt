@@ -28,7 +28,7 @@ class CloudModelTest {
             }
         }
         try {
-            model.attach(SshConnection()); model.refresh(); await { !model.busy }; assertTrue(model.actionsEnabled)
+            model.attach(SshConnection()); model.select(CLOUD_ARCHIVE); model.refresh(); await { !model.busy }; assertTrue(model.actionsEnabled)
             model.start(work); await { !model.busy }; assertTrue(model.active); assertFalse(model.actionsEnabled)
             model.start(work); assertEquals(1, calls.count { it is CloudQuery.Start })
             model.attach(null); model.attach(SshConnection()); model.refresh(); await { !model.busy }
@@ -36,7 +36,7 @@ class CloudModelTest {
             serverTask!!.put("state", "succeeded").put("result", cloudPlan())
             model.refresh(); await { !model.busy }
             model.select(CLOUD_ARCHIVE); model.viewTask(model.tasks.single()); await { !model.busy }
-            assertNotNull(model.space); assertTrue(model.canRelease(model.space!!, emptyList()))
+            assertNotNull(model.space); assertFalse(model.canRelease(model.space!!, emptyList()))
             assertEquals(1, calls.count { it is CloudQuery.Start })
         } finally { scope.cancel() }
     }
@@ -45,17 +45,27 @@ class CloudModelTest {
             val scope = scope(); var now = CLOUD_NOW
             val selected = if (case.startsWith("library")) listOf(CLOUD_LIB) else emptyList()
             val previewWork = CloudWork("torrent", listOf("space", CLOUD_ARCHIVE) + selected.flatMap { listOf("--remove-library", it) })
-            val task = cloudTaskJson(previewWork, result = cloudPlan(selected))
+            val initialPlan = cloudPlan(selected).put("library", org.json.JSONArray().put(JSONObject()
+                .put("path", CLOUD_LIB).put("present", true).put("linked_to_package", true)))
+            var task = cloudTaskJson(previewWork, result = initialPlan)
             val starts = java.util.concurrent.CopyOnWriteArrayList<CloudQuery.Start>()
             val model = CloudModel(scope, { now }) { _, query -> when (query) {
                 CloudQuery.Snapshot -> cloudSnapshot(task)
                 is CloudQuery.Cancel -> error("Unexpected cancellation")
                 is CloudQuery.Task -> JSONObject().put("ok", true).put("task", task).toString()
-                is CloudQuery.Start -> { starts += query; JSONObject().put("ok", true).put("task", cloudTaskJson(query.work, "running").put("id", query.id)).toString() }
+                is CloudQuery.Start -> {
+                    if (query.work.action == "release") starts += query
+                    task = cloudTaskJson(query.work, "running").put("id", query.id)
+                    JSONObject().put("ok", true).put("task", task).toString()
+                }
             } }
             try {
                 model.attach(SshConnection()); model.select(CLOUD_ARCHIVE); model.refresh(); await { !model.busy }
                 model.viewTask(model.tasks.single()); await { !model.busy }
+                if (selected.isNotEmpty()) model.toggleLink(CLOUD_ARCHIVE, CLOUD_LIB)
+                model.start(previewWork); await { !model.busy }
+                task.put("state", "succeeded").put("result", initialPlan)
+                model.refresh(); await { !model.busy }
                 val plan = model.space!!
                 when (case) {
                     "expired" -> now += 600001
@@ -77,7 +87,7 @@ class CloudModelTest {
             else -> error("No automatic task mutation")
         } }
         try {
-            model.attach(SshConnection()); model.refresh(); await { !model.busy }
+            model.attach(SshConnection()); model.select(CLOUD_ARCHIVE); model.refresh(); await { !model.busy }
             model.start(work); await { !model.busy }
             assertTrue(model.stale); assertFalse(model.actionsEnabled)
             model.start(work); assertEquals(1, starts)
