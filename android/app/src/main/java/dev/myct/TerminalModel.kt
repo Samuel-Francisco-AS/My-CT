@@ -58,6 +58,7 @@ class TerminalModel(application: Application) {
         preferred = runCatching { IdeEnvironment.valueOf(prefs.getString("ide-environment", "LOCAL") ?: "LOCAL") }.getOrDefault(IdeEnvironment.LOCAL)) { mode ->
         prefs.edit { putString("ide-environment", mode.name) }
     }
+    internal val serverSetup = ServerSetupModel(application.assets)
     val health = HealthModel()
     val vault = VaultModel()
     internal val antivirusSignatures = AntivirusSignaturesModel()
@@ -148,7 +149,7 @@ class TerminalModel(application: Application) {
                 ide.attach(current, "$hostname:$sshPort/$username/$expected")
                 health.attach(current)
                 vault.attach(current)
-                downloads.attach(current); torrents.attach(current); search.attach(current); media.attach(current); antivirusSignatures.attach(current)
+                downloads.attach(current); torrents.attach(current); search.attach(current); media.attach(current); antivirusSignatures.attach(current); serverSetup.attach(current)
                 message = "SSH conectado · host verificado · PTY real"
                 // Apply actual view dimensions even if they were measured before channel.connect().
                 screen.requestPtyResize()
@@ -182,7 +183,7 @@ class TerminalModel(application: Application) {
                 workers?.close(); queue.close()
                 // Close the socket before joining blocking workers, always off main.
                 withContext(NonCancellable + Dispatchers.IO) { current.close(); workers?.awaitStopped() }
-                if (id == generation) { transport = null; screen.finish(); connection = null; pending = null; modifiers.clear(); files.attach(null); ide.attach(null); health.attach(null); vault.attach(null); downloads.attach(null); torrents.attach(null); search.attach(null); media.attach(null); antivirusSignatures.attach(null) }
+                if (id == generation) { transport = null; screen.finish(); connection = null; pending = null; modifiers.clear(); files.attach(null); ide.attach(null); health.attach(null); vault.attach(null); downloads.attach(null); torrents.attach(null); search.attach(null); media.attach(null); antivirusSignatures.attach(null); serverSetup.attach(null) }
             }
         }
     }
@@ -190,7 +191,7 @@ class TerminalModel(application: Application) {
     fun disconnect(reason: String = "Sessão encerrada. Você pode reconectar.") {
         files.attach(null); ide.attach(null)
         health.attach(null)
-        vault.attach(null); downloads.attach(null); torrents.attach(null); search.attach(null); media.attach(null); antivirusSignatures.attach(null)
+        vault.attach(null); downloads.attach(null); torrents.attach(null); search.attach(null); media.attach(null); antivirusSignatures.attach(null); serverSetup.attach(null)
         generation++
         val old = connection
         connection = null
@@ -205,7 +206,7 @@ class TerminalModel(application: Application) {
     }
     private fun updatePhase(value: Phase) {
         if (value != Phase.CONNECTED) modifiers.clear()
-        if (value != Phase.CONNECTED) { health.attach(null); vault.attach(null); downloads.attach(null); torrents.attach(null); search.attach(null); media.attach(null); antivirusSignatures.attach(null) }
+        if (value != Phase.CONNECTED) { health.attach(null); vault.attach(null); downloads.attach(null); torrents.attach(null); search.attach(null); media.attach(null); antivirusSignatures.attach(null); serverSetup.attach(null) }
         phase = value
         onConnectionStateChanged?.invoke()
     }

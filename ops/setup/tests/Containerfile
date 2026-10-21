@@ -1,0 +1,5 @@
+# Disposable test harness only; never required by installer or app.
+FROM registry.fedoraproject.org/fedora:44
+RUN dnf install -y --setopt=install_weak_deps=False systemd systemd-pam dbus-broker sudo python3 shadow-utils util-linux && dnf clean all
+RUN useradd --create-home tester && echo 'tester ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/myct-test && chmod 0440 /etc/sudoers.d/myct-test
+CMD ["/sbin/init"]

@@ -110,6 +110,7 @@ private fun TerminalApp(model: TerminalModel) {
     var licenses by remember { mutableStateOf(false) }
     var tmuxHelp by remember { mutableStateOf(false) }
     var settings by remember { mutableStateOf(false) }
+    var setupOptions by remember { mutableStateOf(false) }
     var captureWarning by remember { mutableStateOf(false) }
     var stopPersistenceFor by remember { mutableStateOf<TerminalSession?>(null) }
     var measurements by remember { mutableStateOf<String?>(null) }
@@ -162,8 +163,8 @@ private fun TerminalApp(model: TerminalModel) {
     }
     // Always block screenshots on the vault tab, regardless of the general preference.
     val captureProtected = captureProtectionRequired(model.protectScreenshots, selectedTab, navigation.protectCapture)
-    DisposableEffect(activity, captureProtected) {
-        activity.applyCaptureProtection(captureProtected)
+    DisposableEffect(activity, captureProtected, setupOptions) {
+        activity.applyCaptureProtection(captureProtected || setupOptions)
         onDispose { }
     }
     LaunchedEffect(model.phase, model.backgroundEnabled, model.terminal) {
@@ -190,7 +191,7 @@ private fun TerminalApp(model: TerminalModel) {
         section = navigation.requested, drawer = drawer, phase = model.phase, host = model.host, user = model.user, port = model.port,
         backgroundEnabled = model.backgroundEnabled, protectScreenshots = model.protectScreenshots,
         onSelect = ::navigateTo,
-        onOptions = { settings = true },
+        onOptions = { setupOptions = false; settings = true },
         onCaptureChange = { if (it) model.setCaptureProtection(true) else captureWarning = true },
         onPersistenceChange = { requested ->
             requestPersistenceChange(model.phase == TerminalModel.Phase.CONNECTED, model.backgroundEnabled, requested,
@@ -388,10 +389,13 @@ private fun TerminalApp(model: TerminalModel) {
     }
     if (settings) {
         var antivirusOptions by remember { mutableStateOf(false) }
-        AlertDialog(onDismissRequest = { settings = false }, title = { Text("Opções") }, text = {
+        AlertDialog(onDismissRequest = { settings = false; setupOptions = false }, title = { Text("Opções") }, text = {
             Column(Modifier.verticalScroll(rememberScrollState())
                 .panelEntrance(antivirusOptions, if (antivirusOptions) 1f else -1f)) {
-                if (antivirusOptions) {
+                if (setupOptions) {
+                    MyCtTextButton(onClick = { navigationFeedback(); setupOptions = false }) { Text("← Voltar às opções") }
+                    ServerSetupSection(model.serverSetup)
+                } else if (antivirusOptions) {
                     MyCtTextButton(onClick = { navigationFeedback(); antivirusOptions = false }) { Text("← Voltar às opções") }
                     AntivirusSignaturesSection(model.antivirusSignatures)
                 } else {
@@ -415,6 +419,7 @@ private fun TerminalApp(model: TerminalModel) {
                     Spacer(Modifier.height(12.dp))
                     ScreenPanel {
                         Text("Ferramentas", style = MaterialTheme.typography.titleMedium)
+                        MyCtTextButton(onClick = { navigationFeedback(); setupOptions = true }) { Text("Configurar servidor") }
                         MyCtTextButton(onClick = { navigationFeedback(); antivirusOptions = true }) { Text("Antivírus e assinaturas") }
                         MyCtTextButton(onClick = { tmuxHelp = true; settings = false }) { Text("Recuperar trabalho · tmux") }
                         MyCtTextButton(onClick = { licenses = true; settings = false }) { Text("Licenças") }
@@ -425,7 +430,7 @@ private fun TerminalApp(model: TerminalModel) {
                     }
                 }
             }
-        }, confirmButton = { MyCtTextButton(onClick = { settings = false }) { Text("Fechar") } })
+        }, confirmButton = { MyCtTextButton(onClick = { settings = false; setupOptions = false }) { Text("Fechar") } })
     }
     stopPersistenceFor?.let { expected ->
         AlertDialog(onDismissRequest = { stopPersistenceFor = null },

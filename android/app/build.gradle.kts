@@ -11,8 +11,8 @@ android {
         applicationId = "dev.myct"
         minSdk = 26
         targetSdk = 36
-        versionCode = 43
-        versionName = "0.9.2-s1d-rc1"
+        versionCode = 44
+        versionName = "0.10.0-setup1-rc1"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -42,3 +42,14 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("junit:junit:4.13.2")
 }
+
+// Local, deterministic sources + installer. No network fetch during packaging.
+val setupAssets = layout.buildDirectory.dir("generated/setupAssets")
+val buildSetupBundle by tasks.registering(Exec::class) {
+    inputs.files(fileTree("../../ops/setup") { include("*.py", "manifest.json") },
+        fileTree("../../server") { include("main.cpp", "postgres.cpp", "postgres.hpp", "Makefile", "migrations/*.sql") })
+    outputs.dir(setupAssets)
+    commandLine("python3", "../../ops/setup/build_bundle.py", setupAssets.get().dir("myct-setup").asFile.absolutePath)
+}
+android.sourceSets["main"].assets.srcDir(setupAssets)
+tasks.named("preBuild").configure { dependsOn(buildSetupBundle) }

@@ -1,5 +1,11 @@
 # My-CT
 
+**MYCT-SETUP-1 candidata (20/10/2026):** **Opções → Configurar servidor**, diagnóstico
+Fedora por SSH e instalação supervisionada de Core/PostgreSQL. APK
+**0.10.0-setup1-rc1 / code 44**; aceite Moto/Fedora físico limpo pendente.
+Nenhuma implantação no servidor pessoal. [Arquitetura, testes e validação](docs/MYCT-SETUP-1-RELATORIO.md).
+
+
 **MYCT-C1C ACEITA E INTEGRADA À `main` (20/10/2026), [PR #50 MERGED](https://github.com/Samuel-Francisco-AS/My-CT/pull/50), merge `677051c23bdd427a3abcb4fbc79c09f4e1883c4f`:** Nuvem em
 **Downloads → Mídia → Armazenamento**, com arquivo/restore,
 barra de progresso real (%/bytes/taxa/ETA), polling sem piscadas,
