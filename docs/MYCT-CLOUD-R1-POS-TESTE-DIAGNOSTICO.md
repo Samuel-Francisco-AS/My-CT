@@ -3,6 +3,9 @@
 > O diagnóstico abaixo foi preservado integralmente no commit `0dd5453` antes
 > das alterações. A seção final **Correção implementada para nova auditoria**
 > registra a missão posterior autorizada de código/testes, sem implantação.
+> A etapa seguinte implementou o escritor: ver **Aplicador supervisionado —
+> implementação para auditoria**, ao final. As limitações de ausência de escritor
+> descritas nas seções anteriores são históricas dos commits já auditados.
 
 Data: 21/10/2026. Inspeções no Fedora pessoal; coleta sanitizada registrada às
 15:53–15:55 UTC (12:53–12:55 em Fortaleza), com reconferência ao finalizar.
@@ -593,3 +596,128 @@ supervisionado em missão autorizada; verificação de procedência do filesyste
 legado e investigação individual da exceção; somente depois, autorização de
 implantação/reconciliação e novo teste físico no Moto. Esta entrega não declara
 R1 aceita ou encerrada e não inicia R2.
+
+## Aplicador supervisionado — implementação para auditoria
+
+21/10/2026, após a [revisão estática da Luna](https://github.com/Samuel-Francisco-AS/My-CT/pull/60#issuecomment-6323672244)
+sobre `4b71fdb`. Implementado na mesma PR #60 draft, **sem implantação, migração
+pessoal, release nova, merge ou Ready for Review**. Não altera a candidata code
+49 nem sua tag. Fonte Android continua `dev.myct`, code 50; nenhuma mudança de
+Kotlin, ABI ou assinatura nesta etapa, apenas o input adicional do SETUP.
+
+Código e testes: `246953e047e522ed6bf5637012a548080a50bbc7`.
+
+O contrato completo, incluindo JSON de procedência, argumentos de confirmação,
+backup, recuperação e roteiro de implantação futura, está em
+[MYCT-MEDIA-RECONCILE-APLICADOR.md](MYCT-MEDIA-RECONCILE-APLICADOR.md).
+
+- `reconcile-plan` continua diagnóstico somente leitura. `reconcile-preview`
+  acrescenta SHA-256 dos candidatos e vínculo com índice, RPC, catálogos, tarefas
+  e declaração privada de procedência; não grava plano/lock/catálogo/cache local.
+- A prévia apresenta contagens, motivos, caminhos a atualizar e ID exato; expira
+  em 600 s após emissão. `reconcile-apply` exige o mesmo ID em `--confirm` e,
+  para o legado, em `--accept-legacy`. Não aceita confirmação genérica.
+- A declaração do proprietário deve identificar UUID/subvolume atuais exatos e
+  referenciar evidência independente da procedência, reconhecendo expressamente
+  a ausência de identidade histórica. O código verifica coerência/hash, **não**
+  consegue comprovar a veracidade dessa evidência humana. Não inventa continuidade.
+- Locks exclusivos não bloqueantes: delivery → catálogo de arquivos → catálogo
+  de torrents → nomeação por hashes ordenados → Media. Sob locks, reconsulta tudo
+  e recalcula o plano. Tarefa pendente/ativa/cancelando/incerta, catálogo ambíguo,
+  RPC indisponível, origem/índice/arquivo alterados ou confirmação expirada abortam.
+- Backup privado exclusivo, byte a byte, em diretório 0700 sob
+  `~/.local/state/myct/media-reconcile/operations/ID/`, fora dos helpers/repositório.
+  Valida ancestrais por dirfd/O_NOFOLLOW, owner/permissões/nlink; fsync de arquivos
+  e diretórios, temporário no filesystem do destino e rename atômico.
+- Intent persistente antes da troca e recibo sanitizado após ela. Recuperação
+  apenas classifica/conclui recibo: anterior → `not_applied`, proposto →
+  `succeeded` com backup/fsync conferidos, diferente → `superseded`. Nunca
+  sobrescreve catálogo posterior nem restaura backup automaticamente.
+- Repetição concluída retorna `already_applied` sem reescrever índice/backup.
+  Transação incerta/incompleta bloqueia outra aplicação até diagnóstico/recuperação.
+
+A fixture principal aplica **264** registros simulados e confere integralmente
+os **14 coerentes, 1 excepcional, 28 ausentes e ignored** preservados; mídias,
+inodes/nlink/conteúdo e ambos os catálogos de arquivo permanecem iguais. Nesta
+missão **nenhuma prévia transacional com hashing nem aplicação foi executada no
+acervo pessoal**. A contagem real anterior de 264 continua sendo apenas evidência
+do plano antigo; o novo escritor acrescenta provas e pode recusar condições que
+mudaram. Exige nova contagem/plano em missão futura autorizada.
+
+### Validação final do aplicador
+
+| Suíte | PASS | FAIL | SKIP |
+| --- | ---: | ---: | ---: |
+| Python operacional completo — 262 casos | **260** | **0** | **2** |
+| Aplicador, incluído no operacional | **29** | **0** | **0** |
+| SETUP completo | **58** | **0** | **0** |
+| JVM Android — 331 casos | **329** | **0** | **2** |
+| Cloud JVM, incluído no total | **37** | **0** | **0** |
+
+Dois SKIP operacionais por ausência de user manager/linger nas unidades reais do
+contêiner; dois JVM opcionais SSH/SFTP sem ambiente real. Build Android e lint:
+**PASS**, 0 erros, 1 warning UseKtx/2 hints anteriores. Sintaxe Python e
+`git diff --check`: PASS. Não são testes físicos nem auditoria independente.
+
+As suítes Python foram executadas em cópia de fontes/fixtures, contêiner rootless
+Fedora 44 como `tester`, rede desabilitada, sem bind mounts pessoais, com limite
+1536 MiB/1 CPU/1024 PIDs. Concorrência usa dois processos reais apenas nas
+fixtures. Testes cobrem alterações de plano/RPC/índice/conteúdo, symlinks/locks,
+backup e temporário, rename, fsync antes/depois da troca, SIGINT simulado,
+recibo final indisponível, corrupção de backup, catálogo posterior e repetição.
+
+Primeira execução direcionada: falha de readonly por criação de `__pycache__`
+na importação do adaptador; corrigida a importação para compilação em memória.
+Outra falha era preparação da fixture tentando criar symlink sobre lock legítimo
+da tentativa anterior; a fixture passou a preparar explicitamente esse cenário.
+As execuções finais completas incluem todas as correções e novos casos.
+
+Logs ignorados em `artifacts/myct-cloud-r1-writer/`: `operational-final-receipt.log`
+(262 casos, 54,537 s), `setup-final-receipt.log` (58, 5,802 s), `jvm-verified.log`,
+`android.log` e `android-final-receipt.log`. Os logs finais incluem a distinção
+de contagem planejada/comprovada nos recibos de recuperação. Invocações reproduzíveis:
+
+```bash
+# Somente no contêiner descartável, com cópia das fontes:
+python3 -m unittest discover -s ops/tests -p 'test_*.py' -v
+python3 -m unittest discover -s ops/setup/tests -p 'test_*.py' -v
+# Local: apenas build/cache de desenvolvimento, sem instalação/distribuição:
+ANDROID_HOME=/home/sam/Android/Sdk ./android/gradlew -p android \
+  :app:testDebugUnitTest --rerun --offline --console=plain \
+  -Dorg.gradle.jvmargs='-Xmx1536m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8'
+ANDROID_HOME=/home/sam/Android/Sdk ./android/gradlew -p android \
+  :app:buildSetupBundle :app:assembleDebug :app:lintDebug --offline --console=plain \
+  -Dorg.gradle.jvmargs='-Xmx1536m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8'
+```
+
+SETUP atualizado: manifesto e inputs Gradle incluem o novo módulo; helper `.py`
+recebe permissão privada 0600 pelo instalador existente. **17 fontes/hashes**
+conferidos no payload e payload conferido dentro do APK local; determinismo e
+recusa de componentes preexistentes divergentes passaram. Nenhum plano, backup,
+declaração pessoal ou credencial faz parte do bundle.
+
+| Artefato SETUP desta etapa | SHA-256 |
+| --- | --- |
+| `payload.pyz` | `4ed4b6586cf3b37917e1714f58e3cf0e7a310f4d4b676a4a7100034f54abfdb8` |
+| `diagnose.py` | `96f2cdd3cc14a6f099c58bf0531cff589ccf533b99db4e4170d5583fc91792ee` |
+
+Arquivos: novo `ops/myct_media_reconcile.py`, dispatch/importação readonly em
+`ops/myct-media`, manifesto SETUP/inputs Gradle, novo teste do aplicador,
+regressões do plano e do SETUP, contrato operacional e referências documentais.
+Sem alteração dos motores de exclusão, telemetria, serviços ou helpers instalados.
+
+### Pendências e riscos residuais
+
+Os locks são cooperativos; ctimestamps, hashes, reconsultas e conferência de
+descritores não equivalem a freeze contra root/escritor externo que ignore locks
+no intervalo final. Nenhum serviço é pausado para migrar. O legado não contém
+prova histórica completa; a procedência deve ser conferida por evidência humana
+independente antes de declarar aceite. Prévia/aplicação fazem leituras integrais
+dos candidatos: custo real e adequação do prazo no acervo grande não foram
+medidos; expiração recusa a escrita, sem extensão automática.
+
+Próximo gate: auditoria independente da Luna sobre o escritor. Depois, somente
+com nova autorização: implantação coerente dos helpers/módulo, evidência de
+procedência, plano fresco revisado, confirmação supervisionada, conferência do
+recibo/backup e novo teste Moto sem exclusão real. **R1 segue aberta; R2 não
+iniciada.**

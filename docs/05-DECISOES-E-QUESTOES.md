@@ -566,3 +566,18 @@ tokens, confirmações e revogação de consentimento continuam obrigatórios.
 O vínculo excepcional com outra origem RPC segue protegido. Nenhuma migração
 pessoal, deploy ou publicação; PR #60 draft para a Luna. [Provas, limites e
 procedimento futuro](MYCT-CLOUD-R1-POS-TESTE-DIAGNOSTICO.md).
+
+## 21/10/2026 — R1: escritor supervisionado Media, sem rollback automático
+
+Após revisão estática favorável da Luna ao plano, autorização separada para
+implementar o aplicador em módulo próprio, empacotado pelo SETUP. Prévia readonly
+com conteúdo/estado/procedência vinculados ao ID e prazo de 600 s; aceite legado
+específico, sem fabricar identidade histórica. Delivery/catalogs/naming/Media
+serializam operações cooperantes; reconsulta sob locks, backup exclusivo e intent
+durável precedem temporário/fsync/rename/fsync/recibo. Só registros aprovados mudam.
+
+Recuperação classifica o hash atual e atualiza recibo, sem restaurar backup nem
+sobrescrever catálogo mais recente. Transação incerta impede outra aplicação.
+Essa decisão reduz risco de retry/rollback após interrupção sem introduzir um
+framework de migrações. Nenhuma migração real ou implantação autorizada nesta
+entrega. [Contrato, limites e operação futura](MYCT-MEDIA-RECONCILE-APLICADOR.md).

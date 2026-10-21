@@ -11,6 +11,11 @@ incompletude. Fonte code 50; **nenhuma nova release, implantação ou migração
 Os resultados e procedimentos abaixo são históricos da candidata 49;
 a correção atual aguarda a Luna e não representa aceite funcional da R1.
 
+**Etapa posterior — aplicador:** implementado para auditoria, com confirmação
+exata de plano/procedência, backup privado, locks, reconsulta e escrita atômica.
+Nenhuma execução pessoal. [Contrato e operação futura](MYCT-MEDIA-RECONCILE-APLICADOR.md)
+· [Resultados finais da etapa](MYCT-CLOUD-R1-POS-TESTE-DIAGNOSTICO.md#aplicador-supervisionado--implementação-para-auditoria).
+
 **Registro posterior (21/10/2026):** a reauditoria estática da Luna liberou o
 commit `f239bee` para candidata de teste; APK publicada como pre-release e
 helpers atualizados sob autorização, ainda sem aceite físico ou merge.
