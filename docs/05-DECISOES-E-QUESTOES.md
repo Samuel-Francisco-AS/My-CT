@@ -532,3 +532,18 @@ validações funcionais SETUP-1/2/3 no Moto; instalação física limpa permanec
 VALIDADA. As auditorias independentes Codex/Luna serão solicitadas depois desta
 candidata; nenhuma auditoria global ou integração foi realizada aqui.
 [Contrato, provas e pendências](MYCT-SETUP-4-RELATORIO.md).
+
+
+## 21/10/2026 — MYCT-CLOUD-R1: seleção efêmera por pacote e leitura por fase
+
+Pedido do proprietário: corrigir seleção de 13 hardlinks perdida durante `space`
+e tornar a consulta observável, preservando as proteções C1B/C1C e o SETUP integrado.
+Seleção sai de `remember` da tela para o modelo em memória, por archive ID.
+Autorização exige a tarefa iniciada na sessão e igualdade pedido/resultado/seleção;
+histórico, navegação, segundo plano e reconexão não rearmam consentimento.
+Telemetria opt-in `metric:read/scope:phase` mede bytes devolvidos pelo leitor de
+hashes e tempos por fase, sem alterar plano/token ou semântica de rede.
+R2 permanece separada: sem caches, paralelismo ou redução de verificações.
+Contrato SETUP/recuperação mantém sua versão; hashes do bundle refletem helpers
+novos e divergentes preexistentes exigem intervenção. Sem implantação ou aceite
+físico nesta entrega. [Evidências e limites](MYCT-CLOUD-R1-RELATORIO.md).
