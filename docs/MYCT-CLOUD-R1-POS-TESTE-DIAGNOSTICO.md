@@ -1,5 +1,9 @@
 # MYCT-CLOUD-R1 — diagnóstico após teste físico: Nuvem e biblioteca local
 
+> O diagnóstico abaixo foi preservado integralmente no commit `0dd5453` antes
+> das alterações. A seção final **Correção implementada para nova auditoria**
+> registra a missão posterior autorizada de código/testes, sem implantação.
+
 Data: 21/10/2026. Inspeções no Fedora pessoal; coleta sanitizada registrada às
 15:53–15:55 UTC (12:53–12:55 em Fortaleza), com reconferência ao finalizar.
 **Somente diagnóstico; nenhuma correção
@@ -350,3 +354,242 @@ Não foram alterados código, helpers instalados, catálogos, hardlinks, torrent
 Drive ou serviços. Nenhuma PR, tag, release ou commit novo foi criado. A PR #60
 permanece draft; o aceite funcional da R1 permanece pendente. Aguardar autorização
 para uma correção delimitada e revisão independente antes de nova implantação.
+
+## Correção implementada para nova auditoria — 21/10/2026
+
+Implementação na mesma branch `fix/myct-cloud-r1` / PR #60 draft. A autorização
+desta missão abrange código, testes e documentação, **não** implantação, aplicação
+de plano pessoal, publicação de APK ou exclusão. A release code 49 e sua tag
+continuam vinculadas a `f239bee`, sem alteração. O fonte Android passa a
+`0.13.3-cloud-r1-rc2` / **code 50**, para distinguir a futura construção da APK
+imutável já publicada; a construção local é somente validação para auditoria.
+Package, ABIs e configuração de assinatura foram preservados.
+
+### Identidade Media e plano sem aplicação
+
+`ops/myct-media` acrescenta `reconcile-plan`, uma consulta sem locks nem escrita
+de catálogo. O caminho de comando é tratado antes do despachante que cria locks.
+O resultado tem `application_supported=false`; **não existe `reconcile-apply`**
+nesta entrega. `reconciled_state()` é uma transformação pura, usada nas fixtures
+para provar a recuperação proposta, e não um aplicador seguro de catálogo.
+
+Cada candidato exige cumulativamente:
+
+1. Registro anterior com ID, device e inode válidos, fora de `ignored`.
+2. ID exatamente igual ao da origem encontrada por `media_files()`, num torrent
+   reconhecido por `myct-torrent.records()`, completo, com metadados e sem erro.
+3. Origem única, regular, pertencente ao usuário, dentro da árvore confiável;
+   nenhum componente simbólico. O mesmo vale para o nome da biblioteca.
+4. Device **e** inode atuais iguais entre origem e biblioteca; inode atual igual
+   ao persistido. Uma cópia com o mesmo conteúdo não satisfaz essa condição.
+5. Nome relativo exato e tamanho igual ao metadado `files[].length` do torrent
+   registrado; tamanho positivo. Não basta encontrar qualquer vídeo na árvore.
+6. Uma única origem reconhecida para o inode; todos os aliases Media registrados
+   com o mesmo ID; `nlink` exatamente igual a uma origem mais esses aliases. Um
+   hardlink desconhecido ou origem ambígua mantém a proteção.
+7. Identidade Btrfs atual comprovada nos dois nomes: UUID de filesystem e ID de
+   subvolume lidos pelos ioctls Linux de consulta `FS_INFO`/`INO_LOOKUP`. Falha ou
+   filesystem não suportado bloqueia reancoramento; não há fallback para inode.
+8. Se já persistidos, UUID/subvolume, tamanho, `mtime_ns` e UID devem coincidir.
+   Divergência de filesystem ou metadados antigos não é normalizada.
+9. Rechecagem dos dois `stat` ao terminar a coleta, incluindo modo, UID, tamanho,
+   tempos, device/inode e `nlink`. A evidência e o índice inteiro participam do
+   fingerprint do plano; mudança entre plano e nova coleta invalida a proposta.
+
+Os registros novos passam a guardar `id/dev/ino`, `metadata` (tamanho,
+`mtime_ns`, UID) e `filesystem` (UUID/subvolume, ou `null` se indisponível).
+`record_matches()` mantém a igualdade exata de ID/device/inode dos registros
+antigos e acrescenta as restrições novas quando presentes. **Não aceita mudança
+de device durante snapshot, space, limpeza ou remoção.** A prévia pessoal segue
+bloqueada enquanto nenhuma aplicação supervisionada ocorrer.
+Mudanças posteriores de device também exigirão novo plano, mesmo em registros
+enriquecidos (`DEVICE_REANCHOR`): UUID/subvolume acrescentam prova e não promovem
+uma migração silenciosa a cada boot. Essa intervenção conservadora permanece uma
+limitação operacional até revisão específica de qualquer automatização futura.
+
+O scan de Media agora apresenta registro divergente como pendência, em vez de
+retornar `existing/managed=true` sem verificação. Sync/approve não reancoram nem
+adotam silenciosamente hardlinks existentes sem registro. O fluxo explícito de
+relink conserva suas pré-condições de recuperação e salva o formato enriquecido.
+Cleanup/Nuvem passam a reconhecer esse formato pelo mesmo validador.
+
+**Limite histórico explícito:** os registros legados possuem apenas ID/device/
+inode; não contêm UUID, tamanho ou mtime antigos. Esses dados não podem ser
+reconstituídos nem inventados. A prova adicional do plano vem da origem atual
+confiável e do tamanho no metadado do torrent identificado pelo ID anterior.
+Por isso são classificados `LEGACY_REANCHOR`, exigindo um aceite específico de
+reinscrição da identidade, além da confirmação do fingerprint. Isso não é prova
+de continuidade histórica do filesystem. Possível substituição/clonagem anterior
+não pode ser excluída apenas com o índice v1. A Luna deve revisar especialmente
+essa fronteira de confiança antes de qualquer aplicador/deploy; não há hash novo
+de conteúdo, nem verificação de peças do torrent nesta consulta.
+
+### Resultado do plano pessoal, somente leitura
+
+Foi importado o código do checkout e chamada apenas `reconciliation_plan()`;
+nenhum helper instalado foi substituído. A consulta usou `torrent_get` com
+metadados `files`, `stat` e os ioctls de consulta, sem space/release ou escrita.
+O índice foi comparado byte a byte antes/depois da chamada: **igual**.
+
+| Classificação | Quantidade | Consequência atual |
+| --- | ---: | --- |
+| Dos 264 candidatos originais, satisfazem as novas provas | **264** | `LEGACY_REANCHOR`; proposta, sem aplicação/autorização de exclusão |
+| Dos 264, permanecem inelegíveis ao plano nesta amostra | **0** | Reavaliar obrigatoriamente antes de futura aplicação |
+| Já coerentes | **14** | `CURRENT`; nenhuma atualização necessária |
+| Vínculo excepcional | **1** | `SOURCE_INODE_MISMATCH`; protegido, sem atualização proposta |
+| Caminhos de registros ausentes | **28** | `ABSENT`; preservados, sem atualização proposta |
+| Total de registros examinados | **307** | Nenhum gravado |
+
+Os 264 ainda permanecem protegidos nas operações reais, pois o índice pessoal
+não foi migrado. As contagens são candidatos ao plano, **não** elegibilidade de
+exclusão nem aceite funcional no Moto. O vínculo excepcional continua ligado à
+árvore original registrada em um manifesto de Nuvem, enquanto o RPC aponta para
+outro inode numa árvore independente. Sua investigação futura deve correlacionar
+manifesto, `original_download_dir`, recuperação/relink, metainfo e as duas árvores;
+depois, se autorizado, verificar integridade sem alterar origens. Não atribuir a
+ele o ID do arquivo RPC atual nem retirá-lo da biblioteca automaticamente.
+
+### Inventário e Android
+
+`storage_inventory()` separa a enumeração do teste da seleção. Um vínculo inválido
+acumula `LIBRARY_SELECTION` e não interrompe os demais. Erros em um arquivo
+inspecionável são isolados; uma falha mais ampla mantém a enumeração dos alvos
+conhecidos no manifesto/índice. Não promete conhecer aliases que um scan falho
+não pôde descobrir.
+
+Contrato aditivo: `library_complete` indica conclusão da enumeração/scan; cada
+linha de `library` acrescenta `managed` e `status`: `managed`, `unmanaged`,
+`divergent`, `absent` ou `uninspectable`. `present` e `linked_to_package` continuam
+independentes da prova de gerenciamento. Resultado incompleto acrescenta
+`LIBRARY_INCOMPLETE` e impede `can_release`, inclusive sem seleção. Nenhum token,
+prazo máximo de 600 s ou verificação autoritativa de release foi removido.
+
+O Android usa listas completas do mesmo pacote para atualizar opções; resultados
+incompletos preservam as anteriores (ou usam os caminhos conhecidos do catálogo
+se ainda não havia opções). Seleção não é marcada automaticamente. Há aviso de
+incompletude e rótulos separados para vínculos divergentes, não gerenciados e
+ausentes. Legado sem `library_complete`: resultado bloqueado é tratado como
+incompleto; resultado válido sem bloqueios conserva o contrato anterior.
+Autorização agora também exige inventário completo e prévia válida ao receber o
+resultado. Segundo plano/navegação/reconexão, expiração, comparação exata,
+confirmação Jellyfin e A01 de Atualizar continuam cobertos pelas regressões.
+
+### Migração futura: procedimento ainda pendente de autorização e revisão
+
+1. Aprovar este código e o tratamento explícito de legado na auditoria da Luna.
+2. Em missão separada, preparar/revisar o escritor supervisionado: **ele não está
+   implementado aqui**. Nenhuma chamada manual a `save_state(reconciled_state())`
+   deve substituir esse trabalho ou ser usada no Fedora pessoal.
+3. Somente após autorização, conferir instalação, caminhos privados, hashes e
+   ausência de tarefas de Nuvem ativas/incertas. Não cancelar tarefas para migrar.
+4. Gerar plano privado, mostrar contagens/motivos e identidade atual de filesystem;
+   o proprietário confirma a procedência do filesystem e, especificamente, o
+   reancoramento legado. Falta de evidência dessa procedência impede a aplicação.
+5. O escritor deverá adquirir locks de nomeação por hash em ordem estável e depois
+   Media (mesma ordem dos motores), reconsultar tarefas/RPC/índice e gerar plano
+   fresco. Qualquer diferença exige nova prévia, sem aplicar subconjunto implícito.
+6. Sob locks, criar backup exclusivo 0600 em diretório privado 0700, fora dos
+   helpers/repositório, usando criação sem overwrite/symlink, hash e fsync. Validar
+   dono, permissões e ancestrais do catálogo/lock/backup, inclusive `O_NOFOLLOW`.
+7. Revalidar novamente arquivos/identidade/estado e confirmação; atualizar somente
+   as entradas aprovadas. Preservar `ignored`, 14 coerentes, 28 ausentes e o caso
+   excepcional. Escrever arquivo temporário privado no mesmo filesystem, fsync,
+   rename atômico e fsync do diretório. Sem mídia, ACL ou RPC de mutação.
+8. Conferir hash/contagens e registrar recibo sanitizado. Falha não permite rollback
+   automático se houver tarefa ativa/incerta. Exigir nova consulta space depois,
+   sem reutilizar token ou consentimento anterior, e repetir aceite no Moto sem
+   executar liberação real como condição de teste.
+
+### Arquivos de código/teste e SETUP
+
+Alterados: `ops/myct-media`, `ops/myct-media-cleanup`,
+`ops/myct-archive-torrent`; Android `Cloud.kt`, `CloudModel.kt`, `CloudScreen.kt`,
+`build.gradle.kts`; `test_media_reconcile.py`, `test_cloud_space.py`,
+`test_cloud_progress.py` e `CloudR1Test.kt`. Documentação: este relatório,
+`MYCT-CLOUD-R1-RELATORIO.md`, `05-DECISOES-E-QUESTOES.md` e README.
+
+Nenhuma dependência nova. O manifesto SETUP já inclui os três helpers alterados;
+`build_bundle.py` e a tarefa Gradle continuam gerando hashes das fontes atuais.
+As regras que recusam sobrescrever helpers preexistentes divergentes foram
+preservadas. Nenhum catálogo pessoal, plano privado, identidade de filesystem ou
+credencial faz parte dos assets; apenas as fontes enumeradas no manifesto.
+
+### Testes e limitações desta correção
+
+Resultados finais, sem somar execuções repetidas:
+
+| Validação | PASS | FAIL | SKIP |
+| --- | ---: | ---: | ---: |
+| Python operacional completo (233 casos) | **231** | **0** | **2** |
+| Python SETUP completo | **58** | **0** | **0** |
+| JVM Android (331 casos) | **329** | **0** | **2** |
+| Subconjunto Cloud JVM, incluído no total | **37** | **0** | **0** |
+| Reconciliação em fixtures, incluída no operacional | **17** | **0** | **0** |
+| Space em fixtures, incluído no operacional | **12** | **0** | **0** |
+
+Os dois SKIP operacionais são testes de unidades transitórias reais sem user
+manager/linger no contêiner. Os dois JVM são os testes opcionais de transporte
+SSH/SFTP sem ambiente real habilitado. Não são PASS nem validação física.
+
+Build Android `assembleDebug`: **PASS**. Lint: **PASS**, 0 erros, 1 warning
+`UseKtx` e 2 hints anteriores; compilador mantém os dois avisos anteriores de
+condição sempre verdadeira em `IdeScreen.kt`. `git diff --check` e sintaxe Python:
+PASS. Nenhuma dependência foi instalada para os testes.
+
+Bundle SETUP reconstruído e conferido no APK local: 16 fontes, todas iguais ao
+checkout e aos hashes do manifesto injetado; payload dentro do APK idêntico ao
+gerado. Testes de determinismo e recusa de helper divergente passaram.
+
+| Artefato local SETUP | SHA-256 |
+| --- | --- |
+| `payload.pyz` | `44e714fafb6285fd47c8be6e3a3e0d9b86f6a81217ed7b40f8c236379ae3455c` |
+| `diagnose.py` | `496beacee8d16aaef854e5c217c16c147bb3f3b39d565f56ee3627b5fa32863a` |
+
+Comandos principais reproduzíveis (Python **dentro** do contêiner descartável,
+com cópia de `ops` e `server`, sem mounts pessoais):
+
+```bash
+python3 -m unittest discover -s ops/tests -p 'test_*.py' -v
+python3 -m unittest discover -s ops/setup/tests -p 'test_*.py' -v
+ANDROID_HOME=/home/sam/Android/Sdk ./android/gradlew -p android \
+  :app:testDebugUnitTest :app:assembleDebug :app:lintDebug \
+  --offline --console=plain \
+  -Dorg.gradle.jvmargs='-Xmx1536m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8'
+# Após a última alteração operacional, regeneração/verificação do payload no APK:
+ANDROID_HOME=/home/sam/Android/Sdk ./android/gradlew -p android \
+  :app:buildSetupBundle :app:assembleDebug :app:lintDebug \
+  --offline --console=plain \
+  -Dorg.gradle.jvmargs='-Xmx1536m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8'
+```
+
+Logs locais ignorados em `artifacts/myct-cloud-r1-posttest/`:
+`operational-final.log`, `setup-final.log`, `android-final.log`,
+`android-bundle-final.log`, `reconcile-final.log` e
+`progress-synchronized.log`. As execuções completas finais incluem as alterações
+mais recentes; o teste de reconciliação teve 13 casos inicialmente e 17 no final.
+
+As suítes Python usam cópia das fontes em contêiner rootless descartável Fedora
+44, usuário `tester`, rede desabilitada, sem bind mounts pessoais, limite de
+1536 MiB/1 CPU/1024 PIDs. Exclusões de fixtures nos testes de ciclo de vida não
+atingem o acervo. Testes Android usam transporte e relógio simulados.
+
+Tentativas iniciais: a regressão Android detectou a inclusão indevida de uma opção
+antiga do catálogo ao preservar opções; corrigido no modelo. O teste existente
+de telemetria assíncrona esperava que o arquivo `ready` do produtor significasse
+amostra já publicada pelo consumidor; falhou também isoladamente. A fixture agora
+sincroniza a evidência publicada com a continuação do produtor. A infraestrutura
+de telemetria em produção não mudou. A configuração de Metaspace foi ampliada
+somente na invocação Gradle de validação (768 MiB), sem mudar configuração pessoal.
+
+Reconferência final: os três catálogos pessoais continuam com os hashes do
+diagnóstico; os helpers instalados `myct-media`, `myct-media-cleanup` e
+`myct-archive-torrent` continuam byte a byte iguais ao commit publicado `f239bee`.
+`main` continua `54618d9` e a tag da candidata 49 continua em `f239bee`. Nenhum
+plano pessoal foi salvo no repositório/APK. O contêiner criado para estes testes
+foi descartado ao terminar; logs de validação permanecem locais.
+
+**Pendências:** auditoria independente da Luna; revisão/implementação do escritor
+supervisionado em missão autorizada; verificação de procedência do filesystem
+legado e investigação individual da exceção; somente depois, autorização de
+implantação/reconciliação e novo teste físico no Moto. Esta entrega não declara
+R1 aceita ou encerrada e não inicia R2.

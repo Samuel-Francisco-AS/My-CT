@@ -547,3 +547,22 @@ R2 permanece separada: sem caches, paralelismo ou redução de verificações.
 Contrato SETUP/recuperação mantém sua versão; hashes do bundle refletem helpers
 novos e divergentes preexistentes exigem intervenção. Sem implantação ou aceite
 físico nesta entrega. [Evidências e limites](MYCT-CLOUD-R1-RELATORIO.md).
+
+## 21/10/2026 — R1 pós-teste: reancoramento explícito e inventário completo
+
+O índice legado persistiu device de uma montagem como identidade durável; os
+mesmos inodes estão em device diferente após o boot. Não normalizar o campo nem
+aceitar inode isolado. Acrescentar UUID/subvolume Btrfs e metadados nos registros
+novos; manter comparações antigas estritas até reconciliação supervisionada.
+O plano exige origem atual reconhecida, ID anterior, metadado do torrent,
+hardlink atual comprovado, ausência de links desconhecidos e revalidação.
+Legado sem UUID/metadados históricos requer confirmação explícita de reinscrição;
+não há como fabricar a prova histórica ausente. Esta entrega tem apenas consulta
+de plano e transformação pura em fixtures, sem escritor/aplicação CLI.
+
+A Nuvem enumera conhecidos mesmo com seleção reprovada e marca incompletude;
+Android não troca opções anteriores por subconjunto bloqueado. Bloqueios,
+tokens, confirmações e revogação de consentimento continuam obrigatórios.
+O vínculo excepcional com outra origem RPC segue protegido. Nenhuma migração
+pessoal, deploy ou publicação; PR #60 draft para a Luna. [Provas, limites e
+procedimento futuro](MYCT-CLOUD-R1-POS-TESTE-DIAGNOSTICO.md).

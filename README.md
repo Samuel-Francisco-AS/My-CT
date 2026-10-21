@@ -5,6 +5,10 @@ correção de Atualizar durante `space` e progresso real de leitura.
 [Pre-release 0.13.2-cloud-r1-rc1/code 49](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-cloud-r1-v0.13.2-rc1),
 commit auditado `f239bee`; helpers atualizados sob autorização e backup privado.
 **Aceite Moto pendente; PR #60 permanece draft, sem merge.**
+Teste físico identificou device persistido antigo no índice Media e lista parcial
+de vínculos. Correção pós-teste em auditoria: plano de reconciliação sem aplicação,
+inventário completo e UI protegida; fonte code 50, **sem nova publicação/deploy**.
+[Diagnóstico preservado, correção e migração futura](docs/MYCT-CLOUD-R1-POS-TESTE-DIAGNOSTICO.md).
 [Publicação, implantação e roteiro físico](docs/MYCT-CLOUD-R1-DEPLOY-RELATORIO.md) ·
 [Implementação e testes](docs/MYCT-CLOUD-R1-RELATORIO.md).
 

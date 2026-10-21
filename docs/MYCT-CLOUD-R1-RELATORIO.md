@@ -1,5 +1,16 @@
 # MYCT-CLOUD-R1 — seleção e progresso da consulta de espaço
 
+## Atualização pós-teste físico — 21/10/2026
+
+O teste da candidata code 49 identificou registros Media com device persistido
+antigo e inventário parcial na primeira reprovação `LIBRARY_SELECTION`.
+[Diagnóstico preservado e correção para nova auditoria](MYCT-CLOUD-R1-POS-TESTE-DIAGNOSTICO.md):
+plano explícito de reconciliação sem aplicação, identidade Btrfs/metadados para
+registros novos, enumeração completa e opções Android preservadas quando houver
+incompletude. Fonte code 50; **nenhuma nova release, implantação ou migração real**.
+Os resultados e procedimentos abaixo são históricos da candidata 49;
+a correção atual aguarda a Luna e não representa aceite funcional da R1.
+
 **Registro posterior (21/10/2026):** a reauditoria estática da Luna liberou o
 commit `f239bee` para candidata de teste; APK publicada como pre-release e
 helpers atualizados sob autorização, ainda sem aceite físico ou merge.
