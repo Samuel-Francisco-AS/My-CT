@@ -1,8 +1,11 @@
 # MYCT-SETUP — Fedora instalável e recuperável pelo Android
 
-**Decidido:** 20/10/2026, pelo proprietário.  
-**Estado:** planejamento aprovado; **nenhuma implementação, instalação ou recuperação executada**.  
-**Acompanhamento:** [issue #53](https://github.com/Samuel-Francisco-AS/My-CT/issues/53).  
+**Decidido:** 20/10/2026, pelo proprietário.
+
+**Estado:** planejamento aprovado; **nenhuma implementação, instalação ou recuperação executada**.
+
+**Acompanhamento:** [issue #53](https://github.com/Samuel-Francisco-AS/My-CT/issues/53).
+
 **Ordem obrigatória:** SETUP-1 (base) → SETUP-2 (Transmission/Prowlarr) → SETUP-3 (Rclone/Drive) → SETUP-4 (backup/recuperação).
 
 ## Objetivo
