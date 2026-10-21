@@ -8,6 +8,7 @@ from contextlib import contextmanager, ExitStack
 import fcntl
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -16,7 +17,8 @@ import time
 import uuid
 
 LIMIT = 16 * 1024 * 1024
-TTL = 600
+TTL = 600  # Acceptance window, not time spent proving identity under locks.
+MAX_EXECUTION = 24 * 60 * 60
 HEX = re.compile(r'[0-9a-f]{64}')
 TERMINAL = {'succeeded', 'failed', 'cancelled'}
 CONFLICT = {'pending', 'uncertain', 'starting', 'running', 'cancelling', 'archiving',
@@ -221,7 +223,8 @@ def base_plan(core, rows, state):
     except Exception: raise Error('PROOF_UNAVAILABLE') from None
 
 
-def snapshot(core, proof, hash_content=True):
+def snapshot(core, proof, hash_content=True, timings=None):
+    started = time.monotonic()
     raw, meta = read_private(core.state_path())
     state = document(raw)
     if not isinstance(state.get('links'), dict) or not isinstance(state.get('ignored'), list): raise Error('INVALID_INDEX')
@@ -233,20 +236,59 @@ def snapshot(core, proof, hash_content=True):
     rpc = sorted([{k: row.get(k) for k in fields} for row in rows], key=lambda x: x['hash_string'])
     result = {'plan': plan, 'index_sha256': digest(raw), 'index_stat': meta, 'rpc': rpc,
               'environment': environment(), 'provenance_sha256': provenance(proof, plan)}
+    collected = time.monotonic()
     if hash_content: result['contents'] = content(core, plan)
+    hashed = time.monotonic()
     # Hashing may take minutes. Check stat evidence and all authorizations again.
     if base_plan(core, read_rows(core), state) != plan:
         raise Error('PLAN_CHANGED')
     if read_private(core.state_path())[0] != raw or environment() != result['environment']:
         raise Error('PLAN_CHANGED')
+    if timings is not None:
+        timings.update(collect=collected - started, hash=hashed - collected,
+                       recheck=time.monotonic() - hashed)
     return result, state, raw
 
 
+def workload(plan, seconds=None):
+    """Logical bytes read by hashing, deduplicated exactly as content(); not SSD IO."""
+    files = {(e['after']['dev'], e['after']['ino']): e['evidence']['source_stat']['size']
+             for e in plan['entries'] if e['eligible']}
+    size = sum(files.values())
+    # Measure the entire preview (RPC/stat/hash/rechecks), conservatively including
+    # overhead. Cache/load can change: this is a projection, never a guarantee.
+    if seconds is not None and (type(seconds) not in (int, float) or not math.isfinite(seconds) or seconds < 0):
+        raise Error('INVALID_TIMING')
+    required = max(TTL, math.ceil(3 * seconds + 120)) if seconds is not None else None
+    return {'candidate_paths': plan['eligible'], 'distinct_files': len(files),
+            'bytes_per_pass': size, 'full_passes': 2, 'total_read_bytes': 2 * size,
+            'preview_seconds': seconds,
+            'observed_effective_bytes_per_second': size / seconds if seconds else None,
+            'estimated_apply_seconds': seconds,
+            'execution_limit_seconds': required,
+            'maximum_execution_seconds': MAX_EXECUTION,
+            'temporal_viable': required <= MAX_EXECUTION if required is not None else None}
+
+
+def estimate(core, proof):
+    snap, _, _ = snapshot(core, proof, hash_content=False)
+    return {'application_supported': False, 'workload': workload(snap['plan']),
+            'summary': dict(Counter(e['reason'] for e in snap['plan']['entries']))}
+
+
+def check_execution(deadline):
+    if time.monotonic() >= deadline: raise Error('EXECUTION_EXPIRED')
+
+
 def preview(core, proof, now=None):
-    snap, _, _ = snapshot(core, proof)
+    started = time.monotonic()
+    phases = {}
+    snap, _, _ = snapshot(core, proof, timings=phases)
+    diagnostic = workload(snap['plan'], time.monotonic() - started)
     if not snap['plan']['eligible']: raise Error('NO_CANDIDATES')
     issued = int(time.time() if now is None else now)
-    result = {'schema': 1, 'application_supported': True, 'issued': issued, 'expires': issued + TTL,
+    result = {'schema': 2, 'application_supported': True, 'issued': issued, 'expires': issued + TTL,
+              'workload': diagnostic, 'preview_phases_seconds': phases,
               'nonce': uuid.uuid4().hex, 'snapshot': snap,
               'summary': dict(Counter(x['reason'] for x in snap['plan']['entries'])),
               'updates': [x['path'] for x in snap['plan']['entries'] if x['eligible']]}
@@ -255,14 +297,21 @@ def preview(core, proof, now=None):
 
 
 def validate(plan, confirmation, legacy, now):
-    if not isinstance(plan, dict) or plan.get('schema') != 1: raise Error('INVALID_PLAN')
+    if not isinstance(plan, dict) or plan.get('schema') != 2: raise Error('INVALID_PLAN')
     inner = plan['snapshot']['plan']
-    if (set(plan) != {'schema', 'application_supported', 'issued', 'expires', 'nonce', 'snapshot', 'summary', 'updates', 'id'} or
+    if (set(plan) != {'schema', 'application_supported', 'issued', 'expires', 'nonce', 'snapshot', 'summary', 'updates', 'id', 'workload', 'preview_phases_seconds'} or
             plan['application_supported'] is not True or
             not re.fullmatch('[0-9a-f]{32}', plan.get('nonce', '')) or
             plan['updates'] != [e['path'] for e in inner['entries'] if e['eligible']] or
             plan['summary'] != dict(Counter(e['reason'] for e in inner['entries']))):
         raise Error('INVALID_PLAN')
+    phases = plan['preview_phases_seconds']
+    if (set(phases) != {'collect', 'hash', 'recheck'} or
+            any(type(v) not in (int, float) or not math.isfinite(v) or v < 0 for v in phases.values()) or
+            sum(phases.values()) > plan['workload']['preview_seconds'] + 0.001):
+        raise Error('INVALID_TIMING')
+    if plan['workload'] != workload(inner, plan['workload']['preview_seconds']):
+        raise Error('INVALID_TIMING')
     identity = plan.get('id', '')
     if (not HEX.fullmatch(identity) or identity != confirmation or
             identity != digest(encoded({k: v for k, v in plan.items() if k != 'id'}))):
@@ -299,7 +348,8 @@ def receipt(journal, state=None, duplicate=False):
     return {'ok': True, 'operation': journal['operation'], 'state': observed,
             'updated': journal['updated'] if observed == 'succeeded' else 0 if observed == 'not_applied' else None,
             'planned_updates': journal['updated'], 'before_sha256': journal['before_sha256'],
-            'after_sha256': journal['after_sha256'], 'already_applied': duplicate}
+            'after_sha256': journal['after_sha256'], 'already_applied': duplicate,
+            'recovered_missing_intent': journal.get('recovered_missing_intent', False)}
 
 
 def journal_valid(journal, identity):
@@ -326,13 +376,23 @@ def pending_operations():
         pass
 
 
-def apply(core, plan, proof, confirmation, legacy=None):
-    validate(plan, confirmation, legacy, int(time.time()))
-    identity = plan['id']
+def plan_hashes(plan):
     hashes = {r['hash_string'] for r in plan['snapshot']['rpc']}
     hashes.update(e['before']['id'][:40] for e in plan['snapshot']['plan']['entries'] if 'before' in e)
     if not all(re.fullmatch('[0-9a-f]{40}', k) for k in hashes): raise Error('INVALID_HASH')
+    return hashes
+
+
+def apply(core, plan, proof, confirmation, legacy=None):
+    validate(plan, confirmation, legacy, int(time.time()))
+    identity = plan['id']
+    hashes = plan_hashes(plan)
     with locks(core, hashes):
+        # Consume exact consent while still fresh, before the long locked proof.
+        accepted = int(time.time())
+        validate(plan, confirmation, legacy, accepted)
+        if not plan['workload']['temporal_viable']: raise Error('TEMPORAL_PREFLIGHT')
+        deadline = time.monotonic() + plan['workload']['execution_limit_seconds']
         environment()  # No new work can be accepted while delivery.lock is held.
         old, _ = read_private(root() / identity / 'transaction.json', missing=True)
         if old is not None:
@@ -345,6 +405,7 @@ def apply(core, plan, proof, confirmation, legacy=None):
         pending_operations()
         fresh, state, before = snapshot(core, proof)
         if fresh != plan['snapshot']: raise Error('PLAN_CHANGED')
+        check_execution(deadline)  # Abort before creating intent/backup on overrun.
         inner = fresh['plan']
         proposed = core.reconciled_state(state, inner, inner, inner['fingerprint'], accept_legacy=legacy == identity)
         after = encoded(proposed)
@@ -356,12 +417,13 @@ def apply(core, plan, proof, confirmation, legacy=None):
         with parent(root() / '.create', create=True, private=True) as operations:
             try: os.mkdir(identity, 0o700, dir_fd=operations)
             except FileExistsError: raise Error('OPERATION_EXISTS', identity) from None
-            os.fsync(operations)
+            try: os.fsync(operations)
+            except Exception: raise Error('RECOVERY_NEEDED', identity) from None
         with parent(operation / 'transaction.json', private=True) as directory:
             # The enclosing op directory must be new, never an old backup destination.
             if os.listdir(directory): raise Error('OPERATION_EXISTS', identity)
-            atomic(directory, 'transaction.json', encoded(journal))
             try:
+                atomic(directory, 'transaction.json', encoded(journal))
                 write_exclusive(directory, 'state.before.json', before)
                 if read_at(directory, 'state.before.json')[0] != before: raise Error('BACKUP_INVALID')
                 journal['state'] = 'prepared'; atomic(directory, 'transaction.json', encoded(journal))
@@ -375,11 +437,16 @@ def apply(core, plan, proof, confirmation, legacy=None):
                         last, _, _ = snapshot(core, proof, hash_content=False)
                         if last != {k: v for k, v in fresh.items() if k != 'contents'}:
                             raise Error('PLAN_CHANGED')
-                        validate(plan, confirmation, legacy, int(time.time()))
+                        # Consent was accepted under locks; no renewal or unlocked
+                        # reuse. Recheck the exact accepted ID/consents as well as
+                        # the separate execution deadline before publication.
+                        validate(plan, confirmation, legacy, accepted)
+                        check_execution(deadline)
                         if read_at(catalog, core.state_path().name)[0] != before: raise Error('INDEX_CHANGED')
                         with parent(core.state_path(), private=True) as active:
                             if (os.fstat(active).st_dev, os.fstat(active).st_ino) != (os.fstat(catalog).st_dev, os.fstat(catalog).st_ino):
                                 raise Error('DIRECTORY_CHANGED')
+                        check_execution(deadline)  # Also cover the final catalog/directory reads.
                         os.replace(temp, core.state_path().name, src_dir_fd=catalog, dst_dir_fd=catalog)
                         os.fsync(catalog)
                         if read_at(catalog, core.state_path().name)[0] != after: raise Error('INDEX_CHANGED')
@@ -393,11 +460,15 @@ def apply(core, plan, proof, confirmation, legacy=None):
         return receipt(journal)
 
 
-def recover(core, identity):
+def recover(core, identity, plan=None):
     """Classify interrupted commit, fsync and publish receipt; NEVER restore state."""
     if not HEX.fullmatch(identity): raise Error('INVALID_OPERATION')
     path = root() / identity / 'transaction.json'
-    raw, _ = read_private(path); journal = document(raw)
+    raw, _ = read_private(path, missing=True)
+    if raw is None:
+        if plan is None: raise Error('MISSING_INTENT_REQUIRES_PLAN', identity)
+        return recover_missing(core, identity, plan)
+    journal = document(raw)
     journal_valid(journal, identity)
     hashes = journal['hashes']
     if not all(re.fullmatch('[0-9a-f]{40}', k) for k in hashes): raise Error('INVALID_HASH')
@@ -420,12 +491,54 @@ def recover(core, identity):
         return receipt(journal)
 
 
+def recover_missing(core, identity, plan):
+    # Recovery is not consent to apply: expired plans can only classify an
+    # unchanged baseline. Exact canonical ID and all structural checks still hold.
+    validate(plan, identity, identity, plan['issued'])
+    hashes = plan_hashes(plan)
+    path = root() / identity / 'transaction.json'
+    with locks(core, hashes):
+        environment()
+        with parent(path, private=True) as directory:
+            if 'transaction.json' in os.listdir(directory): raise Error('OPERATION_CHANGED', identity)
+            evidence = []
+            for name in sorted(os.listdir(directory)):
+                # Only unpublished atomic-journal temporaries are possible before
+                # the first intent. Preserve and fingerprint each; never delete it.
+                if not re.fullmatch(r'\.reconcile-[0-9a-f]{32}', name):
+                    raise Error('UNCLASSIFIED_EVIDENCE', identity)
+                evidence.append([name, digest(read_at(directory, name)[0])])
+            current, _ = read_private(core.state_path())
+            if digest(current) != plan['snapshot']['index_sha256']:
+                raise Error('UNCLASSIFIED_CATALOG', identity)
+            inner = plan['snapshot']['plan']
+            proposed = core.reconciled_state(document(current), inner, inner, inner['fingerprint'], accept_legacy=True)
+            journal = {'schema': 1, 'operation': identity, 'state': 'not_applied',
+                       'before_sha256': digest(current), 'after_sha256': digest(encoded(proposed)),
+                       'updated': inner['eligible'], 'hashes': sorted(hashes),
+                       'recovered_missing_intent': True, 'preserved_evidence': evidence}
+            journal_valid(journal, identity)
+            if read_private(core.state_path())[0] != current: raise Error('INDEX_CHANGED')
+            # Does not authorize a retry. Publish only a classification receipt;
+            # the catalog, media, and orphaned evidence remain byte-for-byte intact.
+            try:
+                # The original mkdir may itself have failed its parent fsync.
+                with parent(root() / '.recover', private=True) as operations:
+                    os.fsync(operations)
+                atomic(directory, path.name, encoded(journal))
+            except Exception: raise Error('RECOVERY_NEEDED', identity) from None
+            return receipt(journal)
+
+
 def run(core, argv):
     try:
-        if len(argv) == 3 and argv[:2] == ['reconcile-preview', '--provenance']:
-            return preview(core, Path(argv[2]))
+        if len(argv) == 3 and argv[0] in {'reconcile-preview', 'reconcile-estimate'} and argv[1] == '--provenance':
+            return (preview if argv[0] == 'reconcile-preview' else estimate)(core, Path(argv[2]))
         if len(argv) == 3 and argv[:2] == ['reconcile-recover', '--operation']:
             return recover(core, argv[2])
+        if len(argv) == 5 and argv[:2] == ['reconcile-recover', '--operation'] and argv[3] == '--plan':
+            raw, _ = read_private(Path(argv[4]), private_parent=False)
+            return recover(core, argv[2], document(raw))
         if argv and argv[0] == 'reconcile-apply' and len(argv) in (7, 9):
             options = dict(zip(argv[1::2], argv[2::2]))
             if len(options) != (len(argv) - 1) // 2 or set(options) not in ({'--plan', '--provenance', '--confirm'}, {'--plan', '--provenance', '--confirm', '--accept-legacy'}):

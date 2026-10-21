@@ -29,6 +29,9 @@ class ApplyTests(unittest.TestCase):
             return original(include_files, self.f.rows if rows is None else rows)
         p = patch.object(self.core, 'read_torrents', side_effect=read)
         p.start(); self.addCleanup(p.stop)
+        self.elapsed = 0
+        p = patch.object(writer.time, 'monotonic', side_effect=lambda: self.elapsed)
+        p.start(); self.addCleanup(p.stop)
         self.now = 1000000
         p = patch.object(writer.time, 'time', side_effect=lambda: self.now)
         p.start(); self.addCleanup(p.stop)
@@ -168,15 +171,196 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(self.before, self.core.state_path().read_bytes())
         self.assertEqual('not_applied', writer.recover(self.core, p['id'])['state'])
 
-    def test_expiry_after_backup_refuses(self):
+    def test_execution_deadline_after_backup_refuses(self):
         p = self.preview(); original = writer.write_exclusive
         def expire(fd, name, raw):
             result = original(fd, name, raw)
-            if name == 'state.before.json': self.now += writer.TTL
+            if name == 'state.before.json': self.elapsed += writer.TTL
             return result
         with patch.object(writer, 'write_exclusive', side_effect=expire):
             with self.assertRaisesRegex(writer.Error, 'RECOVERY_NEEDED'): self.apply(p)
         self.assertEqual(self.before, self.core.state_path().read_bytes())
+
+    def test_long_hash_passes_exceed_600_but_exact_consent_is_accepted_fresh(self):
+        original = writer.content
+        def slow(core, plan):
+            result = original(core, plan)
+            self.elapsed += 750; self.now += 750
+            return result
+        with patch.object(writer, 'content', side_effect=slow):
+            p = self.preview()
+            self.assertEqual(750, p['workload']['preview_seconds'])
+            self.assertEqual({'collect': 0, 'hash': 750, 'recheck': 0}, p['preview_phases_seconds'])
+            self.assertEqual(p['workload']['bytes_per_pass'] / 750, p['workload']['observed_effective_bytes_per_second'])
+            self.assertEqual(2370, p['workload']['execution_limit_seconds'])
+            self.assertTrue(p['workload']['temporal_viable'])
+            self.now += 599; self.elapsed += 599
+            self.assertEqual('succeeded', self.apply(p)['state'])
+        self.assertGreater(self.now, p['expires'])
+        self.assertEqual(self.before, (writer.root() / p['id'] / 'state.before.json').read_bytes())
+
+    def test_estimate_volume_distinct_passes_unknown_rate_and_read_only_cli(self):
+        self.add(2); self.save()
+        paths = sorted(str(p) for p in self.f.home.rglob('*'))
+        with patch.object(writer, 'content', side_effect=AssertionError('estimate must not hash')):
+            result = writer.estimate(self.core, self.proof)
+        cli = self.core.run(['reconcile-estimate', '--provenance', str(self.proof)])
+        self.assertEqual(result, cli)
+        self.assertEqual(paths, sorted(str(p) for p in self.f.home.rglob('*')))
+        w = result['workload']
+        size = sum(p.stat().st_size for p in self.f.source_root.iterdir())
+        self.assertEqual((2, size, 2, 2 * size), (w['distinct_files'], w['bytes_per_pass'], w['full_passes'], w['total_read_bytes']))
+        self.assertIsNone(w['observed_effective_bytes_per_second']); self.assertIsNone(w['temporal_viable'])
+        inner = self.preview()['snapshot']['plan']
+        inner['entries'].append(copy.deepcopy(inner['entries'][0])); inner['eligible'] += 1
+        self.assertEqual(size, writer.workload(inner)['bytes_per_pass'])
+        self.assertEqual(self.before, self.core.state_path().read_bytes())
+
+    def test_invalid_budget_or_phase_diagnostic_is_not_accepted(self):
+        for field, value in [('execution_limit_seconds', writer.MAX_EXECUTION + 1), ('preview_seconds', -1)]:
+            p = self.preview(); p['workload'][field] = value
+            with self.assertRaisesRegex(writer.Error, 'INVALID_TIMING'): self.apply(p)
+        p = self.preview(); p['preview_phases_seconds']['hash'] = 1
+        with self.assertRaisesRegex(writer.Error, 'INVALID_TIMING'): self.apply(p)
+        self.assertEqual(self.before, self.core.state_path().read_bytes())
+
+    def test_exact_consent_integrity_rechecked_before_publication(self):
+        p = self.preview(); original = writer.write_exclusive
+        def tamper(fd, name, raw):
+            result = original(fd, name, raw)
+            if name == 'state.before.json': p['nonce'] = 'f' * 32
+            return result
+        with patch.object(writer, 'write_exclusive', side_effect=tamper):
+            with self.assertRaisesRegex(writer.Error, 'RECOVERY_NEEDED'): self.apply(p)
+        self.assertEqual(self.before, self.core.state_path().read_bytes())
+        self.assertEqual('not_applied', writer.recover(self.core, p['id'])['state'])
+
+    def test_temporal_preflight_cap_refuses_before_hash_or_operation_creation(self):
+        original = writer.content
+        def slow(core, plan):
+            result = original(core, plan); self.elapsed += writer.MAX_EXECUTION
+            return result
+        with patch.object(writer, 'content', side_effect=slow): p = self.preview()
+        self.assertFalse(p['workload']['temporal_viable'])
+        with patch.object(writer, 'content', side_effect=AssertionError('must preflight first')):
+            with self.assertRaisesRegex(writer.Error, 'TEMPORAL_PREFLIGHT'): self.apply(p)
+        self.assertFalse(writer.root().exists()); self.assertEqual(self.before, self.core.state_path().read_bytes())
+
+    def test_unexpected_hash_slowdown_aborts_before_intent(self):
+        p = self.preview(); original = writer.content
+        def slow(core, plan):
+            result = original(core, plan); self.elapsed += p['workload']['execution_limit_seconds']
+            return result
+        with patch.object(writer, 'content', side_effect=slow):
+            with self.assertRaisesRegex(writer.Error, 'EXECUTION_EXPIRED'): self.apply(p)
+        self.assertFalse(writer.root().exists()); self.assertEqual(self.before, self.core.state_path().read_bytes())
+
+    def test_expiry_is_rechecked_under_locks_and_old_plans_refused(self):
+        from contextlib import contextmanager
+        p = self.preview(); original = writer.locks
+        @contextmanager
+        def delayed(core, hashes):
+            with original(core, hashes):
+                self.now += writer.TTL
+                yield
+        with patch.object(writer, 'locks', side_effect=delayed):
+            with self.assertRaisesRegex(writer.Error, 'EXPIRED'): self.apply(p)
+        self.assertFalse(writer.root().exists())
+        p['schema'] = 1
+        with self.assertRaisesRegex(writer.Error, 'INVALID_PLAN'): self.apply(p)
+
+    def test_execution_limit_after_backup_is_recoverable_and_wall_clock_jump_does_not_extend(self):
+        p = self.preview(); original = writer.write_exclusive
+        def expire(fd, name, raw):
+            result = original(fd, name, raw)
+            if name == 'state.before.json':
+                self.now -= 10000; self.elapsed += p['workload']['execution_limit_seconds']
+            return result
+        with patch.object(writer, 'write_exclusive', side_effect=expire):
+            with self.assertRaisesRegex(writer.Error, 'RECOVERY_NEEDED'): self.apply(p)
+        self.assertEqual(self.before, self.core.state_path().read_bytes())
+        self.assertEqual('not_applied', writer.recover(self.core, p['id'])['state'])
+
+    def fail_first_intent(self, p, stage='atomic'):
+        original_atomic, original_replace, original_sync = writer.atomic, writer.os.replace, writer.os.fsync
+        published = False
+        def fail_atomic(fd, name, raw):
+            if name == 'transaction.json': raise OSError('synthetic private token')
+            return original_atomic(fd, name, raw)
+        def fail_replace(src, dst, **kwargs):
+            nonlocal published
+            if dst == 'transaction.json' and stage == 'replace': raise OSError('synthetic initial rename failure')
+            result = original_replace(src, dst, **kwargs)
+            if dst == 'transaction.json': published = True
+            return result
+        def fail_sync(fd):
+            path = os.readlink('/proc/self/fd/' + str(fd))
+            if ((stage == 'fsync' or stage == 'published_fsync' and published) and path == str(writer.root() / p['id']) or
+                    stage == 'file_fsync' and path.startswith(str(writer.root() / p['id'] / '.reconcile-')) or
+                    stage == 'operations_fsync' and path == str(writer.root()) and (writer.root() / p['id']).exists()):
+                raise OSError('synthetic initial fsync failure')
+            return original_sync(fd)
+        with patch.object(writer, 'atomic', side_effect=fail_atomic if stage == 'atomic' else original_atomic), \
+             patch.object(writer.os, 'replace', side_effect=fail_replace if stage in ('replace', 'published_fsync') else original_replace), \
+             patch.object(writer.os, 'fsync', side_effect=fail_sync if stage in ('fsync', 'file_fsync', 'published_fsync', 'operations_fsync') else original_sync):
+            with self.assertRaisesRegex(writer.Error, 'RECOVERY_NEEDED: ' + p['id']): self.apply(p)
+        self.assertEqual(self.before, self.core.state_path().read_bytes())
+
+    def test_first_intent_failure_has_operation_id_and_explicit_recovery_without_deletion(self):
+        p = self.preview(); self.fail_first_intent(p)
+        directory = writer.root() / p['id']
+        self.assertTrue(directory.is_dir()); self.assertEqual([], list(directory.iterdir()))
+        with self.assertRaisesRegex(writer.Error, 'MISSING_INTENT_REQUIRES_PLAN'): writer.recover(self.core, p['id'])
+        with self.assertRaisesRegex(writer.Error, 'RECOVERY_NEEDED'): self.apply(self.preview())
+        self.now += writer.TTL  # Recovery cannot apply; an expired exact plan suffices.
+        file = self.f.home / 'approved-plan.json'; file.write_bytes(writer.encoded(p)); file.chmod(0o600)
+        r = self.core.run(['reconcile-recover', '--operation', p['id'], '--plan', str(file)])
+        self.assertEqual(('not_applied', 0), (r['state'], r['updated']))
+        self.assertTrue(r['recovered_missing_intent'])
+        j = json.loads((directory / 'transaction.json').read_bytes())
+        self.assertTrue(j['recovered_missing_intent']); self.assertEqual([], j['preserved_evidence'])
+        self.assertEqual(self.before, self.core.state_path().read_bytes())
+        self.assertEqual('succeeded', self.apply(self.preview())['state'])
+
+    def test_first_intent_rename_and_fsync_faults_preserve_and_classify(self):
+        for stage in ('replace', 'fsync', 'file_fsync', 'published_fsync', 'operations_fsync'):
+            with self.subTest(stage=stage):
+                p = self.preview(); self.fail_first_intent(p, stage)
+                self.assertEqual('not_applied', writer.recover(self.core, p['id'], p)['state'])
+                self.assertEqual(self.before, self.core.state_path().read_bytes())
+
+    def test_missing_intent_preserves_orphan_evidence_and_refuses_wrong_plan(self):
+        p = self.preview(); self.fail_first_intent(p)
+        orphan = writer.root() / p['id'] / ('.reconcile-' + 'c' * 32)
+        orphan.write_bytes(b'partial initial intent'); orphan.chmod(0o600)
+        with self.assertRaisesRegex(writer.Error, 'CONFIRMATION'): writer.recover(self.core, p['id'], self.preview())
+        writer.recover(self.core, p['id'], p)
+        self.assertEqual(b'partial initial intent', orphan.read_bytes())
+        journal = json.loads(orphan.with_name('transaction.json').read_bytes())
+        self.assertEqual([[orphan.name, writer.digest(orphan.read_bytes())]], journal['preserved_evidence'])
+        self.assertEqual(self.before, self.core.state_path().read_bytes())
+
+    def test_missing_intent_unknown_evidence_or_changed_catalog_cannot_be_bypassed(self):
+        p = self.preview(); self.fail_first_intent(p)
+        marker = writer.root() / p['id'] / 'state.before.json'
+        marker.write_bytes(self.before); marker.chmod(0o600)
+        with self.assertRaisesRegex(writer.Error, 'UNCLASSIFIED_EVIDENCE'): writer.recover(self.core, p['id'], p)
+        self.assertEqual(self.before, marker.read_bytes())
+        marker.rename(marker.with_name('.reconcile-' + 'd' * 32))  # Fixture only.
+        self.f.state['ignored'].append('newer'); self.core.save_state(self.f.state)
+        newer = self.core.state_path().read_bytes()
+        with self.assertRaisesRegex(writer.Error, 'UNCLASSIFIED_CATALOG'): writer.recover(self.core, p['id'], p)
+        self.assertEqual(newer, self.core.state_path().read_bytes())
+        self.assertFalse(marker.with_name('transaction.json').exists())
+
+    def test_missing_intent_recovery_write_failure_keeps_evidence_and_catalog(self):
+        p = self.preview(); self.fail_first_intent(p)
+        for name, target in [('atomic', writer), ('fsync', writer.os)]:
+            with patch.object(target, name, side_effect=OSError('fixture')):
+                with self.assertRaisesRegex(writer.Error, 'RECOVERY_NEEDED'): writer.recover(self.core, p['id'], p)
+        self.assertEqual([], list((writer.root() / p['id']).iterdir()))
+        self.assertEqual(self.before, self.core.state_path().read_bytes())
+        self.assertEqual('not_applied', writer.recover(self.core, p['id'], p)['state'])
 
     def test_interruption_before_and_after_atomic_catalog_write(self):
         for after in (False, True):

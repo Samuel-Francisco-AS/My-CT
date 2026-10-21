@@ -484,7 +484,7 @@ def remove_one(relative, state):
 def run(argv, rows=None, acl=ensure_access):
     if argv == ['reconcile-plan']:
         return reconciliation_plan(rows=rows)
-    if argv and argv[0] in {'reconcile-preview', 'reconcile-apply', 'reconcile-recover'}:
+    if argv and argv[0] in {'reconcile-estimate', 'reconcile-preview', 'reconcile-apply', 'reconcile-recover'}:
         source = Path(__file__).with_name('myct_media_reconcile.py')
         if source.is_symlink() or not source.is_file():
             raise MediaError('Instale o módulo auditado myct_media_reconcile.py junto do helper.')
