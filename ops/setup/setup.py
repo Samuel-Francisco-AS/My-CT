@@ -425,10 +425,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('action', choices=('diagnose', 'apply'))
     parser.add_argument('--approved')
+    parser.add_argument('--component', choices=('base', 'transmission', 'prowlarr'), default='base')
     args = parser.parse_args()
     os.umask(0o077)
     if MANIFEST is None:
         raise SetupError('Use o pacote gerado por ops/setup/build_bundle.py; não executar o fonte sem manifesto.')
+    if args.component != 'base':
+        addon_main(args)
+        return
     plan = diagnose()
     if args.action == 'diagnose':
         emit(plan)

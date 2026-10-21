@@ -8,6 +8,11 @@ internal class ServerSetupModel(private val assets: AssetManager) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var connection: SshConnection? = null
     private var generation = 0
+    var target by mutableStateOf(SetupTarget.base); private set
+    fun select(value: SetupTarget) {
+        if (busy || target == value) return
+        target = value; plan = null; events = emptyList(); diagnose()
+    }
     var connected by mutableStateOf(false); private set
     var busy by mutableStateOf(false); private set
     var plan by mutableStateOf<SetupPlan?>(null); private set
@@ -28,11 +33,11 @@ internal class ServerSetupModel(private val assets: AssetManager) {
         message = "Consultando Fedora, pacotes, serviços e banco…"
         scope.launch {
             try {
-                val result = withContext(Dispatchers.IO) { current.setupDiagnose(bundle) }
+                val result = withContext(Dispatchers.IO) { current.setupDiagnose(bundle, target) }
                 if (id == generation) {
                     plan = result
                     message = when {
-                        result.complete -> "Base configurada: Core, banco e serviços verificados."
+                        result.complete -> "${target.label}: instalação e serviços verificados."
                         result.blockers.isNotEmpty() -> "Requer intervenção. Instalações existentes foram preservadas."
                         else -> "Diagnóstico concluído. Revise o plano antes de aprovar."
                     }
@@ -52,7 +57,7 @@ internal class ServerSetupModel(private val assets: AssetManager) {
         scope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    current.setupApply(bundle, approved.id, password) { event ->
+                    current.setupApply(bundle, approved.id, password, approved.target) { event ->
                         val status = event.optString("state")
                         val text = "${event.optString("component", "Instalação")} · $status · ${event.optString("message").take(2048)}"
                         scope.launch {

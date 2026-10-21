@@ -11,8 +11,8 @@ android {
         applicationId = "dev.myct"
         minSdk = 26
         targetSdk = 36
-        versionCode = 44
-        versionName = "0.10.0-setup1-rc1"
+        versionCode = 45
+        versionName = "0.11.0-setup2-rc1"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -47,6 +47,7 @@ dependencies {
 val setupAssets = layout.buildDirectory.dir("generated/setupAssets")
 val buildSetupBundle by tasks.registering(Exec::class) {
     inputs.files(fileTree("../../ops/setup") { include("*.py", "manifest.json") },
+        fileTree("../../ops") { include("myct-torrent", "myct-search", "torrent/myct-torrent-done", "torrent/myct-transmission.service") },
         fileTree("../../server") { include("main.cpp", "postgres.cpp", "postgres.hpp", "Makefile", "migrations/*.sql") })
     outputs.dir(setupAssets)
     commandLine("python3", "../../ops/setup/build_bundle.py", setupAssets.get().dir("myct-setup").asFile.absolutePath)
