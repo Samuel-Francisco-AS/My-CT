@@ -22,16 +22,18 @@ internal fun ServerSetupSection(model: ServerSetupModel, onOAuthTerminal: () -> 
     ScreenHeading("Configurar servidor", "Base Fedora e componentes opcionais. Diagnóstico sem alterar configurações. Requer Fedora tradicional 43/44, SSH e python3. Nenhuma IA é necessária.")
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         SetupTarget.entries.forEach { value ->
-            MyCtTextButton(onClick = { model.select(value) }, enabled = !model.busy) {
+            MyCtTextButton(onClick = { model.select(value) }, enabled = !model.busy && !model.backup.busy) {
                 Text(if (model.target == value) "● ${value.label}" else value.label)
             }
         }
     }
+    if (model.target == SetupTarget.backup) { BackupSetupSection(model.backup); return }
     if (model.target == SetupTarget.rclone) {
         OutlinedTextField(value = model.cloudRemote, onValueChange = { model.editCloud(it, model.cloudConfig) },
             label = { Text("Remote escolhido (NOME:)") }, singleLine = true, enabled = !model.busy)
         OutlinedTextField(value = model.cloudConfig, onValueChange = { model.editCloud(model.cloudRemote, it) },
-            label = { Text("Caminho rclone.conf (vazio = descobrir padrão)") }, singleLine = true, enabled = !model.busy)
+            label = { Text("Caminho do rclone.conf") }, singleLine = true, enabled = !model.busy)
+        Text("Deixe vazio para descobrir automaticamente.")
         Text("Somente nome e caminho. Nunca cole tokens, Client Secret, códigos OAuth ou conteúdo da configuração nestes campos.")
         ExpandDetails("Configurar Google Drive · etapa humana") {
             Text("Instalar Rclone não autentica uma conta. Se já existe remote configurado, preserve-o; não recrie nem reautorize automaticamente.")
@@ -97,6 +99,7 @@ internal fun ServerSetupSection(model: ServerSetupModel, onOAuthTerminal: () -> 
         ExpandDetails("Componentes opcionais / próximas fases") { plan.optional.forEach { Text(it) } }
         if (plan.journal.isNotEmpty()) ExpandDetails("Últimas etapas registradas no Fedora") { plan.journal.forEach { Text(it) } }
         if (plan.complete) StatusNotice(when (plan.target) {
+            SetupTarget.backup -> "Consulte o fluxo Backup / Recuperação."
             SetupTarget.base -> "Base verificada. Abra Saúde para consultar o Core."
             SetupTarget.transmission -> "Transmission verificado. Use Downloads → Torrents."
             SetupTarget.rclone -> "Instalação offline concluída. OAuth pode estar pendente. Use o arquivamento existente após configuração e verificação explícita."

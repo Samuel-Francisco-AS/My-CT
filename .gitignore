@@ -15,3 +15,8 @@ artifacts/
 
 # Python operational tools/tests
 __pycache__/
+
+# Recovery packages are private operational data, never release/repository inputs.
+*.myct.zip
+*.myct.age
+*.dump

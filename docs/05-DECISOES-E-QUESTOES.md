@@ -497,3 +497,28 @@ segredos não entram em argumentos do authorize. O proprietário autorizou avan�
 SETUP-3/4 sem instalação física limpa, que permanece NÃO VALIDADA. Auditoria reforçada
 Codex e revisão independente Luna ficam exigidas ao final da SETUP-4, antes de merge.
 [Relatório SETUP-3](MYCT-SETUP-3-RELATORIO.md).
+
+
+### 20/10/2026 — SETUP-4: pacote limitado e recuperação de dados, sem importar execução
+
+Preferências básicas usam allowlist sem credenciais. Banco/catálogos exigem
+seleção consciente e criptografia `age` com destinatário público; identidade
+secreta só em stdin SSH, temporária, sem armazenamento no APK/argv/logs. Sem age,
+recusar a parte privada; básico continua disponível. SHA-256 não autentica origem.
+
+Usar pg_dump lógico consistente, nunca PGDATA. Na recuperação, pg_restore apenas
+renderiza dados em memória sob limites; nenhum SQL recebido é executado. Extrair
+somente eventos tipados da migração 001 e inserir por SQL fixo numa Base gerenciada,
+vazia ou já idêntica. Conflitos/legados/versões diferentes bloqueiam. Outros schemas
+ou migrações ficam fora da candidata. Serviços são reconstruídos pelos alvos
+SETUP-1/2/3, sem importar unidades, habilitar ou reiniciar serviços nesta etapa.
+
+Catálogos/manifests selecionados são recuperados em pasta histórica isolada:
+identidades incluem caminhos antigos, então reescrevê-los e ativá-los implicitamente
+poderia quebrar referências remotas e estados de liberação. Sua ativação/importação
+e aplicação de receitas Transmission/Prowlarr ficam explicitamente pendentes.
+Não presumir recuperação de mídia ou disponibilidade de Drive. O usuário confirmou
+validações funcionais SETUP-1/2/3 no Moto; instalação física limpa permanece NÃO
+VALIDADA. As auditorias independentes Codex/Luna serão solicitadas depois desta
+candidata; nenhuma auditoria global ou integração foi realizada aqui.
+[Contrato, provas e pendências](MYCT-SETUP-4-RELATORIO.md).

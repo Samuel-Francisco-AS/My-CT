@@ -8,9 +8,10 @@ internal class ServerSetupModel(private val assets: AssetManager) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var connection: SshConnection? = null
     private var generation = 0
+    val backup = BackupSetupModel(assets)
     var target by mutableStateOf(SetupTarget.base); private set
     fun select(value: SetupTarget) {
-        if (busy || target == value) return
+        if (busy || backup.busy || target == value) return
         target = value; onlineMessage = ""; plan = null; events = emptyList(); diagnose()
     }
     var cloudRemote by mutableStateOf("myct-gdrive:"); private set
@@ -56,12 +57,14 @@ internal class ServerSetupModel(private val assets: AssetManager) {
     var events by mutableStateOf<List<String>>(emptyList()); private set
     private val bundle by lazy { SetupBundle.load(assets) }
     fun attach(value: SshConnection?) {
+        backup.attach(value)
         generation++; connection = value; connected = value != null
         plan = null; busy = false; events = emptyList(); onlineMessage = ""; oauthTunnel = false; cloudEdited = false; cloudRemote = "myct-gdrive:"; cloudConfig = ""
         message = if (connected) "Diagnóstico somente leitura; nenhuma alteração será aplicada automaticamente." else
             "Sem SSH. Reconecte e diagnostique para consultar o estado real; pedidos anteriores não serão repetidos."
     }
     fun diagnose() {
+        if (target == SetupTarget.backup) { backup.inventory(); return }
         val current = connection ?: return
         if (busy) return
         val selected = try { if (target == SetupTarget.rclone && cloudEdited) SetupCloudSelection(cloudRemote, cloudConfig) else null }

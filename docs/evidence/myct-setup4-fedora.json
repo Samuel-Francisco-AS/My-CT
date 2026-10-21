@@ -1,0 +1,32 @@
+{
+  "environment": "rootless Fedora 44 x86_64; two isolated HOME/PG clusters",
+  "postgres": "pg_dump (PostgreSQL) 18.6",
+  "age": "1.3.1",
+  "basic_excludes_credentials": true,
+  "private_encrypted": true,
+  "real_pg_dump": true,
+  "validated_event_restore": true,
+  "source_db_not_stopped": true,
+  "existing_user_service_preserved": true,
+  "no_service_enable_or_start": true,
+  "source_credentials_unchanged": true,
+  "inspect_is_read_only": true,
+  "home_mapping": true,
+  "catalogs_historical_only": true,
+  "no_oauth_credentials_restored": true,
+  "repeat_unchanged": true,
+  "existing_data_conflict_blocked": true,
+  "missing_identity_and_tampering_blocked": true,
+  "postgres_major_mismatch_blocked": true,
+  "future_migration_marker_blocked": true,
+  "physical_fedora_clean": "NOT VALIDATED",
+  "moto_setup4": "NOT VALIDATED",
+  "personal_data": "NOT ACCESSED",
+  "payload_sha256": "b149d01da57bd447f493300ae2939223a1ace80c03257284c137994b3bc263b5",
+  "resource_limit": {
+    "memory_mib": 1536,
+    "cpus": 1,
+    "pids": 1024
+  },
+  "memory_snapshot": "98.8MB / 1.611GB"
+}

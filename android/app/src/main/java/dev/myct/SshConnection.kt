@@ -78,7 +78,7 @@ class SshConnection {
         try {
             channel.setCommand(setupReceiverCommand(bundle, planId, target, selection))
             channel.setInputStream(java.io.ByteArrayInputStream(wire))
-            channel.setOutputStream(SetupLines(receive))
+            channel.setOutputStream(SetupLines(receive = receive))
             channel.setErrStream(object : OutputStream() { override fun write(b: Int) {} })
             channel.connect(10_000)
             val deadline = System.nanoTime() + 3_600_000L * 1_000_000
@@ -107,6 +107,34 @@ class SshConnection {
             check(!closed && current.isConnected)
             current.setPortForwardingL("127.0.0.1", 53682, "127.0.0.1", 53682)
         } else current.delPortForwardingL("127.0.0.1", 53682)
+    }
+
+    internal fun setupBackup(bundle: SetupBundle, request: org.json.JSONObject, identity: ByteArray): org.json.JSONObject {
+        var channel: ChannelExec? = null
+        var wire: ByteArray? = null
+        var reply: org.json.JSONObject? = null
+        try {
+            wire = backupWire(request, identity)
+            val opened = synchronized(downloadChannels) {
+                check(!closed && session?.isConnected == true)
+                (session!!.openChannel("exec") as ChannelExec).also { downloadChannels.add(it) }
+            }
+            channel = opened
+            opened.setCommand(setupBackupCommand(bundle.diagnostic))
+            opened.setInputStream(java.io.ByteArrayInputStream(wire))
+            opened.setOutputStream(SetupLines(512 * 1024) { reply = validateBackupReply(it) })
+            opened.setErrStream(object : OutputStream() { override fun write(b: Int) {} })
+            opened.connect(10_000)
+            val deadline = System.nanoTime() + 300_000L * 1_000_000
+            while (!opened.isClosed) {
+                if (Thread.currentThread().isInterrupted || System.nanoTime() >= deadline) throw InterruptedException()
+                Thread.sleep(100)
+            }
+            return checkNotNull(reply)
+        } finally {
+            wire?.fill(0); identity.fill(0); channel?.disconnect()
+            synchronized(downloadChannels) { channel?.let { downloadChannels.remove(it) } }
+        }
     }
 
     private fun openDownloadExec(keepInput: Boolean = false): DownloadExec {

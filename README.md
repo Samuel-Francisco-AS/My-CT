@@ -1,11 +1,20 @@
 # My-CT
 
+**MYCT-SETUP-4 candidata (20/10/2026):** **Backup / Recuperação** em
+Opções → Configurar servidor. Pacote básico sem segredos; banco e catálogos
+selecionados exigem `age`. Dump lógico PostgreSQL e restauração limitada à
+migração 001, com prévia e aprovação. Catálogos são recuperados como históricos;
+receitas Transmission/Prowlarr e ativação de catálogos continuam manuais/pendentes.
+APK **0.13.0-setup4-rc1 / code 47**; Moto SETUP-4 e Fedora físico limpo
+**NÃO VALIDADOS**. Sem backup real/deploy no Fedora pessoal e sem auditoria global
+nesta missão. [Relatório, evidências e limites](docs/MYCT-SETUP-4-RELATORIO.md).
+
 **MYCT-SETUP-3 candidata (20/10/2026):** Rclone/Google Drive opcional em
 **Opções → Configurar servidor**: diagnóstico passivo, instalação supervisionada,
 OAuth humano pelo Terminal/túnel temporário e verificação online separada.
 APK **0.12.0-setup3-rc1 / code 46**. Fedora pessoal preservado; nenhuma consulta
 Drive ou transferência real nesta missão. Instalação física limpa **NÃO VALIDADA**;
-aceite Moto SETUP-3 pendente. [Relatório e roteiro seguro](docs/MYCT-SETUP-3-RELATORIO.md).
+validação funcional SETUP-3 no Moto informada pelo proprietário; OAuth real nesta candidata não comprovado. [Relatório e roteiro seguro](docs/MYCT-SETUP-3-RELATORIO.md).
 
 **MYCT-SETUP-2 candidata (20/10/2026):** planos opcionais separados para
 Transmission e Prowlarr em **Opções → Configurar servidor**. APK
