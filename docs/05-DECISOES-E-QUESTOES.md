@@ -581,3 +581,21 @@ sobrescrever catálogo mais recente. Transação incerta impede outra aplicaçã
 Essa decisão reduz risco de retry/rollback após interrupção sem introduzir um
 framework de migrações. Nenhuma migração real ou implantação autorizada nesta
 entrega. [Contrato, limites e operação futura](MYCT-MEDIA-RECONCILE-APLICADOR.md).
+
+## 21/10/2026 — Reconciliação Media: aceitação curta e execução integral limitada
+
+Após MA01/MA02 da [auditoria da Luna](https://github.com/Samuel-Francisco-AS/My-CT/pull/60#issuecomment-6325881368),
+separam-se os 600 s de aceitação do plano (rechecados sob locks) do deadline
+monotônico de uma execução contínua: `max(600, ceil(3 * tempo_da_prévia + 120))`,
+teto de 24 h. Orçamento medido e volume/passagens participam do ID schema 2.
+Projeção acima do teto recusa antes do hashing de apply; execução acima da margem
+recusa publicação. Não remover SHA-256, soltar locks ou renovar consentimento para
+acomodar leitura longa. Token de release/space continua independente e inalterado.
+A projeção não garante desempenho; custo real dos 264 não foi medido nesta missão.
+
+Falha do primeiro intent preserva o diretório e exige recuperação com o plano
+exato. Só classifica `not_applied` se o catálogo anterior permanecer igual e as
+evidências forem reconhecidas; nunca restaura catálogo nem apaga órfãos.
+[Contrato e procedimento](MYCT-MEDIA-RECONCILE-APLICADOR.md). Desenvolvimento em
+fixtures, PR #60 draft, sem implantação, migração pessoal ou nova APK; aguardar
+reauditoria antes de qualquer operação real.

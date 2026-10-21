@@ -721,3 +721,163 @@ com nova autorização: implantação coerente dos helpers/módulo, evidência d
 procedência, plano fresco revisado, confirmação supervisionada, conferência do
 recibo/backup e novo teste Moto sem exclusão real. **R1 segue aberta; R2 não
 iniciada.**
+
+## Correção pós-auditoria do aplicador — MA01/MA02
+
+21/10/2026. [Auditoria integral da Luna](https://github.com/Samuel-Francisco-AS/My-CT/pull/60#issuecomment-6325881368)
+sobre código `246953e` / HEAD documental `5f92a3d`: CHANGES REQUESTED, MA01
+bloqueante para implantação. Esta seção substitui o contrato temporal e a
+limitação de recuperação sem intent descritos na etapa histórica acima.
+**Somente desenvolvimento/fixtures/documentação; nenhuma consulta de conteúdo,
+aplicação ou implantação no acervo pessoal.** PR #60 permanece draft.
+Código/testes corretivos: `d01644f3f87f4c4584e4ae595d1e70e36c7d2982`.
+
+### MA01 — causa confirmada e contrato ajustado
+
+A prévia anterior emitia a confirmação depois de um SHA-256 integral; apply
+repetia o hash sob locks e exigia os mesmos 600 segundos até o rename. Portanto,
+uma segunda passagem >600 s tornava impossível publicar, apesar de toda a prova
+estar correta. Se chegasse à última checagem depois do intent, exigia recuperação.
+Não foi demonstrada uma falha real nos 264: seu volume/tempo de hashing não foi
+medido. A taxa anterior de ~74,4 MiB/s pertence a outro trabalho, não é benchmark
+desses candidatos. Os 130.409.669.078 bytes do diagnóstico são dos **279 arquivos
+da biblioteca**, não uma soma identificada dos 264 elegíveis ao escritor.
+
+Solução mínima: separar o prazo para aceitar o plano do tempo de uma execução
+contínua sob locks. Mantidos os **600 s para iniciar**, com conferência antes e
+sob todos os locks. Ao aceitar, fixa um deadline monotônico exclusivo daquela
+execução: `max(600, ceil(3 * preview_seconds + 120))`, limitado a **24 horas**.
+O orçamento inteiro integra o ID schema 2 aprovado; não há renovação, retomada
+com consentimento vencido ou liberação dos locks entre prova e publicação.
+
+A duração medida inclui RPC, hashing e reconsultas. Fator 3 e reserva de 120 s
+acomodam variabilidade e IO do catálogo, sem declarar garantia estatística. O teto
+é um limite operacional explícito de publicação, não benchmark ou licença para
+esperar indefinidamente. Projeção acima dele recusa antes da segunda leitura e
+antes de criar intent/backup (`TEMPORAL_PREFLIGHT`). Se a máquina ficar mais lenta
+que a margem, excesso observado após hashing aborta **antes** do intent; excesso
+posterior preserva intent/backup para recuperação. IO/RPC bloqueado não é morto
+pelo deadline; nenhum catálogo pode ser publicado depois da checagem expirada.
+
+As duas passagens completas continuam obrigatórias, com hashes exatos, provas de
+origem/dev/inode/UUID/subvolume/metadados e revalidação integral. Antes do rename,
+reconfere o ID e os consentimentos aceitos, além do deadline de execução e da
+coleta final sem novo hashing. Locks, backup privado e publicação atômica não
+mudaram. O token de `space/release` continua com prazo máximo independente de
+600 s; reconciliação nunca autoriza exclusão.
+
+Diagnóstico novo, somente leitura:
+
+- `reconcile-estimate --provenance ARQUIVO`: contagem de candidatos/inodes
+  distintos, bytes por passagem, duas passagens e bytes totais lógicos; sem
+  hashing/locks/escrita. Duração/taxa/viabilidade ficam `null` sem amostras.
+- `reconcile-preview`: acrescenta tempo total observado, taxa efetiva lógica,
+  duração projetada da aplicação, orçamento/teto e `temporal_viable`. Tempos
+  `collect`, `hash`, `recheck` distinguem coleta/RPC/metadados, leitura e reconsulta.
+  São diagnósticos de fases, sem afirmar IO físico ou gargalo não medido.
+- Aliases do mesmo `(dev, ino)` são deduplicados exatamente como no hashing;
+  reflinks/inodes distintos continuam exigindo leituras separadas. Sem rede,
+  paralelismo, cache de integridade ou otimização R2 nova.
+
+Planos antigos schema 1 são recusados para apply: gerar e revisar schema 2.
+Journals anteriores continuam recuperáveis. Antes de qualquer migração pessoal,
+ainda é obrigatório medir volume e prévia não destrutiva em missão autorizada,
+conferir carga/cache/projeção e procedência e então confirmar o plano fresco.
+
+### MA02 — primeiro intent indisponível
+
+A publicação inicial de `transaction.json` estava fora do bloco que convertia
+falhas em `RECOVERY_NEEDED: ID`. O diretório já criado bloqueava apply, mas recover
+não sabia classificá-lo. Agora a falha de publicação inicial ou de fsync da
+criação do diretório conserva a pasta e retorna esse diagnóstico com o ID.
+
+Recover sem journal pede `MISSING_INTENT_REQUIRES_PLAN: ID`. A via explícita
+`reconcile-recover --operation ID --plan ARQUIVO` exige o plano canônico exato da
+operação. Pode estar expirado porque essa via só classifica; não aplica catálogo
+nem revalida autorização de migração. Sob os mesmos locks e checagem de tarefas,
+só publica `not_applied`, `updated=0`, quando o catálogo atual tem o hash anterior
+exato e a pasta está vazia ou contém apenas temporários privados esperados.
+Temporários órfãos permanecem byte a byte; seus nomes/hashes são registrados em
+`preserved_evidence`, com `recovered_missing_intent=true` no recibo. A recuperação
+sincroniza também o diretório pai da operação antes de publicar seu recibo.
+
+Plano errado, catálogo diferente/mais recente, backup/arquivo desconhecido,
+symlink, permissões inseguras ou journal ilegível mantêm bloqueio para diagnóstico.
+Não remove evidências, não cria backup retroativo e não sobrescreve catálogo.
+Falha de fsync/publicação da recuperação continua bloqueada e pode ser inspecionada
+novamente; outra aplicação exige nova prévia/ID e confirmação específica.
+
+### Validação desta correção
+
+Resultados finais das fontes desta etapa, sem somar reexecuções:
+
+| Suíte | PASS | FAIL | SKIP |
+| --- | ---: | ---: | ---: |
+| Python operacional completo — 275 casos | **273** | **0** | **2** |
+| Aplicador, incluído no operacional | **42** | **0** | **0** |
+| SETUP completo | **58** | **0** | **0** |
+| JVM Android — 331 casos, execução forçada | **329** | **0** | **2** |
+| Cloud JVM, incluído no total | **37** | **0** | **0** |
+
+Build `assembleDebug`, geração/conferência SETUP, lint, sintaxe Python e
+`git diff --check`: PASS. Lint: 0 erros, 1 warning UseKtx/2 hints anteriores.
+SKIP: duas unidades transitórias sem user manager/linger no contêiner e dois
+transportes opcionais JVM SSH/SFTP sem ambiente real. Nenhuma dependência nova.
+
+Cobertura adicional: hashing real em arquivos pequenos com avanço controlado de
+**750 s na prévia e 750 s na aplicação**, início aos 599 s da confirmação e sucesso
+após expiração civil, dentro do orçamento de **2370 s**. Plano expirado ao iniciar,
+expiração durante aquisição dos locks, teto inviável, segundo hashing inesperadamente
+lento, deadline após backup/retrocesso do relógio civil, orçamento inválido e ID
+alterado antes da publicação continuam recusados. Sem espera de quatro minutos.
+
+Falhas iniciais simuladas: antes da escrita, fsync do arquivo temporário, rename,
+fsync do diretório antes/depois da publicação e fsync da criação da operação.
+Também: recuperação sem plano, plano errado, órfão preservado, evidência inesperada,
+catálogo posterior e falha de fsync/publicação da própria recuperação. As regressões
+anteriores continuam cobrindo 264 atualizações simuladas, preservação dos 14
+coerentes/1 excepcional/28 ausentes/ignored, concorrência, backups, troca atômica,
+arquivamento/restauração/cleanup/release exclusivamente em fixtures.
+
+Ambiente Python: contêiner rootless Fedora 44 descartável, usuário tester, rede
+desabilitada, sem mounts pessoais, limite 1536 MiB/1 CPU/1024 PIDs. Somente cópias
+de `ops`/`server`. Android local/offline, mesmos limites JVM da etapa anterior;
+nenhum aparelho ou serviço pessoal usado. Logs ignorados:
+`artifacts/myct-cloud-r1-ma/{operational-final,setup-final,android-final,android-bundle-final}.log`.
+Invocações reproduzíveis: mesmas suítes completas da seção anterior; a primeira
+invocação Gradle combina `testDebugUnitTest --rerun`, `buildSetupBundle`,
+`assembleDebug` e `lintDebug`; bundle/build/lint reconferidos após a revisão final.
+
+### Arquivos, compatibilidade e próximos passos
+
+Código: `ops/myct_media_reconcile.py`, dispatch de `reconcile-estimate` em
+`ops/myct-media`, `ops/tests/test_media_reconcile_apply.py`. Documentação: contrato
+do aplicador, este relatório e registro de decisão temporal. Nenhuma mudança em
+Kotlin, manifesto SETUP, política de exclusão ou infraestrutura de telemetria.
+O manifesto já enumera os helpers; bundle regenerado com os **17 hashes** atuais,
+incluindo o módulo alterado. Bloqueio de helpers legados divergentes permanece.
+Package/assinatura/ABIs e fonte code 50 preservados, code49/tag/release imutáveis.
+Nenhum catálogo, plano pessoal, backup ou credencial incorporado aos assets.
+Conferidos bytes/hashes de todas as 17 fontes no manifesto injetado,
+`integrity.json` e igualdade do payload no APK local:
+
+| Artefato SETUP MA01/MA02 | SHA-256 |
+| --- | --- |
+| `payload.pyz` | `4b539385e443777ffffd9593f185dd6ad70ef295d486608315113332068733c0` |
+| `diagnose.py` | `82e0518a15c29653779ffc5d15aafd3549ff807f1ae573681c9b8840c6cb0f26` |
+
+Execução operacional final: 65,283 s; SETUP: 16,469 s. O contêiner desta missão
+foi descartado após os testes; os logs locais ignorados foram preservados.
+
+Riscos restantes: projeção depende de carga/cache; IO bloqueado pode prolongar
+locks sem permitir publicação expirada. Locks continuam cooperativos contra
+escritores externos; legado sem identidade histórica exige evidência humana de
+procedência, nunca fabricada pelo programa. Recuperação sem intent deliberadamente
+não classifica catálogo diferente nem evidência desconhecida. Volume e gargalo
+dos 264 continuam pendentes de medição autorizada.
+
+Próximo gate: **reauditoria independente da Luna**, especialmente separação do
+prazo de aceitação/execução e recuperação sem intent. Depois, somente com nova
+autorização: implantação coerente/backup, procedência, estimate/prévia medida,
+revisão do plano exato e aplicação supervisionada. Não implantar, migrar, publicar
+APK/release, fazer merge ou iniciar R2 nesta missão. R1 continua aberta.

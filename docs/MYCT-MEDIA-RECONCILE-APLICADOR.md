@@ -15,9 +15,10 @@ Este documento descreve esse escritor, implementado em
 | Comando | Contrato |
 | --- | --- |
 | `reconcile-plan` | Diagnóstico anterior, somente metadados; não é aprovação aplicável |
+| `reconcile-estimate --provenance ARQUIVO` | Diagnóstico somente de metadados: volume distinto, duas passagens; taxa/viabilidade desconhecidas sem medição |
 | `reconcile-preview --provenance ARQUIVO` | Prévia pronta para confirmação, somente leitura, com SHA-256 dos candidatos, contagens, razões, caminhos propostos e ID |
 | `reconcile-apply --plan ARQUIVO --provenance ARQUIVO --confirm ID --accept-legacy ID` | Aplicação explícita; `--accept-legacy` obrigatório para legado e deve repetir o ID inteiro |
-| `reconcile-recover --operation ID` | Reconcilia o recibo de uma interrupção; **nunca restaura/substitui o catálogo** |
+| `reconcile-recover --operation ID [--plan ARQUIVO]` | Reconcilia recibos; plano exato obrigatório quando falta o primeiro intent; **nunca restaura/substitui o catálogo** |
 
 Arquivos de plano/procedência devem ter caminhos absolutos sob o home, ser
 regulares privados (0600, dono atual, nlink=1), sem symlinks ou ancestrais
@@ -25,18 +26,64 @@ graváveis por outras contas. A prévia não salva esses arquivos nem cria locks
 o proprietário poderá redirecionar seu resultado para arquivo privado. Importações
 dos módulos locais não criam `__pycache__` junto dos helpers.
 
-A prévia tem `application_supported=true`, schema 1, nonce aleatório, instante de
+A prévia tem `application_supported=true`, **schema 2**, nonce aleatório, instante de
 emissão, expiração, snapshot, resumo e caminhos propostos. O ID é o SHA-256 da
 representação canônica de todo esse conteúdo, incluindo procedência e índice.
 Não é senha nem prova criptográfica de autoria: o proprietário controla a sessão
 SSH/CLI, lê a prévia e confirma exatamente seu ID. Não há `--yes` ou aceite
 genérico. Opções duplicadas/desconhecidas são recusadas.
 
-Validade: **600 segundos a partir do término da geração da prévia**, sem renovação
-automática. O prazo é rechecado antes de adquirir locks e imediatamente antes da
-publicação. Uma aplicação longa pode expirar e ser recusada; isso não autoriza
-alargar o prazo silenciosamente. O token de release/space permanece independente
-e inalterado. Concluir a migração nunca concede autorização de exclusão Android.
+Após [MA01 da Luna](https://github.com/Samuel-Francisco-AS/My-CT/pull/60#issuecomment-6325881368),
+a validade distingue **aceitação** de **execução de uma única aplicação**:
+
+- Aceitação: **600 segundos após terminar a prévia**, conferidos antes e novamente
+  sob todos os locks, antes do segundo hashing. `--confirm ID` e
+  `--accept-legacy ID` continuam exatos. Uma prévia expirada não inicia aplicação.
+- Execução: ao aceitar sob locks, fixa deadline por relógio monotônico, sem
+  renovação: `max(600, ceil(3 * preview_seconds + 120))` segundos. O tempo da prévia
+  inclui leitura, RPC, inventário e revalidações; o fator 3 e reserva de 120 s são
+  margem para variação de carga/cache e fsync, **não garantia de throughput**.
+- Teto explícito: **24 horas**, limite conservador de ocupação cooperativa. Se o
+  orçamento calculado ultrapassar o teto, `TEMPORAL_PREFLIGHT` recusa antes do
+  segundo hashing, diretório de operação ou backup. Não recorta o orçamento para
+  fingir viabilidade. Esse teto não foi medido no servidor pessoal.
+- Após o segundo hashing e antes de criar intent, confere o deadline; ao publicar
+  o catálogo, confere novamente. Tempo excedido antes do intent →
+  `EXECUTION_EXPIRED`, catálogo intacto. Depois do intent → `RECOVERY_NEEDED: ID`,
+  backup/evidências preservados para classificação. Não mata IO/RPC bloqueado;
+  o deadline limita autorização de publicar, não garante timeout de syscall.
+
+Isso evita exigir que a própria prova integral caiba no prazo destinado à decisão
+humana. Depois de aceita, a autorização serve exclusivamente àquela execução
+contínua sob locks; não permite soltar locks, pausar/retomar ou iniciar novamente
+com consentimento vencido. A coleta integral fresca, hashes exatos e última
+revalidação continuam obrigatórios. Alterar o relógio civil não renova o deadline.
+O novo orçamento e as métricas integram o ID aprovado. Planos schema 1 não são
+aplicáveis: gerar uma prévia schema 2; journals anteriores continuam recuperáveis.
+
+**O token de release/space e seus 600 segundos são independentes e inalterados.**
+Concluir a migração nunca concede autorização de exclusão Android.
+
+### Diagnóstico de volume e viabilidade
+
+`reconcile-estimate` não lê conteúdos nem cria arquivos/locks: mostra caminhos
+candidatos, `distinct_files` por `(dev, ino)`, `bytes_per_pass`, `full_passes=2`
+(prévia + aplicação) e `total_read_bytes`. Aliases do mesmo inode não são contados
+novamente. Essas são leituras lógicas, não bytes de rede ou IO físico do SSD.
+Sem amostras, taxa, duração e viabilidade são `null`, não zero ou aprovação.
+
+A prévia completa acrescenta `workload.preview_seconds`,
+`observed_effective_bytes_per_second` (bytes distintos / duração total observada),
+`estimated_apply_seconds`, `execution_limit_seconds`, teto e `temporal_viable`.
+`preview_phases_seconds` separa `collect` (RPC/metadados/catálogos/procedência),
+`hash` (leitura integral e seus checks) e `recheck` (reconsulta final). Esses tempos
+não são IO de disco isolado; permitem localizar uma fase cara sem presumir o
+gargalo. Uma projeção viável não promete o desempenho da segunda leitura.
+
+Antes da migração pessoal, ainda é necessário coletar o volume com estimate e
+medir a prévia não destrutiva, após autorização específica, comparar taxa/carga e
+revisar o orçamento antes de confirmar. A amostra anterior de ~74,4 MiB/s de um
+pacote não mede os 264 candidatos. Nenhum deles foi lido nesta correção.
 
 ## Procedência do filesystem legado
 
@@ -92,7 +139,7 @@ Além disso, o escritor:
 Após backup e temporário duráveis e publicação do intent `committing`, uma coleta
 final de metadados/RPC/índice/catálogos/tarefas/procedência deve continuar idêntica.
 Essa coleta não repete o hashing inteiro: alterações posteriores ao hash mudam
-ctime/mtime e os demais metadados verificados. A validade temporal e o diretório
+ctime/mtime e os demais metadados verificados. O deadline de execução e o diretório
 ativo do catálogo também são reconferidos antes do rename.
 
 Hashing aqui prova estabilidade entre as amostras e a origem atual; não é uma
@@ -159,10 +206,36 @@ com tarefas/catálogos novamente seguros, a recuperação compara o índice atua
 | Hash atual igual ao proposto | Verifica backup, refaz fsync do diretório e finaliza recibo `succeeded` |
 | Hash atual diferente de ambos | `superseded`; preserva integralmente o catálogo diferente/mais recente |
 
-Backup corrompido impede declarar sucesso recuperado. Intent ilegível/ausente,
+Backup corrompido impede declarar sucesso recuperado. Intent ilegível,
 permissões inseguras ou estado impossível de confirmar exigem diagnóstico manual;
-não remover evidências para contornar o bloqueio. Falha após rename/fsync pode
-deixar o novo catálogo visível com recibo `committing`; nunca faz rollback
+não remover evidências para contornar o bloqueio.
+
+Após MA02, falha ao sincronizar o diretório recém-criado ou publicar o primeiro
+`transaction.json` retorna `RECOVERY_NEEDED: ID`, preservando o diretório. Sem
+intent, `reconcile-recover --operation ID` responde
+`MISSING_INTENT_REQUIRES_PLAN: ID`. A recuperação assistida requer adicionalmente
+`--plan ARQUIVO`, plano schema 2 cujo conteúdo canônico e ID correspondam exatamente
+à operação. O prazo pode estar vencido porque essa via nunca aplica catálogo.
+
+Sob a mesma ordem de locks, com tarefas/catálogos seguros, só classifica
+`not_applied` se o índice atual for byte a byte o baseline aprovado (SHA-256), e o
+diretório estiver vazio ou contiver exclusivamente temporários privados
+`.reconcile-<32 hex>` da publicação inicial. Faz hash desses temporários e registra
+nomes/hashes em `preserved_evidence`, sem removê-los ou usá-los como autorização.
+A rotina atômica limpa somente o temporário transitório que ela própria criou;
+jamais usa essa limpeza para remover órfãos ou evidências preexistentes.
+Um recibo novo, atômico e fsync, registra `recovered_missing_intent=true` e
+`updated=0`. Não cria backup retroativo, não grava mídia/catálogo, não retoma apply.
+
+Qualquer backup/arquivo inesperado, symlink, journal inválido, plano divergente ou
+catálogo diferente impede classificação assistida (`UNCLASSIFIED_EVIDENCE` ou
+`UNCLASSIFIED_CATALOG` quando pertinente). Preservar tudo para diagnóstico; nunca
+remover o diretório para desbloquear. Uma falha da própria publicação da
+recuperação mantém o bloqueio/evidências. Após classificação, outra aplicação
+exige nova prévia/ID e confirmação. A recuperação normal de journals já publicados
+permanece independente do plano e compatível com o formato anterior.
+
+Falha após rename/fsync pode deixar o novo catálogo visível com recibo `committing`; nunca faz rollback
 automático sobre esse estado. Backups parciais de falha são preservados.
 
 Repetir um apply já concluído, com confirmação ainda válida e hash atual esperado,
@@ -182,8 +255,11 @@ verificação dos trabalhos e autorização específica, sem sobrescrever estado
    recusar componentes legados divergentes sem substituição supervisionada.
 2. Conferir a procedência do filesystem e preparar o JSON privado acima. Usar
    diretório de revisão 0700 fora do repositório e `umask 077` para os arquivos.
-3. Gerar `reconcile-preview --provenance CAMINHO_ABSOLUTO` e salvar o JSON privado.
-   Ler `summary`, `updates`, UUID/subvolume, emissão/expiração e o ID completo.
+3. Primeiro gerar `reconcile-estimate --provenance CAMINHO_ABSOLUTO`, revisar o
+   volume/passagens; depois gerar
+   `reconcile-preview --provenance CAMINHO_ABSOLUTO` e salvar o JSON privado.
+   Ler `summary`, `updates`, UUID/subvolume, `workload`, tempos por fase,
+   emissão/expiração e o ID completo; confirmar viabilidade medida e margem.
    Não presumir que a contagem antiga de 264 continua válida.
 4. Confirmar explicitamente os dois argumentos `--confirm ID --accept-legacy ID`
    junto dos arquivos exatos de plano/procedência. Não automatizar a confirmação
@@ -206,8 +282,8 @@ impossível. Operações normais do My-CT que respeitam os locks ficam serializa
 
 A prévia/aplicação leem integralmente os candidatos, potencialmente centenas de
 GiB; leituras podem vir de cache e não representam IO físico garantido no SSD.
-Nenhum custo real do acervo foi medido nesta missão; prazo de 600 s pode ser
-insuficiente em máquina lenta e falha de forma conservadora. Não houve otimização
+Nenhum custo real do acervo foi medido nesta missão; cache/carga podem tornar o
+orçamento insuficiente e impedir publicação, preservando catálogo/evidências. Não houve otimização
 R2, leitura de mídia pessoal, implantação, migração real ou aceite físico.
 
 Resultados e evidências desta missão estão no
