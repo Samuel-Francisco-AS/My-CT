@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "release": "myct-setup-3-rc1",
+  "release": "myct-setup-4-fix1-rc1",
   "fedora_min": 43,
   "fedora_max": 44,
   "architectures": [
@@ -65,7 +65,7 @@
     "Transmission e Prowlarr têm planos opcionais separados; não são dependências da Base.",
     "Indexadores e fontes Prowlarr exigem configuração humana por túnel SSH; nenhuma fonte é adicionada pelo instalador.",
     "Rclone/Google Drive tem plano opcional separado; OAuth é configuração humana, acesso online exige confirmação própria.",
-    "Backup/recuperação: SETUP-4. Cofre e demais helpers não são provisionados por esta etapa."
+    "Backup/Recuperação tem alvo próprio. Dumps e catálogos privados exigem age e seleção explícita. Cofre/credenciais e mídia não são incluídos."
   ],
   "addons": {
     "transmission": {
@@ -117,5 +117,14 @@
       "myct-media-cleanup",
       "myct-torrent"
     ]
+  },
+  "recovery": {
+    "schema": 1,
+    "max_bytes": 33554432,
+    "max_items": 256,
+    "max_events": 10000,
+    "private_encryption": "age X25519 recipient; identity via stdin only",
+    "database_scope": "myct migration 001; logical pg_dump; fixed validated event restore; no SQL from package executed",
+    "automatic_services": false
   }
 }

@@ -11,7 +11,7 @@ internal enum class SetupState(val label: String) {
     unmanaged("Instalação anterior não gerenciada"), intervention("Requer intervenção"), failure("Falha"), incompatible("Incompatível")
 }
 internal data class SetupComponent(val id: String, val state: SetupState, val description: String, val privilege: String)
-internal enum class SetupTarget(val label: String) { base("Base"), transmission("Transmission"), prowlarr("Prowlarr"), rclone("Rclone / Drive") }
+internal enum class SetupTarget(val label: String) { base("Base"), transmission("Transmission"), prowlarr("Prowlarr"), rclone("Rclone / Drive"), backup("Backup / Recuperação") }
 internal data class SetupInventory(val detected: Boolean, val managed: Boolean, val installed: Boolean, val running: Boolean,
     val enabled: Boolean, val linger: Boolean, val apiReady: Boolean, val version: String)
 internal data class SetupPlan(val id: String, val release: String, val system: String, val arch: String, val user: String,
@@ -87,13 +87,13 @@ internal fun setupDiagnosticCommand(code: ByteArray, target: SetupTarget = Setup
     // Compressed fixed APK code, never shell-interpolated source; diagnosis remains in memory.
     return "exec python3 -c 'import sys,zlib; sys.argv=[\"myct-setup\",\"$action\",\"--component\",\"${target.name}\"$approvedArg]+${setupSelectionArguments(selection)}; exec(zlib.decompress(bytes.fromhex(\"$hex\")))'"
 }
-internal class SetupLines(private val receive: (JSONObject) -> Unit) : OutputStream() {
+internal class SetupLines(private val limit: Int = 128 * 1024, private val receive: (JSONObject) -> Unit) : OutputStream() {
     private val line = ByteArrayOutputStream()
     @Synchronized override fun write(b: Int) {
         if (b == 10) {
             if (line.size() > 0) receive(JSONObject(line.toString("UTF-8")))
             line.reset()
-        } else { require(line.size() < 128 * 1024); line.write(b) }
+        } else { require(line.size() < limit); line.write(b) }
     }
     override fun write(b: ByteArray, off: Int, len: Int) { for (i in off until off + len) write(b[i].toInt() and 255) }
 }
@@ -161,4 +161,36 @@ internal fun setupCloudVerificationMessage(text: String): String {
         }
         else -> error("Resposta inválida")
     }
+}
+
+internal fun setupBackupCommand(code: ByteArray): String {
+    val compressed = ByteArrayOutputStream().also { b -> java.util.zip.DeflaterOutputStream(b).use { it.write(code) } }.toByteArray()
+    val hex = compressed.joinToString("") { "%02x".format(it.toInt() and 255) }
+    return "exec python3 -c 'import sys,zlib; sys.argv=[\"myct-setup\",\"backup\",\"--component\",\"backup\"]; exec(zlib.decompress(bytes.fromhex(\"$hex\")))'"
+}
+internal fun backupWire(request: JSONObject, identity: ByteArray): ByteArray {
+    require(!request.has("identity") && !request.has("password"))
+    val json = request.toString().toByteArray()
+    require(json.size < 16384 && identity.size <= 256 && identity.none { it == 10.toByte() || it == 13.toByte() })
+    return json + byteArrayOf(10) + identity + byteArrayOf(10)
+}
+internal fun validateBackupReply(j: JSONObject): JSONObject {
+    require(j.getInt("schema") == 1)
+    require(j.optString("operation") in listOf("inventory", "plan-export", "export", "inspect", "restore") || j.optString("state") == "failure")
+    if (j.optString("operation") in listOf("plan-export", "inspect")) require(Regex("[a-f0-9]{64}").matches(j.getString("plan_id")))
+    j.optJSONObject("facts")?.optJSONObject("cloud_selection")?.let { parseBackupCloudPreview(it) }
+    return j
+}
+
+internal data class BackupCloudPreview(val source: SetupCloudSelection, val result: SetupCloudSelection?,
+    val activeBefore: SetupCloudSelection?, val status: String, val willApply: Boolean)
+
+internal fun parseBackupCloudPreview(j: JSONObject): BackupCloudPreview {
+    fun selection(key: String) = j.optJSONObject(key)?.let { SetupCloudSelection(it.getString("remote"), it.getString("config")) }
+    val status = j.getString("status").also { require(it in listOf("apply", "existing", "conflict", "historical")) }
+    val willApply = j.getBoolean("will_apply")
+    require(willApply == (status == "apply"))
+    val result = selection("result")
+    require((result == null) == (status == "historical"))
+    return BackupCloudPreview(checkNotNull(selection("source")), result, selection("active_before"), status, willApply)
 }
