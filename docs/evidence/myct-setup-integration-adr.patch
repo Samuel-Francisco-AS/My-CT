@@ -1,0 +1,28 @@
+diff --git a/docs/05-DECISOES-E-QUESTOES.md b/docs/05-DECISOES-E-QUESTOES.md
+index c49d218..6e918ab 100644
+--- a/docs/05-DECISOES-E-QUESTOES.md
++++ b/docs/05-DECISOES-E-QUESTOES.md
+@@ -28,6 +28,7 @@
+ | ADR-016 | Ordenação das fases | DECIDIDO | Após aceite/merge da MYCT-R4/Fix, executar L1A → L1B → L1C antes da MYCT-6/T5 de automações; nenhuma implementação antecipada |
+ | ADR-017 | Critério da primeira L1 | DECIDIDO | IDE e arquivos locais, terminal Android/PTY local e prova física de editar, compilar e executar C **offline** no Moto; C++/linguagens adicionais e Linux completo são posteriores |
+ | ADR-018 | Tecnologia compilação local | ABERTO | Prova curta compara compilação C para WebAssembly/WASI e alternativa nativa Android segura; sem garantia de compatibilidade com Linux, sem burlar restrições targetSdk 36 |
++| ADR-019 | MYCT-SETUP | DECIDIDO | Próxima fase de portabilidade Fedora, em ordem: SETUP-1 base (diagnóstico/Core/PostgreSQL/systemd), SETUP-2 Transmission/Prowlarr, SETUP-3 Rclone/Drive, SETUP-4 backup/recuperação; instalação supervisionada e sem IA obrigatória. Ver [plano](MYCT-SETUP-PLANO.md) e [issue #53](https://github.com/Samuel-Francisco-AS/My-CT/issues/53). |
+ 
+ ## Propostas técnicas (não congelar sem prova)
+ | ID | Tema | Proposta | Como decidir |
+@@ -481,6 +482,15 @@ automaticamente. Não há autorização para remover backups Drive nem para
+ limpar vestígios divergentes da fixture antiga sem revisão.
+ [Relatório final](MYCT-C1C-RELATORIO.md).
+ 
++## 2026-10-20 — ADR-019: Fedora instalável e recuperável
++
++**Contexto.** O My-CT depende de serviços e caminhos montados manualmente no Fedora pessoal; recomeçar após formatação ou em outro computador exige reconstrução guiada por quem criou o projeto.
++
++**Escolha.** Provisionamento supervisionado por SSH no Android, começando por Fedora/DNF/systemd e seus serviços-base. Quatro entregas sequenciais aprovadas: [SETUP-1 a SETUP-4](MYCT-SETUP-PLANO.md). Verificar o ambiente e mostrar plano/consentimento antes de qualquer mudança. Reutilizar componentes atuais; não adicionar dependência de IA nem executor root genérico.
++
++**Alternativas descartadas por ora.** Instalação manual documentada apenas (não resolve a autonomia); suporte multidistribuição imediato (amplia o escopo); containers/VM obrigatórios (custo injustificado no hardware-alvo); instalação cega e automática (risco aos dados existentes).
++
++**Consequências.** Exigir SSH ativo, acesso autorizado e fingerprint verificável antes do bootstrap; distinguir instalação de recuperação. Preservar instalações pré-existentes e reexecução segura. Plano aprovado **não** equivale à autorização para implantar no Fedora atual ou realizar operações destrutivas. A recuperação completa dependerá de backup verificável, não de promessas de restauração sem dados.
+ 
+ ### 20/10/2026 — SETUP-3: instalação offline e OAuth separados
+ 
