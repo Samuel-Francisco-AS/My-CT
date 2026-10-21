@@ -11,13 +11,13 @@ internal enum class SetupState(val label: String) {
     unmanaged("Instalação anterior não gerenciada"), intervention("Requer intervenção"), failure("Falha"), incompatible("Incompatível")
 }
 internal data class SetupComponent(val id: String, val state: SetupState, val description: String, val privilege: String)
-internal enum class SetupTarget(val label: String) { base("Base"), transmission("Transmission"), prowlarr("Prowlarr") }
+internal enum class SetupTarget(val label: String) { base("Base"), transmission("Transmission"), prowlarr("Prowlarr"), rclone("Rclone / Drive") }
 internal data class SetupInventory(val detected: Boolean, val managed: Boolean, val installed: Boolean, val running: Boolean,
     val enabled: Boolean, val linger: Boolean, val apiReady: Boolean, val version: String)
 internal data class SetupPlan(val id: String, val release: String, val system: String, val arch: String, val user: String,
     val memory: Long, val disk: Long, val admin: String, val components: List<SetupComponent>,
     val blockers: List<String>, val optional: List<String>, val canApply: Boolean, val complete: Boolean,
-    val packages: List<String>, val journal: List<String>, val target: SetupTarget, val inventory: SetupInventory?)
+    val packages: List<String>, val journal: List<String>, val target: SetupTarget, val inventory: SetupInventory?, val cloud: SetupCloud? = null)
 internal fun parseSetupPlan(text: String): SetupPlan {
     val j = JSONObject(text)
     require(j.getInt("schema") == 1)
@@ -55,9 +55,10 @@ internal fun parseSetupPlan(text: String): SetupPlan {
             v.getBoolean("enabled"), v.getBoolean("linger"), v.getBoolean("api_ready"), v.getString("version").take(64))
     }
     require(target == SetupTarget.base || inventory != null)
+    require((target == SetupTarget.rclone) == j.has("cloud"))
     return SetupPlan(id, j.getString("release"), facts.getJSONObject("os").optString("PRETTY_NAME", "Desconhecido"),
         facts.getString("arch"), facts.getString("user"), j.getLong("memory_available"), j.getLong("disk_available"),
-        j.getString("admin"), rows, blockers, strings("optional"), canApply, complete, packages, journal, target, inventory)
+        j.getString("admin"), rows, blockers, strings("optional"), canApply, complete, packages, journal, target, inventory, j.optJSONObject("cloud")?.let { parseSetupCloud(it) })
 }
 internal data class SetupBundle(val diagnostic: ByteArray, val payload: ByteArray, val hash: String) {
     companion object {
@@ -75,13 +76,16 @@ internal data class SetupBundle(val diagnostic: ByteArray, val payload: ByteArra
     }
 }
 internal fun sha256(data: ByteArray) = MessageDigest.getInstance("SHA-256").digest(data).joinToString("") { "%02x".format(it.toInt() and 255) }
-internal fun setupDiagnosticCommand(code: ByteArray, target: SetupTarget = SetupTarget.base): String {
+internal fun setupDiagnosticCommand(code: ByteArray, target: SetupTarget = SetupTarget.base, selection: SetupCloudSelection? = null, onlineApproval: String? = null): String {
+    require(onlineApproval == null || (target == SetupTarget.rclone && Regex("[a-f0-9]{64}").matches(onlineApproval)))
+    val action = if (onlineApproval == null) "diagnose" else "verify-cloud"
+    val approvedArg = onlineApproval?.let { ",\"--approved\",\"$it\"" } ?: ""
     val compressed = ByteArrayOutputStream().also { buffer ->
         java.util.zip.DeflaterOutputStream(buffer).use { it.write(code) }
     }.toByteArray()
     val hex = compressed.joinToString("") { "%02x".format(it.toInt() and 255) }
     // Compressed fixed APK code, never shell-interpolated source; diagnosis remains in memory.
-    return "exec python3 -c 'import sys,zlib; sys.argv=[\"myct-setup\",\"diagnose\",\"--component\",\"${target.name}\"]; exec(zlib.decompress(bytes.fromhex(\"$hex\")))'"
+    return "exec python3 -c 'import sys,zlib; sys.argv=[\"myct-setup\",\"$action\",\"--component\",\"${target.name}\"$approvedArg]+${setupSelectionArguments(selection)}; exec(zlib.decompress(bytes.fromhex(\"$hex\")))'"
 }
 internal class SetupLines(private val receive: (JSONObject) -> Unit) : OutputStream() {
     private val line = ByteArrayOutputStream()
@@ -94,7 +98,7 @@ internal class SetupLines(private val receive: (JSONObject) -> Unit) : OutputStr
     override fun write(b: ByteArray, off: Int, len: Int) { for (i in off until off + len) write(b[i].toInt() and 255) }
 }
 
-internal fun setupReceiverCommand(bundle: SetupBundle, planId: String, target: SetupTarget = SetupTarget.base): String {
+internal fun setupReceiverCommand(bundle: SetupBundle, planId: String, target: SetupTarget = SetupTarget.base, selection: SetupCloudSelection? = null): String {
     require(Regex("[a-f0-9]{64}").matches(planId))
     val receiver = """
             import hashlib,os,subprocess,sys,tempfile
@@ -106,11 +110,55 @@ internal fun setupReceiverCommand(bundle: SetupBundle, planId: String, target: S
                 with tempfile.TemporaryDirectory(prefix="myct-setup-") as work:
                     path=os.path.join(work,"payload.pyz")
                     with open(path,"xb") as file: file.write(payload)
-                    status=subprocess.run([sys.executable,path,"apply","--approved","$planId","--component","${target.name}"],input=password).returncode
+                    status=subprocess.run([sys.executable,path,"apply","--approved","$planId","--component","${target.name}"]+${setupSelectionArguments(selection)},input=password).returncode
             finally:
                 password[:]=b'\0'*len(password)
             sys.exit(status)
         """.trimIndent()
     val hex = receiver.toByteArray().joinToString("") { "%02x".format(it.toInt() and 255) }
     return "exec python3 -c 'exec(bytes.fromhex(\"$hex\"))'"
+}
+
+internal data class SetupCloudSelection(val remote: String, val config: String) {
+    init {
+        require(Regex("[A-Za-z][A-Za-z0-9_-]{0,63}:").matches(remote))
+        require(config.isEmpty() || (config.startsWith('/') && config.length <= 1024 && config.none { it.code < 32 || it.code == 127 }))
+    }
+    fun arguments(): List<String> = listOf("--remote", remote, "--config", config)
+}
+internal data class SetupCloud(val selection: SetupCloudSelection, val configState: String, val configPath: String,
+    val configured: Boolean, val manager: Boolean, val helpers: List<String>)
+internal fun setupSelectionArguments(selection: SetupCloudSelection?): String {
+    val json = org.json.JSONArray(selection?.arguments() ?: emptyList<String>()).toString()
+    val hex = json.toByteArray().joinToString("") { "%02x".format(it.toInt() and 255) }
+    return "__import__(\"json\").loads(bytes.fromhex(\"$hex\"))"
+}
+internal fun parseSetupCloud(j: JSONObject): SetupCloud {
+    val s = j.getJSONObject("selection")
+    val c = j.getJSONObject("config")
+    val helpers = j.getJSONObject("helpers")
+    return SetupCloud(SetupCloudSelection(s.getString("remote"), s.getString("config")),
+        c.getString("state").also { require(it in listOf("pending", "configured", "protected", "incompatible")) },
+        c.getString("path").take(1024), c.getBoolean("configured"), j.getBoolean("manager"),
+        helpers.keys().asSequence().map { name -> "$name · " + when (helpers.getString(name)) { "compatible" -> "Compatível"; "previous" -> "Anterior preservado"; "missing" -> "Ausente"; else -> "Requer intervenção" } }.toList())
+}
+internal fun setupCloudVerificationMessage(text: String): String {
+    val j = JSONObject(text)
+    require(j.getInt("schema") == 1)
+    // Render fixed local text only. Raw OAuth/provider error output is never displayed.
+    return when (j.getString("state")) {
+        "verified" -> {
+            require(j.getBoolean("access") && !j.getBoolean("archive_recoverable"))
+            "Acesso autenticado confirmado. " + (if (j.optLong("quota_free", -1) == 0L) "Cota sem espaço livre. " else "") +
+                (if (j.getBoolean("archive_accessible")) "Pasta My-CT-Archive acessível. " else "Pasta My-CT-Archive não confirmada; pode não existir. ") +
+                "Integridade e recuperação dos arquivos não foram verificadas. Nenhuma transferência iniciada."
+        }
+        "failure" -> when (j.optString("code")) {
+            "oauth" -> "Autenticação não confirmada. Revise OAuth privadamente pelo Terminal."
+            "quota" -> "Acesso recusado por permissão, limite ou cota. Confira a conta."
+            "network" -> "Rede ou serviço indisponível. Nenhum acesso foi presumido."
+            else -> "Verificação indisponível. Diagnostique novamente; detalhes privados omitidos."
+        }
+        else -> error("Resposta inválida")
+    }
 }

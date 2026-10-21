@@ -59,14 +59,14 @@ class SshConnection {
     internal fun antivirus(command: AvCommand): SshExecResult =
         executeSshResult(avCommand(command), { openDownloadExec() })
 
-    internal fun setupDiagnose(bundle: SetupBundle, target: SetupTarget = SetupTarget.base): SetupPlan {
-        val reply = executeSshResult(setupDiagnosticCommand(bundle.diagnostic, target), { openDownloadExec() }, 120_000)
+    internal fun setupDiagnose(bundle: SetupBundle, target: SetupTarget = SetupTarget.base, selection: SetupCloudSelection? = null): SetupPlan {
+        val reply = executeSshResult(setupDiagnosticCommand(bundle.diagnostic, target, selection), { openDownloadExec() }, 120_000)
         check(reply.status == 0)
         return parseSetupPlan(reply.output)
     }
 
     internal fun setupApply(bundle: SetupBundle, planId: String, password: ByteArray, target: SetupTarget = SetupTarget.base,
-                            receive: (org.json.JSONObject) -> Unit) {
+                            selection: SetupCloudSelection? = null, receive: (org.json.JSONObject) -> Unit) {
         require(Regex("[a-f0-9]{64}").matches(planId))
         require(password.size <= 1024 && password.none { it == 10.toByte() || it == 13.toByte() })
         val channel = synchronized(downloadChannels) {
@@ -76,7 +76,7 @@ class SshConnection {
         val wire = bundle.payload + password + byteArrayOf(10)
         // Receiver is fixed APK code; staged bytes execute only after SHA-256 verification.
         try {
-            channel.setCommand(setupReceiverCommand(bundle, planId, target))
+            channel.setCommand(setupReceiverCommand(bundle, planId, target, selection))
             channel.setInputStream(java.io.ByteArrayInputStream(wire))
             channel.setOutputStream(SetupLines(receive))
             channel.setErrStream(object : OutputStream() { override fun write(b: Int) {} })
@@ -92,6 +92,21 @@ class SshConnection {
             channel.disconnect()
             synchronized(downloadChannels) { downloadChannels.remove(channel) }
         }
+    }
+
+    internal fun setupVerifyCloud(bundle: SetupBundle, plan: SetupPlan): String {
+        require(plan.target == SetupTarget.rclone)
+        val reply = executeSshResult(setupDiagnosticCommand(bundle.diagnostic, plan.target, plan.cloud!!.selection, plan.id),
+            { openDownloadExec() }, 120_000)
+        check(reply.status == 0)
+        return setupCloudVerificationMessage(reply.output)
+    }
+    @Synchronized internal fun setupOAuthTunnel(open: Boolean) {
+        val current = checkNotNull(session)
+        if (open) {
+            check(!closed && current.isConnected)
+            current.setPortForwardingL("127.0.0.1", 53682, "127.0.0.1", 53682)
+        } else current.delPortForwardingL("127.0.0.1", 53682)
     }
 
     private fun openDownloadExec(keepInput: Boolean = false): DownloadExec {

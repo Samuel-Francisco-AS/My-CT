@@ -491,3 +491,19 @@ limpar vestígios divergentes da fixture antiga sem revisão.
 **Alternativas descartadas por ora.** Instalação manual documentada apenas (não resolve a autonomia); suporte multidistribuição imediato (amplia o escopo); containers/VM obrigatórios (custo injustificado no hardware-alvo); instalação cega e automática (risco aos dados existentes).
 
 **Consequências.** Exigir SSH ativo, acesso autorizado e fingerprint verificável antes do bootstrap; distinguir instalação de recuperação. Preservar instalações pré-existentes e reexecução segura. Plano aprovado **não** equivale à autorização para implantar no Fedora atual ou realizar operações destrutivas. A recuperação completa dependerá de backup verificável, não de promessas de restauração sem dados.
+
+### 20/10/2026 — SETUP-3: instalação offline e OAuth separados
+
+Rclone continua opcional; diagnóstico permite somente consultas locais `version`
+e `config file` e leitura restrita do tipo do remote escolhido. `about` e a consulta
+pontual `lsjson --stat` exigem autorização online própria, pois podem renovar OAuth
+e escrever tokens. Não usar status dos motores como diagnóstico passivo: ele
+consulta cota e pode acessar catálogos. A seleção não secreta em
+`~/.config/myct/cloud.json` permite reutilizar os motores e unidades transitórias
+existentes com outro remote/caminho; nenhum segundo catálogo ou daemon.
+Configurações/helpers anteriores divergentes são preservados e bloqueiam escrita.
+OAuth usa Client ID próprio e prompts do Rclone com túnel SSH temporário em loopback;
+segredos não entram em argumentos do authorize. O proprietário autorizou avançar
+SETUP-3/4 sem instalação física limpa, que permanece NÃO VALIDADA. Auditoria reforçada
+Codex e revisão independente Luna ficam exigidas ao final da SETUP-4, antes de merge.
+[Relatório SETUP-3](MYCT-SETUP-3-RELATORIO.md).

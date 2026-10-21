@@ -19,6 +19,7 @@ import threading
 # Also supports loading this CLI as the torrent engine's common module.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from myct_cloud_progress import Progress
+from myct_cloud_config import cloud_selection, CloudConfigError
 
 progress = Progress()
 
@@ -149,6 +150,12 @@ def rclone(*args):
     # changing copy semantics. An encrypted existing config may still be unlocked.
     env = {k: v for k, v in os.environ.items()
            if not k.startswith('RCLONE_') or k in {'RCLONE_CONFIG', 'RCLONE_CONFIG_PASS'}}
+    try:
+        selected = cloud_selection()
+    except CloudConfigError as error:
+        raise Failure('CLOUD_CONFIG', str(error)) from None
+    if selected['config']:
+        env['RCLONE_CONFIG'] = selected['config']
     telemetry = progress.enabled and args[0] == 'copyto'
     flags = (['--use-json-log', '--stats', '2s', '--stats-log-level', 'NOTICE', '--log-level', 'NOTICE']
              if telemetry else ['--stats', '0', '--log-level', 'ERROR'])
@@ -342,8 +349,14 @@ def failure_code(error):
     return 'INTERRUPTED' if isinstance(error, KeyboardInterrupt) else 'LOCAL_IO'
 
 
+def selected_remote():
+    try:
+        return remote_name(cloud_selection()['remote'])
+    except CloudConfigError as error:
+        raise Failure('CLOUD_CONFIG', str(error)) from None
+
 def run(argv):
-    remote = remote_name(os.environ.get('MYCT_ARCHIVE_REMOTE', 'myct-gdrive:'))
+    remote = selected_remote()
     if len(argv) >= 2 and argv[0] == '--remote':
         remote = remote_name(argv[1])
         argv = argv[2:]

@@ -14,7 +14,7 @@ def build(destination):
     files = {name: (ROOT / name).read_bytes() for name in manifest['sources']}
     manifest['sha256'] = {name: hashlib.sha256(data).hexdigest() for name, data in files.items()}
     code = (ROOT / 'ops/setup/setup.py').read_text().replace('MANIFEST = None  # injected by build_bundle.py', 'MANIFEST = ' + repr(manifest))
-    addon = (ROOT / 'ops/setup/addons.py').read_text()
+    addon = (ROOT / 'ops/setup/addons.py').read_text() + '\n' + (ROOT / 'ops/myct_cloud_config.py').read_text() + '\n' + (ROOT / 'ops/setup/cloud.py').read_text()
     code = code.replace('\n\ndef main():', '\n\n' + addon + '\n\ndef main():')
     diagnostic = code.encode()
     (destination / 'diagnose.py').write_bytes(diagnostic)
