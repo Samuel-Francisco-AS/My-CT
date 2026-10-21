@@ -244,11 +244,12 @@ internal class CloudModel(
                     return
                 }
                 // Choices may be displayed from history; history cannot grant deletion consent.
-                linkChoices[plan.id] = plan.library.filter { it.optBoolean("present") && it.optBoolean("linked_to_package") }
-                    .map { it.getString("path") }
+                val reported = plan.library.map { it.getString("path") }
+                linkChoices[plan.id] = if (plan.libraryComplete) reported else
+                    (libraryChoices(plan.id).ifEmpty { entries.find { it.id == plan.id }?.links.orEmpty() } + reported).distinct()
                 if (selected == plan.id) {
                     space = plan
-                    if (current.state == "succeeded" && previewRequest == (current.id to current.work) &&
+                    if (plan.valid(clock()) && current.state == "succeeded" && previewRequest == (current.id to current.work) &&
                         plan.selected.sorted() == selectedLinks(plan.id).sorted()) authorized = plan
                     else {
                         authorized = null

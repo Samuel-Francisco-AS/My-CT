@@ -35,7 +35,9 @@ if mode != 'missing':
         print(json.dumps(row), file=sys.stderr, flush=True)
         if mode == 'pause' and n == size//2:
             Path(os.environ['PROGRESS_READY']).touch()
-            time.sleep(.4)
+            deadline = time.monotonic() + 3
+            while not Path(os.environ['PROGRESS_CONTINUE']).exists() and time.monotonic() < deadline:
+                time.sleep(.01)
         if mode == 'error' and n == size//2:
             print('connection timeout SECRET', file=sys.stderr); sys.exit(1)
 dest.parent.mkdir(parents=True, exist_ok=True)
@@ -185,15 +187,25 @@ class ProgressEnginesTest(unittest.TestCase):
             p = receipt(home / '.local/share/myct/cloud-jobs')
             src = home / 'in'; src.write_bytes(b'x' * 100)
             ready = home / 'ready'
+            proceed = home / 'continue'
             engine = file_fixture.archive
-            with patch.object(engine, 'progress', p), patch.dict(os.environ, {'PROGRESS_MODE': 'pause', 'PROGRESS_READY': str(ready)}):
+            with patch.object(engine, 'progress', p), patch.dict(os.environ, {'PROGRESS_MODE': 'pause', 'PROGRESS_READY': str(ready), 'PROGRESS_CONTINUE': str(proceed)}):
                 p.plan([100])
                 thread = threading.Thread(target=engine.copy, args=(str(src), str(home / 'out'))); thread.start()
                 deadline = time.monotonic() + 3
-                while not ready.exists() and time.monotonic() < deadline: time.sleep(.01)
-                self.assertTrue(ready.exists())
-                self.assertEqual(read_progress(p.root, JOB)['bytes_done'], 50)
-                thread.join(3); self.assertFalse(thread.is_alive())
+                try:
+                    # Producer ready does not imply the asynchronous reader has
+                    # published its sample. Wait for the evidence we assert.
+                    while time.monotonic() < deadline:
+                        sample = read_progress(p.root, JOB)
+                        if ready.exists() and sample and sample['bytes_done'] == 50: break
+                        time.sleep(.01)
+                    self.assertTrue(ready.exists())
+                    self.assertEqual(read_progress(p.root, JOB)['bytes_done'], 50)
+                finally:
+                    proceed.touch()
+                    thread.join(3)
+                self.assertFalse(thread.is_alive())
                 self.assertEqual(read_progress(p.root, JOB)['bytes_done'], 100)
                 os.environ['PROGRESS_MODE'] = 'error'; p.plan([100])
                 with self.assertRaisesRegex(engine.Failure, 'rede'): engine.copy(str(src), str(home / 'error'))

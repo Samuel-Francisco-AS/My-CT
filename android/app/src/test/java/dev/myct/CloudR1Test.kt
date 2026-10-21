@@ -68,6 +68,39 @@ class CloudR1Test {
         assertTrue(m.canRelease(p, paths))
         assertEquals(1, f.starts.size) // No second space request and no release execution.
     }
+    @Test fun blockedPartialInventoryPreservesThirteenChoicesAndNeverAuthorizes() {
+        for (explicit in listOf(false, true)) Fixture().use { f ->
+            f.start()
+            val blocked = plan(paths).put("can_release", false).put("blockers", JSONArray().put("LIBRARY_SELECTION"))
+                .put("library", JSONArray().put(JSONObject().put("path", paths.first()).put("present", true).put("linked_to_package", true)))
+            if (explicit) blocked.put("library_complete", false) // Old helpers omit the flag.
+            f.complete(blocked)
+            val m = f.model; val p = m.space!!
+            assertEquals(paths.toSet(), m.selectedLinks(CLOUD_ARCHIVE))
+            assertEquals(paths, m.libraryChoices(CLOUD_ARCHIVE))
+            assertFalse(p.libraryComplete); assertFalse(m.previewAuthorized(p)); assertFalse(m.canRelease(p, paths))
+            m.viewTask(m.tasks.single()); f.waitIdle()
+            assertEquals(paths, m.libraryChoices(CLOUD_ARCHIVE)); assertFalse(m.previewAuthorized(m.space!!))
+            assertEquals(1, f.starts.size)
+        }
+    }
+    @Test fun completeBlockedInventoryShowsAllThirteenWithoutGrantingConsent() = Fixture().use { f ->
+        f.start()
+        val blocked = plan(paths).put("library_complete", true).put("can_release", false)
+            .put("blockers", JSONArray().put("LIBRARY_SELECTION"))
+        blocked.getJSONArray("library").getJSONObject(0).put("managed", false).put("status", "divergent")
+        f.complete(blocked)
+        val m = f.model; val p = m.space!!
+        assertTrue(p.libraryComplete); assertEquals(13, p.library.size)
+        assertEquals("divergent", p.library.first().getString("status"))
+        assertEquals(paths.toSet(), m.selectedLinks(CLOUD_ARCHIVE)); assertEquals(13, m.libraryChoices(CLOUD_ARCHIVE).size)
+        assertFalse(m.previewAuthorized(p)); assertFalse(m.canRelease(p, paths))
+    }
+    @Test fun incompleteFlagCannotAuthorizeEvenWhenServerClaimsNoBlockers() = Fixture().use { f ->
+        f.start(); f.complete(plan(paths).put("library_complete", false))
+        assertFalse(f.model.canRelease(f.model.space!!, paths))
+        assertFalse(f.model.previewAuthorized(f.model.space!!))
+    }
     @Test fun manualRefreshCannotUndoLegitimateInvalidationOrExpiryDuringSpace() {
         for (event in listOf("navigation", "background", "reconnect", "expiry", "other-package")) Fixture().use { f ->
             val m = f.model; f.start()

@@ -74,6 +74,92 @@ class SpaceEngineTests(unittest.TestCase):
         self.fixture.setUp(); self.addCleanup(self.fixture.doCleanups)
         self.tool = lifecycle.tool
 
+    def thirteen(self):
+        import os
+        f = self.fixture; f.linked()
+        state = self.tool.media.load_state()
+        paths = [f.rel]
+        for n in range(2, 14):
+            src = f.base / ('Pacote/extra%02d.mkv' % n)
+            src.write_bytes(b'video fixture ' * n)
+            rel = 'Series/Fixture/Season 01/E%02d.mkv' % n
+            dst = f.home / 'Media' / rel
+            dst.parent.mkdir(parents=True, exist_ok=True); os.link(src, dst)
+            state['links'][rel] = {'id': f.key + ':' + str(src.relative_to(f.base)),
+                                   'dev': dst.stat().st_dev, 'ino': dst.stat().st_ino}
+            paths.append(rel)
+        self.tool.media.save_state(state)
+        identity = f.archived(); f.engine.calls.clear(); f.cloud.calls.clear()
+        return identity, sorted(paths), state
+
+    def test_thirteen_links_complete_after_first_last_or_multiple_selection_blocks(self):
+        identity, paths, original = self.thirteen()
+        f = self.fixture
+        for bad in ([paths[0]], [paths[-1]], paths[::2]):
+            state = copy.deepcopy(original)
+            for rel in bad: state['links'][rel]['dev'] -= 1
+            self.tool.media.save_state(state)
+            before = self.tool.media.state_path().read_bytes()
+            catalog = (self.tool.common.state_dir() / 'catalog.json').read_bytes()
+            plan = f.run_cli('space', identity, *[arg for rel in paths for arg in ('--remove-library', rel)])
+            self.assertEqual(paths, plan['remove_library'])
+            self.assertEqual(13, len(plan['library']))
+            self.assertTrue(plan['library_complete'])
+            self.assertEqual(set(paths), {r['path'] for r in plan['library']})
+            self.assertEqual(len(bad), sum(r['status'] == 'divergent' for r in plan['library']))
+            self.assertEqual(13 - len(bad), sum(r['managed'] for r in plan['library']))
+            self.assertIn('LIBRARY_SELECTION', plan['blockers']); self.assertFalse(plan['can_release'])
+            self.assertEqual(before, self.tool.media.state_path().read_bytes())
+            self.assertEqual(catalog, (self.tool.common.state_dir() / 'catalog.json').read_bytes())
+            self.assertEqual([], f.mutations())
+
+    def test_failed_library_scan_reports_known_paths_and_explicit_incompleteness(self):
+        identity, paths, _ = self.thirteen(); f = self.fixture
+        original = self.tool.check_mounts
+        def mounts(root):
+            if root == self.tool.media.media_root(): raise OSError('fixture scan failure')
+            return original(root)
+        with patch.object(self.tool, 'check_mounts', side_effect=mounts):
+            plan = f.preview(identity)
+        self.assertEqual(13, len(plan['library']))
+        self.assertEqual(set(paths), {r['path'] for r in plan['library']})
+        self.assertFalse(plan['library_complete']); self.assertIn('LIBRARY_INCOMPLETE', plan['blockers'])
+        self.assertFalse(plan['can_release']); self.assertEqual([], f.mutations())
+
+    def test_missing_unmanaged_and_unsafe_links_have_distinct_statuses(self):
+        identity, paths, state = self.thirteen(); f = self.fixture
+        absent, unmanaged, unsafe = paths[:3]
+        (f.home / 'Media' / absent).unlink()
+        state['links'].pop(unmanaged)
+        target = f.home / 'Media' / unsafe
+        target.unlink(); target.symlink_to(f.base / 'Pacote/filme.mkv')
+        self.tool.media.save_state(state)
+        plan = f.preview(identity)
+        statuses = {r['path']: r['status'] for r in plan['library']}
+        self.assertEqual('absent', statuses[absent]); self.assertEqual('unmanaged', statuses[unmanaged])
+        self.assertEqual('uninspectable', statuses[unsafe]); self.assertEqual(13, len(statuses))
+        self.assertFalse(plan['library_complete']); self.assertFalse(plan['can_release'])
+
+    def test_media_state_failure_keeps_original_manifest_paths(self):
+        identity, paths, _ = self.thirteen(); f = self.fixture
+        with patch.object(self.tool.media, 'load_state', side_effect=self.tool.media.MediaError('fixture invalid state')):
+            plan = f.preview(identity)
+        self.assertEqual(set(paths), {r['path'] for r in plan['library']})
+        self.assertFalse(plan['library_complete']); self.assertFalse(plan['can_release'])
+
+    def test_one_uninspectable_file_does_not_stop_remaining_scan(self):
+        identity, paths, _ = self.thirteen(); f = self.fixture
+        failed = f.home / 'Media' / paths[0]
+        original = self.tool.media.record_matches
+        def check(info, key, path):
+            if path == failed: raise OSError('fixture one file unavailable')
+            return original(info, key, path)
+        with patch.object(self.tool.media, 'record_matches', side_effect=check):
+            plan = f.preview(identity)
+        self.assertEqual(13, len(plan['library']))
+        self.assertEqual(12, sum(r['managed'] for r in plan['library']))
+        self.assertFalse(plan['library_complete']); self.assertFalse(plan['can_release'])
+
     def test_space_measures_each_actual_tree_read_different_sizes_and_not_library_alias(self):
         f = self.fixture; identity = f.prepare()
         p = progress_fixture.ProgressTests(); p.setUp(); self.addCleanup(p.doCleanups)

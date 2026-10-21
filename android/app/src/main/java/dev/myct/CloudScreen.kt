@@ -290,11 +290,20 @@ private fun CloudDetail(model: CloudModel, entry: CloudEntry?, torrent: ServerTo
             item("links") {
                 ScreenPanel {
                     Text("Vínculos Jellyfin", style = MaterialTheme.typography.titleSmall)
+                    if (!plan.libraryComplete) StatusNotice("Inventário incompleto. Opções anteriores preservadas; a liberação permanece bloqueada.", true)
                     if (plan.library.isEmpty()) Text("Nenhum vínculo associado.", style = MaterialTheme.typography.bodySmall)
                     plan.library.forEach { link ->
                         val path = link.getString("path")
-                        DetailValue(if (link.optBoolean("linked_to_package")) "Hardlink presente" else if (link.optBoolean("present")) "Destino ocupado — conferir" else "Vínculo ausente", path)
-                        if (!link.optBoolean("present")) MyCtTextButton(onClick = {
+                        val status = when (link.optString("status")) {
+                            "managed" -> "Hardlink gerenciado e comprovado"
+                            "unmanaged" -> "Hardlink presente sem registro Media"
+                            "divergent" -> "Registro ou origem divergente — protegido"
+                            "absent" -> "Vínculo ausente"
+                            "uninspectable" -> "Vínculo não inspecionado — protegido"
+                            else -> if (link.optBoolean("linked_to_package")) "Hardlink presente" else if (link.optBoolean("present")) "Destino ocupado — conferir" else "Vínculo ausente"
+                        }
+                        DetailValue(status, path)
+                        if (plan.libraryComplete && link.optString("status") != "uninspectable" && !link.optBoolean("present")) MyCtTextButton(onClick = {
                             model.start(CloudWork("torrent", listOf("relink", key, "--library", path)))
                         }, enabled = model.actionsEnabled && entry?.recoveryState == "verified" && torrent?.paused == true && !link.optBoolean("ignored")) { Text("Reconstruir vínculo") }
                     }

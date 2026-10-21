@@ -75,8 +75,7 @@ def snapshot(rows=None, state=None):
                         info = state['links'].get(relative)
                         matched = (source is not None and inode.st_nlink >= 2 and
                                    (info is None or
-                                    (info['dev'], info['ino'], info['id']) ==
-                                    (inode.st_dev, inode.st_ino, source['id'])))
+                                    core.record_matches(info, source['id'], file)))
                         items.append({'path': relative,
                                       'bytes': inode.st_size,
                                       'torrent': source['torrent'] if matched else None,

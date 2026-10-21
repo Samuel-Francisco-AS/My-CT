@@ -210,8 +210,8 @@ internal fun parseCloudTask(row: JSONObject): CloudTask {
 internal data class CloudSpace(val id: String, val token: String, val selected: List<String>,
     val canRelease: Boolean, val physical: Long, val estimate: Long, val retained: Long,
     val paths: List<String>, val trees: List<JSONObject>, val library: List<JSONObject>,
-    val blockers: List<String>, val expiresAt: Long) {
-    fun valid(now: Long) = canRelease && blockers.isEmpty() && now < expiresAt
+    val blockers: List<String>, val expiresAt: Long, val libraryComplete: Boolean = true) {
+    fun valid(now: Long) = libraryComplete && canRelease && blockers.isEmpty() && now < expiresAt
     fun release(libraryConfirmed: Boolean, now: Long): CloudWork {
         require(valid(now) && (selected.isEmpty() || libraryConfirmed))
         return CloudWork("torrent", listOf("release", id, "--preview", token, "--confirm", token) +
@@ -225,9 +225,12 @@ internal fun parseCloudSpace(row: JSONObject, now: Long): CloudSpace {
     return CloudSpace(row.getString("id"), token, row.cloudStrings("remove_library"), row.getBoolean("can_release"),
         row.optLong("physical_bytes"), row.optLong("reclaim_estimate_bytes"), row.optLong("retained_known_bytes"),
         row.cloudObjects("remove_paths").map { it.getString("path") }, row.cloudObjects("trees"), row.cloudObjects("library"),
-        cloudBlockers(row.cloudStrings("blockers")), minOf(now + ttl * 1000, token.substringBefore('-').toLong() * 1000 + 600000)).also {
+        cloudBlockers(row.cloudStrings("blockers")), minOf(now + ttl * 1000, token.substringBefore('-').toLong() * 1000 + 600000),
+        row.optBoolean("library_complete", row.getBoolean("can_release") && row.cloudStrings("blockers").isEmpty())).also {
         require(cloudId.matches(it.id) && cloudToken.matches(token) && it.physical >= 0 && it.estimate >= 0 && it.retained >= 0)
         require(it.selected.size <= 256 && it.selected.distinct().size == it.selected.size && it.selected.all(::validMediaPath) && it.paths.all(::cloudPath))
+        val links = it.library.map { link -> link.getString("path") }
+        require(links.distinct().size == links.size && links.all(::validMediaPath))
         require(row.getString("confirmation") == token && (it.selected.isEmpty() || row.getString("library_confirmation") == token))
     }
 }
@@ -250,6 +253,8 @@ internal fun cloudState(entry: CloudEntry, torrent: ServerTorrent?, task: CloudT
 internal fun cloudBlockers(codes: List<String>): List<String> = codes
     .filterNot { it == "NO_LOCAL_DATA" && "LOCAL_DIVERGENCE" in codes }
     .map { code -> when (code) {
+        "LIBRARY_SELECTION" -> "Há vínculos da seleção com registro Media ou origem não comprovados. Liberação bloqueada."
+        "LIBRARY_INCOMPLETE" -> "Não foi possível concluir o inventário de vínculos. Liberação bloqueada."
         "LOCAL_DIVERGENCE", "NO_LOCAL_DATA" -> cloudError(JSONObject().put("code", code)).substringBefore(" ($code)")
         else -> code
     } }
