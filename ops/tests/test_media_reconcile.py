@@ -124,6 +124,22 @@ class ReconcileTests(unittest.TestCase):
         info['metadata']['mtime_ns'] += 1
         self.assertEqual('RECORDED_METADATA_MISMATCH', self.plan()['entries'][0]['reason'])
 
+    def test_enriched_identity_does_not_silently_accept_future_device_change(self):
+        rel, _, dest = self.add()
+        info = self.m.link_record(self.f.state['links'][rel]['id'], dest)
+        info['dev'] = 50  # Current stat is 51; UUID/subvolume/other metadata match.
+        self.f.state['links'][rel] = copy.deepcopy(info)
+        self.assertFalse(self.m.record_matches(info, info['id'], dest))
+        self.assertFalse(fixtures.cleanup.snapshot(self.f.rows, self.f.state)['files'][0]['eligible'])
+        plan = self.plan()
+        self.assertEqual('DEVICE_REANCHOR', plan['entries'][0]['reason'])
+        self.assertFalse(plan['legacy_requires_explicit_reanchor'])
+        self.assertEqual(info, self.f.state['links'][rel])
+        with self.assertRaises(self.m.MediaError):
+            self.m.reconciled_state(self.f.state, plan, plan, 'not-confirmed')
+        result = self.m.reconciled_state(self.f.state, plan, plan, plan['fingerprint'])
+        self.assertEqual(51, result['links'][rel]['dev'])
+
     def test_unknown_filesystem_and_symlink_are_never_reanchored(self):
         rel, src, dest = self.add()
         with patch.object(self.m, 'filesystem_identity', return_value=None):

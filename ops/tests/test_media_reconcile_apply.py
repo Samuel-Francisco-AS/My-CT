@@ -1,5 +1,8 @@
 """Writer tests: disposable catalogs/media, fake RPC/Btrfs, no installed helpers."""
 import copy
+import builtins
+import io
+from contextlib import contextmanager, ExitStack
 import importlib.util
 import json
 import multiprocessing
@@ -28,9 +31,6 @@ class ApplyTests(unittest.TestCase):
         def read(include_files=False, rows=None):
             return original(include_files, self.f.rows if rows is None else rows)
         p = patch.object(self.core, 'read_torrents', side_effect=read)
-        p.start(); self.addCleanup(p.stop)
-        self.elapsed = 0
-        p = patch.object(writer.time, 'monotonic', side_effect=lambda: self.elapsed)
         p.start(); self.addCleanup(p.stop)
         self.now = 1000000
         p = patch.object(writer.time, 'time', side_effect=lambda: self.now)
@@ -62,6 +62,32 @@ class ApplyTests(unittest.TestCase):
     def apply(self, plan):
         return writer.apply(self.core, plan, self.proof, plan['id'], plan['id'])
 
+    @contextmanager
+    def no_media_io(self):
+        """Reject Python/fd content reads; filesystem stat/ioctl remain permitted."""
+        roots = (self.f.home / 'Media', self.f.source_root)
+        def is_media(file):
+            if isinstance(file, int):
+                file = os.readlink('/proc/self/fd/' + str(file))
+            path = Path(os.fsdecode(file))
+            return any(path.is_relative_to(root) for root in roots)
+        def guarded_open(original):
+            def call(file, *args, **kwargs):
+                if is_media(file): raise AssertionError('media content must not be opened via Python IO')
+                return original(file, *args, **kwargs)
+            return call
+        def guarded_read(original):
+            def call(fd, *args, **kwargs):
+                if is_media(fd): raise AssertionError('media content must not be read')
+                return original(fd, *args, **kwargs)
+            return call
+        with ExitStack() as stack:
+            for target, name in ((builtins, 'open'), (io, 'open')):
+                stack.enter_context(patch.object(target, name, side_effect=guarded_open(getattr(target, name))))
+            for name in ('read', 'pread'):
+                stack.enter_context(patch.object(os, name, side_effect=guarded_read(getattr(os, name))))
+            yield
+
     def test_264_updates_preserve_fourteen_exception_absent_ignored_and_media(self):
         for n in range(2, 265): self.add(n)
         for n in range(265, 279): self.add(n, old=False)
@@ -75,9 +101,11 @@ class ApplyTests(unittest.TestCase):
         files = {p: (p.stat().st_ino, p.stat().st_nlink, p.read_bytes())
                  for p in (self.f.home / 'Media').rglob('*.mkv')}
         archives = [p.read_bytes() for p in writer.catalogs()]
-        plan = self.preview()
+        with self.no_media_io(): plan = self.preview()
+        self.assertEqual({'examined': 307, 'candidates': 264, 'current': 14, 'absent': 28, 'protected': 1}, plan['counts'])
         self.assertEqual({'LEGACY_REANCHOR': 264, 'CURRENT': 14, 'SOURCE_INODE_MISMATCH': 1, 'ABSENT': 28}, plan['summary'])
-        reply = self.apply(plan); self.assertEqual(264, reply['updated']); self.assertEqual('succeeded', reply['state'])
+        with self.no_media_io(): reply = self.apply(plan)
+        self.assertEqual(264, reply['updated']); self.assertEqual('succeeded', reply['state'])
         result = self.core.load_state()
         for rel, info in state['links'].items():
             if rel in plan['updates']:
@@ -171,57 +199,52 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(self.before, self.core.state_path().read_bytes())
         self.assertEqual('not_applied', writer.recover(self.core, p['id'])['state'])
 
-    def test_execution_deadline_after_backup_refuses(self):
+    def test_same_size_change_with_restored_mtime_is_detected_by_ctime(self):
+        p = self.preview(); original = writer.write_exclusive
+        src = next(self.f.source_root.iterdir()); before = src.stat()
+        def change(fd, name, raw):
+            result = original(fd, name, raw)
+            if name == 'state.before.json':
+                src.write_bytes(b'x' * before.st_size)
+                os.utime(src, ns=(before.st_atime_ns, before.st_mtime_ns))
+            return result
+        with patch.object(writer, 'write_exclusive', side_effect=change):
+            with self.assertRaisesRegex(writer.Error, 'RECOVERY_NEEDED'): self.apply(p)
+        self.assertEqual(before.st_size, src.stat().st_size)
+        self.assertEqual(before.st_mtime_ns, src.stat().st_mtime_ns)
+        self.assertEqual(self.before, self.core.state_path().read_bytes())
+        self.assertEqual('not_applied', writer.recover(self.core, p['id'])['state'])
+
+    def test_confirmation_expiring_after_backup_refuses_and_recovers(self):
         p = self.preview(); original = writer.write_exclusive
         def expire(fd, name, raw):
             result = original(fd, name, raw)
-            if name == 'state.before.json': self.elapsed += writer.TTL
+            if name == 'state.before.json': self.now += writer.TTL
             return result
         with patch.object(writer, 'write_exclusive', side_effect=expire):
             with self.assertRaisesRegex(writer.Error, 'RECOVERY_NEEDED'): self.apply(p)
         self.assertEqual(self.before, self.core.state_path().read_bytes())
+        self.assertEqual('not_applied', writer.recover(self.core, p['id'])['state'])
 
-    def test_long_hash_passes_exceed_600_but_exact_consent_is_accepted_fresh(self):
-        original = writer.content
-        def slow(core, plan):
-            result = original(core, plan)
-            self.elapsed += 750; self.now += 750
-            return result
-        with patch.object(writer, 'content', side_effect=slow):
+    def test_preview_overview_and_metadata_only_application(self):
+        with self.no_media_io():
             p = self.preview()
-            self.assertEqual(750, p['workload']['preview_seconds'])
-            self.assertEqual({'collect': 0, 'hash': 750, 'recheck': 0}, p['preview_phases_seconds'])
-            self.assertEqual(p['workload']['bytes_per_pass'] / 750, p['workload']['observed_effective_bytes_per_second'])
-            self.assertEqual(2370, p['workload']['execution_limit_seconds'])
-            self.assertTrue(p['workload']['temporal_viable'])
-            self.now += 599; self.elapsed += 599
+            self.assertEqual({'examined': 1, 'candidates': 1, 'current': 0, 'absent': 0, 'protected': 0}, p['counts'])
+            self.assertEqual([self.fs], p['filesystems'])
+            self.assertNotIn('contents', p['snapshot'])
+            self.assertNotIn('workload', p)
             self.assertEqual('succeeded', self.apply(p)['state'])
-        self.assertGreater(self.now, p['expires'])
-        self.assertEqual(self.before, (writer.root() / p['id'] / 'state.before.json').read_bytes())
+        with self.assertRaises(self.core.MediaError):
+            self.core.run(['reconcile-estimate', '--provenance', str(self.proof)])
 
-    def test_estimate_volume_distinct_passes_unknown_rate_and_read_only_cli(self):
-        self.add(2); self.save()
-        paths = sorted(str(p) for p in self.f.home.rglob('*'))
-        with patch.object(writer, 'content', side_effect=AssertionError('estimate must not hash')):
-            result = writer.estimate(self.core, self.proof)
-        cli = self.core.run(['reconcile-estimate', '--provenance', str(self.proof)])
-        self.assertEqual(result, cli)
-        self.assertEqual(paths, sorted(str(p) for p in self.f.home.rglob('*')))
-        w = result['workload']
-        size = sum(p.stat().st_size for p in self.f.source_root.iterdir())
-        self.assertEqual((2, size, 2, 2 * size), (w['distinct_files'], w['bytes_per_pass'], w['full_passes'], w['total_read_bytes']))
-        self.assertIsNone(w['observed_effective_bytes_per_second']); self.assertIsNone(w['temporal_viable'])
-        inner = self.preview()['snapshot']['plan']
-        inner['entries'].append(copy.deepcopy(inner['entries'][0])); inner['eligible'] += 1
-        self.assertEqual(size, writer.workload(inner)['bytes_per_pass'])
-        self.assertEqual(self.before, self.core.state_path().read_bytes())
-
-    def test_invalid_budget_or_phase_diagnostic_is_not_accepted(self):
-        for field, value in [('execution_limit_seconds', writer.MAX_EXECUTION + 1), ('preview_seconds', -1)]:
-            p = self.preview(); p['workload'][field] = value
-            with self.assertRaisesRegex(writer.Error, 'INVALID_TIMING'): self.apply(p)
-        p = self.preview(); p['preview_phases_seconds']['hash'] = 1
-        with self.assertRaisesRegex(writer.Error, 'INVALID_TIMING'): self.apply(p)
+    def test_misleading_counts_or_obsolete_plan_contract_is_rejected(self):
+        p = self.preview(); p['counts']['candidates'] = 0
+        with self.assertRaisesRegex(writer.Error, 'INVALID_PLAN'): self.apply(p)
+        for schema in (1, 2):
+            p = self.preview(); p['schema'] = schema
+            with self.assertRaisesRegex(writer.Error, 'INVALID_PLAN'): self.apply(p)
+        p = self.preview(); p['workload'] = {}
+        with self.assertRaisesRegex(writer.Error, 'INVALID_PLAN'): self.apply(p)
         self.assertEqual(self.before, self.core.state_path().read_bytes())
 
     def test_exact_consent_integrity_rechecked_before_publication(self):
@@ -235,24 +258,12 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(self.before, self.core.state_path().read_bytes())
         self.assertEqual('not_applied', writer.recover(self.core, p['id'])['state'])
 
-    def test_temporal_preflight_cap_refuses_before_hash_or_operation_creation(self):
-        original = writer.content
+    def test_metadata_collection_exceeding_600_refuses_before_intent(self):
+        p = self.preview(); original = writer.candidate_metadata
         def slow(core, plan):
-            result = original(core, plan); self.elapsed += writer.MAX_EXECUTION
-            return result
-        with patch.object(writer, 'content', side_effect=slow): p = self.preview()
-        self.assertFalse(p['workload']['temporal_viable'])
-        with patch.object(writer, 'content', side_effect=AssertionError('must preflight first')):
-            with self.assertRaisesRegex(writer.Error, 'TEMPORAL_PREFLIGHT'): self.apply(p)
-        self.assertFalse(writer.root().exists()); self.assertEqual(self.before, self.core.state_path().read_bytes())
-
-    def test_unexpected_hash_slowdown_aborts_before_intent(self):
-        p = self.preview(); original = writer.content
-        def slow(core, plan):
-            result = original(core, plan); self.elapsed += p['workload']['execution_limit_seconds']
-            return result
-        with patch.object(writer, 'content', side_effect=slow):
-            with self.assertRaisesRegex(writer.Error, 'EXECUTION_EXPIRED'): self.apply(p)
+            original(core, plan); self.now += writer.TTL
+        with patch.object(writer, 'candidate_metadata', side_effect=slow):
+            with self.assertRaisesRegex(writer.Error, 'EXPIRED'): self.apply(p)
         self.assertFalse(writer.root().exists()); self.assertEqual(self.before, self.core.state_path().read_bytes())
 
     def test_expiry_is_rechecked_under_locks_and_old_plans_refused(self):
@@ -268,18 +279,6 @@ class ApplyTests(unittest.TestCase):
         self.assertFalse(writer.root().exists())
         p['schema'] = 1
         with self.assertRaisesRegex(writer.Error, 'INVALID_PLAN'): self.apply(p)
-
-    def test_execution_limit_after_backup_is_recoverable_and_wall_clock_jump_does_not_extend(self):
-        p = self.preview(); original = writer.write_exclusive
-        def expire(fd, name, raw):
-            result = original(fd, name, raw)
-            if name == 'state.before.json':
-                self.now -= 10000; self.elapsed += p['workload']['execution_limit_seconds']
-            return result
-        with patch.object(writer, 'write_exclusive', side_effect=expire):
-            with self.assertRaisesRegex(writer.Error, 'RECOVERY_NEEDED'): self.apply(p)
-        self.assertEqual(self.before, self.core.state_path().read_bytes())
-        self.assertEqual('not_applied', writer.recover(self.core, p['id'])['state'])
 
     def fail_first_intent(self, p, stage='atomic'):
         original_atomic, original_replace, original_sync = writer.atomic, writer.os.replace, writer.os.fsync
@@ -578,7 +577,7 @@ class ApplyTests(unittest.TestCase):
 
     def test_media_writable_by_another_account_is_not_authorized(self):
         next(self.f.source_root.iterdir()).chmod(0o660)
-        with self.assertRaisesRegex(writer.Error, 'UNSAFE_CONTENT'): self.preview()
+        with self.assertRaisesRegex(writer.Error, 'UNSAFE_MEDIA_METADATA'): self.preview()
         self.assertEqual(self.before, self.core.state_path().read_bytes())
 
 

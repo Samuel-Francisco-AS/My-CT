@@ -8,7 +8,6 @@ from contextlib import contextmanager, ExitStack
 import fcntl
 import hashlib
 import json
-import math
 import os
 from pathlib import Path
 import re
@@ -17,8 +16,7 @@ import time
 import uuid
 
 LIMIT = 16 * 1024 * 1024
-TTL = 600  # Acceptance window, not time spent proving identity under locks.
-MAX_EXECUTION = 24 * 60 * 60
+TTL = 600
 HEX = re.compile(r'[0-9a-f]{64}')
 TERMINAL = {'succeeded', 'failed', 'cancelled'}
 CONFLICT = {'pending', 'uncertain', 'starting', 'running', 'cancelling', 'archiving',
@@ -184,33 +182,22 @@ def provenance(path, plan):
     return digest(raw)
 
 
-def content(core, plan):
-    """One SHA256 per candidate inode, with nofollow descriptor and stable stat."""
-    result, measured = {}, {}
+def candidate_metadata(core, plan):
+    """Stat only: pin safe ancestors, never read or hash media contents."""
     for entry in plan['entries']:
         if not entry['eligible']: continue
-        path = core.media_root() / core.safe_relative(entry['path'])
-        with parent(path) as directory:
-            fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
-            try:
-                s = os.fstat(fd)
-                expected = entry['after']; evidence = entry['evidence']['source_stat']
+        evidence = entry['evidence']
+        expected = evidence['source_stat']
+        paths = [(Path(evidence['source']), expected['ctime_ns']),
+                 (core.media_root() / core.safe_relative(entry['path']), evidence['library_ctime_ns'])]
+        for path, ctime in paths:
+            with parent(path) as directory:
+                s = os.stat(path.name, dir_fd=directory, follow_symlinks=False)
                 if not stat.S_ISREG(s.st_mode) or s.st_uid != os.getuid() or s.st_mode & 0o022:
-                    raise Error('UNSAFE_CONTENT')
-                if ((s.st_dev, s.st_ino) != (expected['dev'], expected['ino']) or
-                        s.st_ctime_ns != evidence['ctime_ns'] or s.st_size != evidence['size']):
-                    raise Error('CONTENT_CHANGED')
-                key = (s.st_dev, s.st_ino)
-                if key not in measured:
-                    h = hashlib.sha256()
-                    while chunk := os.read(fd, 1024 * 1024): h.update(chunk)
-                    measured[key] = h.hexdigest()
-                if metadata(s) != metadata(os.fstat(fd)) or metadata(s) != metadata(os.stat(path.name, dir_fd=directory, follow_symlinks=False)):
-                    raise Error('CONTENT_CHANGED')
-                result[entry['path']] = measured[key]
-            finally:
-                os.close(fd)
-    return result
+                    raise Error('UNSAFE_MEDIA_METADATA')
+                if (any(getattr(s, 'st_' + field) != expected[field]
+                        for field in ('dev', 'ino', 'size', 'mtime_ns', 'nlink', 'uid')) or s.st_ctime_ns != ctime):
+                    raise Error('MEDIA_METADATA_CHANGED')
 
 
 def read_rows(core):
@@ -223,8 +210,7 @@ def base_plan(core, rows, state):
     except Exception: raise Error('PROOF_UNAVAILABLE') from None
 
 
-def snapshot(core, proof, hash_content=True, timings=None):
-    started = time.monotonic()
+def snapshot(core, proof):
     raw, meta = read_private(core.state_path())
     state = document(raw)
     if not isinstance(state.get('links'), dict) or not isinstance(state.get('ignored'), list): raise Error('INVALID_INDEX')
@@ -236,82 +222,47 @@ def snapshot(core, proof, hash_content=True, timings=None):
     rpc = sorted([{k: row.get(k) for k in fields} for row in rows], key=lambda x: x['hash_string'])
     result = {'plan': plan, 'index_sha256': digest(raw), 'index_stat': meta, 'rpc': rpc,
               'environment': environment(), 'provenance_sha256': provenance(proof, plan)}
-    collected = time.monotonic()
-    if hash_content: result['contents'] = content(core, plan)
-    hashed = time.monotonic()
-    # Hashing may take minutes. Check stat evidence and all authorizations again.
+    candidate_metadata(core, plan)
+    # Recollect identity/RPC/control files after metadata inspection as well.
     if base_plan(core, read_rows(core), state) != plan:
         raise Error('PLAN_CHANGED')
     if read_private(core.state_path())[0] != raw or environment() != result['environment']:
         raise Error('PLAN_CHANGED')
-    if timings is not None:
-        timings.update(collect=collected - started, hash=hashed - collected,
-                       recheck=time.monotonic() - hashed)
     return result, state, raw
 
 
-def workload(plan, seconds=None):
-    """Logical bytes read by hashing, deduplicated exactly as content(); not SSD IO."""
-    files = {(e['after']['dev'], e['after']['ino']): e['evidence']['source_stat']['size']
-             for e in plan['entries'] if e['eligible']}
-    size = sum(files.values())
-    # Measure the entire preview (RPC/stat/hash/rechecks), conservatively including
-    # overhead. Cache/load can change: this is a projection, never a guarantee.
-    if seconds is not None and (type(seconds) not in (int, float) or not math.isfinite(seconds) or seconds < 0):
-        raise Error('INVALID_TIMING')
-    required = max(TTL, math.ceil(3 * seconds + 120)) if seconds is not None else None
-    return {'candidate_paths': plan['eligible'], 'distinct_files': len(files),
-            'bytes_per_pass': size, 'full_passes': 2, 'total_read_bytes': 2 * size,
-            'preview_seconds': seconds,
-            'observed_effective_bytes_per_second': size / seconds if seconds else None,
-            'estimated_apply_seconds': seconds,
-            'execution_limit_seconds': required,
-            'maximum_execution_seconds': MAX_EXECUTION,
-            'temporal_viable': required <= MAX_EXECUTION if required is not None else None}
-
-
-def estimate(core, proof):
-    snap, _, _ = snapshot(core, proof, hash_content=False)
-    return {'application_supported': False, 'workload': workload(snap['plan']),
-            'summary': dict(Counter(e['reason'] for e in snap['plan']['entries']))}
-
-
-def check_execution(deadline):
-    if time.monotonic() >= deadline: raise Error('EXECUTION_EXPIRED')
+def overview(plan):
+    summary = dict(Counter(e['reason'] for e in plan['entries']))
+    total, candidates = len(plan['entries']), plan['eligible']
+    current, absent = summary.get('CURRENT', 0), summary.get('ABSENT', 0)
+    filesystems = {encoded(e['after']['filesystem']) for e in plan['entries'] if 'after' in e}
+    return {'summary': summary,
+            'counts': {'examined': total, 'candidates': candidates, 'current': current,
+                       'absent': absent, 'protected': total - candidates - current - absent},
+            'filesystems': [document(raw) for raw in sorted(filesystems)]}
 
 
 def preview(core, proof, now=None):
-    started = time.monotonic()
-    phases = {}
-    snap, _, _ = snapshot(core, proof, timings=phases)
-    diagnostic = workload(snap['plan'], time.monotonic() - started)
+    snap, _, _ = snapshot(core, proof)
     if not snap['plan']['eligible']: raise Error('NO_CANDIDATES')
     issued = int(time.time() if now is None else now)
-    result = {'schema': 2, 'application_supported': True, 'issued': issued, 'expires': issued + TTL,
-              'workload': diagnostic, 'preview_phases_seconds': phases,
-              'nonce': uuid.uuid4().hex, 'snapshot': snap,
-              'summary': dict(Counter(x['reason'] for x in snap['plan']['entries'])),
+    result = {'schema': 3, 'application_supported': True, 'issued': issued, 'expires': issued + TTL,
+              'nonce': uuid.uuid4().hex, 'snapshot': snap, **overview(snap['plan']),
               'updates': [x['path'] for x in snap['plan']['entries'] if x['eligible']]}
     result['id'] = digest(encoded(result))
     return result
 
 
 def validate(plan, confirmation, legacy, now):
-    if not isinstance(plan, dict) or plan.get('schema') != 2: raise Error('INVALID_PLAN')
+    if not isinstance(plan, dict) or plan.get('schema') != 3: raise Error('INVALID_PLAN')
     inner = plan['snapshot']['plan']
-    if (set(plan) != {'schema', 'application_supported', 'issued', 'expires', 'nonce', 'snapshot', 'summary', 'updates', 'id', 'workload', 'preview_phases_seconds'} or
+    if (set(plan) != {'schema', 'application_supported', 'issued', 'expires', 'nonce', 'snapshot', 'summary', 'updates', 'id', 'counts', 'filesystems'} or
             plan['application_supported'] is not True or
             not re.fullmatch('[0-9a-f]{32}', plan.get('nonce', '')) or
-            plan['updates'] != [e['path'] for e in inner['entries'] if e['eligible']] or
-            plan['summary'] != dict(Counter(e['reason'] for e in inner['entries']))):
+            plan['updates'] != [e['path'] for e in inner['entries'] if e['eligible']]):
         raise Error('INVALID_PLAN')
-    phases = plan['preview_phases_seconds']
-    if (set(phases) != {'collect', 'hash', 'recheck'} or
-            any(type(v) not in (int, float) or not math.isfinite(v) or v < 0 for v in phases.values()) or
-            sum(phases.values()) > plan['workload']['preview_seconds'] + 0.001):
-        raise Error('INVALID_TIMING')
-    if plan['workload'] != workload(inner, plan['workload']['preview_seconds']):
-        raise Error('INVALID_TIMING')
+    if any(plan[k] != value for k, value in overview(inner).items()):
+        raise Error('INVALID_PLAN')
     identity = plan.get('id', '')
     if (not HEX.fullmatch(identity) or identity != confirmation or
             identity != digest(encoded({k: v for k, v in plan.items() if k != 'id'}))):
@@ -388,11 +339,7 @@ def apply(core, plan, proof, confirmation, legacy=None):
     identity = plan['id']
     hashes = plan_hashes(plan)
     with locks(core, hashes):
-        # Consume exact consent while still fresh, before the long locked proof.
-        accepted = int(time.time())
-        validate(plan, confirmation, legacy, accepted)
-        if not plan['workload']['temporal_viable']: raise Error('TEMPORAL_PREFLIGHT')
-        deadline = time.monotonic() + plan['workload']['execution_limit_seconds']
+        validate(plan, confirmation, legacy, int(time.time()))
         environment()  # No new work can be accepted while delivery.lock is held.
         old, _ = read_private(root() / identity / 'transaction.json', missing=True)
         if old is not None:
@@ -405,7 +352,7 @@ def apply(core, plan, proof, confirmation, legacy=None):
         pending_operations()
         fresh, state, before = snapshot(core, proof)
         if fresh != plan['snapshot']: raise Error('PLAN_CHANGED')
-        check_execution(deadline)  # Abort before creating intent/backup on overrun.
+        validate(plan, confirmation, legacy, int(time.time()))
         inner = fresh['plan']
         proposed = core.reconciled_state(state, inner, inner, inner['fingerprint'], accept_legacy=legacy == identity)
         after = encoded(proposed)
@@ -432,21 +379,15 @@ def apply(core, plan, proof, confirmation, legacy=None):
                     try:
                         write_exclusive(catalog, temp, after)
                         journal['state'] = 'committing'; atomic(directory, 'transaction.json', encoded(journal))
-                        # ctime/mtime/stat + RPC/catalog/jobs must still match after
-                        # backup and temp fsync. No unprotected second hash pass.
-                        last, _, _ = snapshot(core, proof, hash_content=False)
-                        if last != {k: v for k, v in fresh.items() if k != 'contents'}:
-                            raise Error('PLAN_CHANGED')
-                        # Consent was accepted under locks; no renewal or unlocked
-                        # reuse. Recheck the exact accepted ID/consents as well as
-                        # the separate execution deadline before publication.
-                        validate(plan, confirmation, legacy, accepted)
-                        check_execution(deadline)
+                        # Metadata/RPC/control files must still match after the
+                        # durable backup and temporary catalog, before publication.
+                        last, _, _ = snapshot(core, proof)
+                        if last != fresh: raise Error('PLAN_CHANGED')
                         if read_at(catalog, core.state_path().name)[0] != before: raise Error('INDEX_CHANGED')
                         with parent(core.state_path(), private=True) as active:
                             if (os.fstat(active).st_dev, os.fstat(active).st_ino) != (os.fstat(catalog).st_dev, os.fstat(catalog).st_ino):
                                 raise Error('DIRECTORY_CHANGED')
-                        check_execution(deadline)  # Also cover the final catalog/directory reads.
+                        validate(plan, confirmation, legacy, int(time.time()))
                         os.replace(temp, core.state_path().name, src_dir_fd=catalog, dst_dir_fd=catalog)
                         os.fsync(catalog)
                         if read_at(catalog, core.state_path().name)[0] != after: raise Error('INDEX_CHANGED')
@@ -532,8 +473,8 @@ def recover_missing(core, identity, plan):
 
 def run(core, argv):
     try:
-        if len(argv) == 3 and argv[0] in {'reconcile-preview', 'reconcile-estimate'} and argv[1] == '--provenance':
-            return (preview if argv[0] == 'reconcile-preview' else estimate)(core, Path(argv[2]))
+        if len(argv) == 3 and argv[:2] == ['reconcile-preview', '--provenance']:
+            return preview(core, Path(argv[2]))
         if len(argv) == 3 and argv[:2] == ['reconcile-recover', '--operation']:
             return recover(core, argv[2])
         if len(argv) == 5 and argv[:2] == ['reconcile-recover', '--operation'] and argv[3] == '--plan':
