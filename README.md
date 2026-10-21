@@ -1,5 +1,14 @@
 # My-CT
 
+**MYCT-SETUP integrada à `main` (21/10/2026):** [PR #59 MERGED](https://github.com/Samuel-Francisco-AS/My-CT/pull/59),
+marco `567d51409b10f2ca01c0f822942efd8c0baaf21e`, reúne documentação,
+SETUP-1/2/3/4 e AUDIT-FIX-1 com históricos preservados. APK **code 48** aceito
+funcionalmente pelo proprietário no Moto G06; nenhuma nova versão/release.
+Fedora pessoal e helpers instalados não foram alterados. Provisionamento completo
+em Fedora físico limpo **NÃO VALIDADO**. Issue #53 permanece aberta até confirmação
+final do proprietário. [Integração, testes e limites](docs/MYCT-SETUP-INTEGRATION-RELATORIO.md).
+Os registros de candidatas abaixo descrevem o estado nas respectivas datas.
+
 **MYCT-SETUP-AUDIT-FIX-1 candidata (21/10/2026):** correções pós-auditoria de
 assinatura RPM, publicação/retomada, caminhos/locks, ordem dos componentes,
 prévia Rclone e retenção de campos secretos. APK **0.13.1-setup-audit-fix1-rc1 /

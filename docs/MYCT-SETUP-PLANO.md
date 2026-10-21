@@ -1,5 +1,12 @@
 # MYCT-SETUP — Fedora instalável e recuperável pelo Android
 
+**Atualização 21/10/2026:** documentação e implementação SETUP-1/2/3/4, com
+correções pós-auditoria, consolidadas pela [PR #59](https://github.com/Samuel-Francisco-AS/My-CT/pull/59).
+APK code48 aceito funcionalmente no Moto pelo proprietário. Provisionamento
+completo em Fedora físico limpo permanece **NÃO VALIDADO**. Este texto preserva
+o planejamento original de 20/10; seu estado inicial abaixo é histórico.
+[Resultado, limitações e evidências da integração](MYCT-SETUP-INTEGRATION-RELATORIO.md).
+
 **Decidido:** 20/10/2026, pelo proprietário.
 
 **Estado:** planejamento aprovado; **nenhuma implementação, instalação ou recuperação executada**.

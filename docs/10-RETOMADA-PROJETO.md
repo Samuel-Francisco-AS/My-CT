@@ -1,4 +1,36 @@
-# My-CT — guia de retomada após MYCT-5D-B2
+# My-CT — guia de retomada
+
+## Referência atual — MYCT-SETUP integrada em 21/10/2026
+
+[PR #59 MERGED](https://github.com/Samuel-Francisco-AS/My-CT/pull/59), marco
+`567d51409b10f2ca01c0f822942efd8c0baaf21e`: documentação/ADR-019,
+SETUP-1/2/3/4 e correções pós-auditoria na `main`, com commits originais preservados.
+O registro documental posterior acompanha esse marco sem mudar código de execução.
+PRs #54/#55 reconhecidas MERGED pelo GitHub; #56/#57/#58 encerradas como
+substituídas pela #59, sem merge individual. Bases e branches remotas preservadas.
+[Relatório de integração e evidências](MYCT-SETUP-INTEGRATION-RELATORIO.md).
+
+APK `dev.myct` **0.13.1-setup-audit-fix1-rc1 / code 48**, aceito funcionalmente
+no Moto G06 pelo proprietário. Manter a instalação e os dados: nenhum novo APK,
+reinstalação, alteração de versão ou assinatura é necessário por este merge.
+Fedora físico limpo continua **NÃO VALIDADO**; a issue #53 aguarda confirmação final.
+
+**Git não implanta no Fedora pessoal.** Core, PostgreSQL 18 privado e seu serviço
+de usuário, Transmission, Prowlarr, Rclone/Drive, Jellyfin, catálogos e helpers
+anteriores permanecem protegidos. Não instalar helpers nem executar os comandos
+históricos de instalação/partida/parada abaixo no servidor em uso. Eles documentam
+etapas anteriores, não são a sequência atual de manutenção. Mudanças operacionais
+exigem autorização própria e inspeção passiva do estado real.
+
+Retomar desenvolvimento neste checkout único: conferir árvore limpa, `git fetch
+origin`, comparar `main`/`origin/main` e avançar somente por fast-forward quando
+apropriado. Para o instalador, usar **Opções → Configurar servidor**, diagnóstico
+passivo e plano aprovado separadamente. Testes mutáveis somente em ambiente
+descartável. Rclone OAuth continua humano; não consultar Drive como teste passivo.
+Recuperação PostgreSQL limitada à migração 001, catálogos históricos não ativados
+automaticamente e mídia não respaldada não recuperável pelo instalador.
+
+## Registros históricos anteriores
 
 **MYCT-5D-B2 ACEITA no Moto G06 em 16/10/2026; PR #21 integrado à main (merge `ed593cffe798e01177c249b9acffc700184a455a`):** APK
 **0.5.6-antivirus/code 13**, seção Antivírus no relatório de arquivos e
