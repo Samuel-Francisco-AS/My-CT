@@ -6,7 +6,8 @@ correção de Atualizar durante `space` e progresso real de leitura.
 commit auditado `f239bee`; helpers atualizados sob autorização e backup privado.
 **Aceite Moto pendente; PR #60 permanece draft, sem merge.**
 Teste físico identificou device persistido antigo no índice Media e lista parcial
-de vínculos. Correção pós-teste em auditoria: plano/aplicador supervisionado,
+de vínculos. Correção pós-teste em auditoria: plano/aplicador supervisionado
+somente por metadados (sem leitura dos vídeos),
 inventário completo e UI protegida; fonte code 50, **sem nova publicação/deploy
 ou migração pessoal**. [Contrato do aplicador](docs/MYCT-MEDIA-RECONCILE-APLICADOR.md).
 [Diagnóstico preservado, correção e migração futura](docs/MYCT-CLOUD-R1-POS-TESTE-DIAGNOSTICO.md).

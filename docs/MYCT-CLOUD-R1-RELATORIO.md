@@ -1,5 +1,12 @@
 # MYCT-CLOUD-R1 — seleção e progresso da consulta de espaço
 
+> Contrato atual do aplicador Media: reconciliação **somente por metadados**,
+> schema 3, confirmação de 600 s, sem hashing de vídeos. Backup/recuperação
+> preservados. [Contrato](MYCT-MEDIA-RECONCILE-APLICADOR.md) e
+> [diagnóstico, investigação de st_dev e testes](MYCT-CLOUD-R1-POS-TESTE-DIAGNOSTICO.md).
+> Em revisão na PR #60 draft, sem implantação/migração pessoal.
+
+
 ## Atualização pós-teste físico — 21/10/2026
 
 O teste da candidata code 49 identificou registros Media com device persistido

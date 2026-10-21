@@ -582,7 +582,9 @@ Essa decisão reduz risco de retry/rollback após interrupção sem introduzir u
 framework de migrações. Nenhuma migração real ou implantação autorizada nesta
 entrega. [Contrato, limites e operação futura](MYCT-MEDIA-RECONCILE-APLICADOR.md).
 
-## 21/10/2026 — Reconciliação Media: aceitação curta e execução integral limitada
+## 21/10/2026 — Histórico superado: aceitação curta e execução integral limitada
+
+**Substituído pela reconciliação por metadados descrita na decisão seguinte.**
 
 Após MA01/MA02 da [auditoria da Luna](https://github.com/Samuel-Francisco-AS/My-CT/pull/60#issuecomment-6325881368),
 separam-se os 600 s de aceitação do plano (rechecados sob locks) do deadline
@@ -599,3 +601,17 @@ evidências forem reconhecidas; nunca restaura catálogo nem apaga órfãos.
 [Contrato e procedimento](MYCT-MEDIA-RECONCILE-APLICADOR.md). Desenvolvimento em
 fixtures, PR #60 draft, sem implantação, migração pessoal ou nova APK; aguardar
 reauditoria antes de qualquer operação real.
+
+
+## 21/10/2026 — Reconciliação Media somente por metadados
+
+Por autorização expressa do proprietário, remover hashing/leitura dos vídeos e a
+complexidade temporal criada para acomodá-los. Reconciliação corrige identidade
+de hardlinks; não audita conteúdo. Plano schema 3 vincula metadados/RPC/estado/
+procedência, com resumo e ID exato; validade única de 600 s, inclusive antes do
+rename. SHA-256 só para controles pequenos. Backup exclusivo, locks na ordem
+existente, publicação atômica e recuperação MA02 preservados. Sem orçamento por
+GiB, throughput, passagens ou comando estimate. Proteções de archive/restore/
+space/release permanecem. UUID/subvolume acrescentam evidência, mas não promovem
+migração automática em outro boot. [Contrato atual](MYCT-MEDIA-RECONCILE-APLICADOR.md).
+Nenhuma implantação, reconciliação pessoal ou APK publicada; aguardar Luna.

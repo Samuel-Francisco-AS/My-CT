@@ -1,5 +1,10 @@
 # MYCT-CLOUD-R1 — diagnóstico após teste físico: Nuvem e biblioteca local
 
+> **Contrato atual: reconciliação somente por metadados, schema 3 e validade de
+> 600 s. Ver “Simplificação autorizada — identidade por metadados” ao final e o
+> [contrato atual](MYCT-MEDIA-RECONCILE-APLICADOR.md). As seções anteriores sobre
+> conteúdo, duas passagens e orçamento MA01 são histórico superado.**
+>
 > O diagnóstico abaixo foi preservado integralmente no commit `0dd5453` antes
 > das alterações. A seção final **Correção implementada para nova auditoria**
 > registra a missão posterior autorizada de código/testes, sem implantação.
@@ -722,7 +727,7 @@ procedência, plano fresco revisado, confirmação supervisionada, conferência 
 recibo/backup e novo teste Moto sem exclusão real. **R1 segue aberta; R2 não
 iniciada.**
 
-## Correção pós-auditoria do aplicador — MA01/MA02
+## Histórico superado — correção MA01/MA02 com hashing (não usar como procedimento atual)
 
 21/10/2026. [Auditoria integral da Luna](https://github.com/Samuel-Francisco-AS/My-CT/pull/60#issuecomment-6325881368)
 sobre código `246953e` / HEAD documental `5f92a3d`: CHANGES REQUESTED, MA01
@@ -881,3 +886,190 @@ prazo de aceitação/execução e recuperação sem intent. Depois, somente com 
 autorização: implantação coerente/backup, procedência, estimate/prévia medida,
 revisão do plano exato e aplicação supervisionada. Não implantar, migrar, publicar
 APK/release, fazer merge ou iniciar R2 nesta missão. R1 continua aberta.
+
+## Simplificação autorizada — identidade por metadados
+
+21/10/2026. Por solicitação expressa do proprietário, substitui o procedimento
+com hashing/MA01 do HEAD `5e5f5889b238ac48d4d2a17ddb340ee132606c65`.
+Código/testes: `136b1636e1abdafdaa8617164f655f756f27571d`.
+**Contrato atual: schema 3, somente metadados, confirmação de 600 s.** Histórico
+acima preservado para rastreabilidade, sem servir de orientação operacional atual.
+Mesma branch/PR #60 draft; nenhuma implantação, migração pessoal ou nova APK.
+
+### Código removido e provas preservadas
+
+Removida `content()` de `ops/myct_media_reconcile.py`: abertura/leitura sequencial
+de vídeo em blocos de 1 MiB, SHA-256 por conteúdo e mapa `snapshot.contents`.
+Removidos `workload()`, `estimate()`, `reconcile-estimate`, taxas, volume/passagens
+de hashing, tempos associados, `MAX_EXECUTION`, teto de 24 h e deadline especial.
+O módulo passa de **552 para 493 linhas**, sem dependência nova ou framework.
+SHA-256 continua protegendo os controles pequenos: plano, índice, backup,
+procedência, recibos e evidências de journal. Nuvem mantém todas as verificações
+próprias de integridade; archive/restore/space/release não foram modificados.
+
+`candidate_metadata()` usa stat por diretório seguro/O_NOFOLLOW em origem e
+biblioteca, sem ler dados; preserva dono/permissões e compara device/inode,
+tamanho, nlink, UID, mtime e ctime com as evidências. `reconciliation_plan()` mantém
+origem gerenciada única, ID registrado, torrent completo/metadados/sem erro,
+tamanho exato no torrent, ausência de symlinks/aliases desconhecidos, inode antigo
+e UUID/subvolume coerentes. Não aceita inode ou conteúdo igual isoladamente.
+
+Prévia: somente leitura, sem lock de escrita, com `counts` (examinados,
+candidatos, coerentes, ausentes, protegidos), motivos, filesystems comprovados,
+caminhos propostos e ID canônico. Protegidos incluem `ignored`; nenhuma opção é
+aprovada automaticamente. Planos schemas 1/2 são recusados para aplicação.
+
+Confirmação: `--confirm ID` e, para legado, `--accept-legacy ID`, ambos exatos e
+revisados pelo proprietário, dentro de **600 s após a prévia**. Sem orçamento
+longo/renovação; validade reconferida antes/sob locks, após recoleta e antes do
+rename. Metadados/RPC lentos podem expirar, sem autorização artificial.
+
+Aplicação: ordem de locks delivery → catálogos → nomeação ordenada → Media;
+reconsulta/compara o snapshot completo, cria backup exclusivo privado e intent,
+escreve temporário/fsync, reconsulta metadados/RPC/ambiente e autorização, publica
+por replace/fsync e recibo. Somente registros candidatos mudam. Backup, journal,
+concorrência, idempotência e recuperação MA02 foram preservados, sem restauração
+ou exclusão automática de evidências. Recuperação de journal válido continua
+compatível com o formato anterior; via sem primeiro intent requer plano schema 3
+exato, catálogo anterior intacto e evidências reconhecidas. Não reutilizar plano
+antigo de hashing nem editar o catálogo manualmente.
+
+### Origem de dev 50/51 — evidência e limites
+
+**Confirmado no código/histórico:** a persistência de `{id, dev, ino}` e comparação
+estrita de device datam de `6ada496875a6abbad6e6bbac15a90e714d15b636`
+(18/10/2026, implementação inicial Media). É anterior ao SETUP (`8a2212f`,
+20/10/2026) e às correções R1. Comparar um número de dispositivo persistido como
+se fosse identidade estável entre boots pode bloquear vínculos legítimos.
+`bec0484` acrescentou UUID/subvolume e plano explícito; não normalizou device.
+
+No Linux/Btrfs upstream, `btrfs_getattr()` publica em `stat.dev` o `anon_dev` da
+raiz do subvolume; a inicialização dessa raiz pode alocar um novo dispositivo
+anônimo via `get_anon_bdev()`. Portanto, esse número é atribuído em memória,
+não é o UUID persistente do volume. Isso explica um mecanismo possível para
+renumeração após nova instanciação/montagem, **não reconstitui o evento pessoal**.
+Fontes primárias: [inode.c](https://code.googlesource.com/linux/torvalds/linux/+/23eb7901811a06805ec7d6e766dd82f083d03204/fs/btrfs/inode.c),
+[disk-io.c](https://code.googlesource.com/linux/torvalds/linux/+/f24ba334afafc70c3149e9db9c0cf8ecc6d52a09/fs/btrfs/disk-io.c).
+A [documentação Btrfs](https://btrfs.readthedocs.io/en/latest/btrfs-subvolume.html)
+esclarece o namespace próprio dos inodes e o ID persistente do subvolume; inode
+isolado não identifica um arquivo no filesystem inteiro.
+
+Inspeção objetiva desta missão, exclusivamente de leitura (`findmnt`, stat do
+home, `/etc/fstab`, diários de kernel de dois boots, histórico/fontes Git):
+
+| Evidência sanitizada | Resultado |
+| --- | --- |
+| Filesystem do home / raiz de subvolume | Btrfs / `/home` |
+| `stat(home).st_dev` atual | **51** |
+| fstab raiz/home | Mesmo dispositivo configurado; home com `subvol=home` |
+| Diários de kernel atual/anterior | 7 mensagens Btrfs em cada, uma montagem inicial e um UUID por boot |
+| Comparação dos UUIDs nos dois boots | **Iguais**; UUID pessoal não publicado |
+| Mensagens Btrfs de erro/read-only nessa amostra | 0 / 0; não é auditoria completa de saúde |
+| Primeira entrada de kernel disponibilizada, boot atual | 21/10/2026 **10:56:45,084720 UTC** |
+| Primeira entrada disponibilizada, boot anterior | 20/10/2026 13:48:45,073785 UTC |
+
+O horário 13:56:44 UTC anotado na seção histórica não coincide com esta leitura
+do diário; ele não é usado como prova do instante exato da mudança. Não foi
+reconstituída a origem dessa diferença de anotação. A primeira mensagem disponível
+também não atesta sozinha a hora de alocação do device do subvolume.
+
+**Hipótese sustentada:** reinicialização/nova instanciação de subvolume Btrfs
+renumerou o dispositivo anônimo, sem mudar os hardlinks observados. Os recibos
+anteriores já documentados têm dev 50 e os posteriores/stat têm 51. Mesmo UUID
+nos dois boots é compatível com essa hipótese, mas não exclui clonagem/restauração
+anterior nem comprova continuidade histórica dos arquivos.
+
+**Sem evidência suficiente:** qual alocação/ordem de montagem produziu exatamente
+50 ou 51. O diário disponível não registra essa associação por inode/subvolume.
+Na inspeção de SETUP não foi encontrado código que monte/desmonte, altere fstab
+ou subvolumes; nos helpers Nuvem, `check_mounts()` somente lê mountinfo para
+recusar árvores inseguras. Não há prova para atribuir a mudança ao SETUP/Nuvem.
+Não foram alterados fstab, montagens, serviços, torrents ou configurações.
+
+O registro enriquecido não elimina automaticamente um futuro bloqueio por device:
+`record_matches()` continua estrito. UUID/subvolume/tamanho/mtime/UID permitem
+uma proposta `DEVICE_REANCHOR` mais bem fundamentada, mantendo a exigência de
+prévia/confirmação explícita. Essa intervenção futura é uma limitação consciente,
+sem migração insegura ou normalização automática. Teste específico a cobre.
+
+### Testes e compatibilidade
+
+Somente fixtures descartáveis; contêiner rootless Fedora 44 como tester, rede
+desabilitada, sem mounts pessoais, 1536 MiB/1 CPU/1024 PIDs. Mesmas ferramentas
+existentes: Python 3.14.7, Java 21, Gradle/SDK offline. Nenhuma dependência instalada.
+
+| Validação final | PASS | FAIL | SKIP |
+| --- | ---: | ---: | ---: |
+| Operacional completo — 274 casos | **272** | **0** | **2** |
+| Aplicador, incluído acima | **40** | **0** | **0** |
+| Plano, incluído acima | **18** | **0** | **0** |
+| SETUP completo | **58** | **0** | **0** |
+| JVM Android — 331 casos, execução forçada | **329** | **0** | **2** |
+| Cloud JVM, incluído no total | **37** | **0** | **0** |
+
+Build, lint, sintaxe Python, diff --check e bundle SETUP: PASS. Lint: 0 erros,
+1 warning UseKtx/2 hints anteriores. SKIP: duas unidades transitórias sem user
+manager/linger e dois transportes opcionais JVM SSH/SFTP, sem ambiente real.
+Operacional: 64,859 s; SETUP: 11,483 s. Não são testes físicos no Moto.
+
+A fixture principal usa 264 candidatos, 14 coerentes, 1 origem divergente, 28
+registros ausentes e ignored. Preserva arquivos/inodes/nlink/conteúdo e catálogos
+de arquivo. Durante preview/apply, guardas falham se houver leitura de mídia via
+Python open/io.open ou descritor read/pread; arquivos pequenos de controle seguem
+legíveis. Preparação/conferência dos conteúdos das fixtures ocorre fora da operação
+supervisionada. Não se usa mídia pessoal e não se exige hash para confirmar o teste.
+
+Mantidos negativos de inode/ID/origem/tamanho/UUID/metadata, symlink/caminho inseguro,
+alias desconhecido, confirmação/plano divergentes, expiração sob locks e após
+backup, mudança de arquivo/RPC/tarefas/catálogo, concorrência, falhas de escrita/
+fsync/replace e recuperação conservadora. Teste adicional altera bytes mantendo
+tamanho e restaurando mtime; ctime divergente bloqueia. Não se promete detectar
+alteração que não apareça nas evidências ou manipulação privilegiada.
+
+Logs ignorados em `artifacts/myct-cloud-r1-metadata/`: `reconcile-initial.log`,
+`operational-final.log`, `setup-final.log`, `android-final.log`. Comandos:
+
+```bash
+# Dentro do contêiner descartável com cópia de ops/server:
+python3 -m unittest discover -s ops/tests -p 'test_*.py' -v
+python3 -m unittest discover -s ops/setup/tests -p 'test_*.py' -v
+# Build local, sem instalação/publicação:
+ANDROID_HOME=/home/sam/Android/Sdk ./android/gradlew -p android \
+  :app:testDebugUnitTest --rerun :app:buildSetupBundle \
+  :app:assembleDebug :app:lintDebug --offline --console=plain \
+  -Dorg.gradle.jvmargs='-Xmx1536m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8'
+```
+
+Manifesto SETUP continua com 17 fontes; geração determinística/hashes atualizados
+automaticamente pelos fontes. Compatibilidade dos módulos e recusa de helper
+preexistente divergente testadas. Payload conferido no APK local, sem catálogo,
+plano pessoal, backup ou credenciais. Android/Kotlin/assinatura/ABIs/code 50
+inalterados; release/tag code 49 e main preservadas.
+
+| Artefato SETUP metadata-only | SHA-256 |
+| --- | --- |
+| `payload.pyz` | `2173d9e0283b7fb81293c29ea90930eca3819e5081aa11507cef5b2ce70a383e` |
+| `diagnose.py` | `38db0f5ccd410eac885181e63bb79fb1bc65f599a7a2da2d3d765383214a7960` |
+
+Conferidos bytes/hashes das 17 fontes, integridade dos dois artefatos e igualdade
+do payload nos assets do APK local. Contêiner desta missão descartado após os
+testes, logs ignorados preservados. Arquivos alterados: `ops/myct_media_reconcile.py`,
+dispatch em `ops/myct-media`, testes `test_media_reconcile.py` e
+`test_media_reconcile_apply.py`; contrato, este relatório, decisões e notas atuais
+no README/relatório R1. Nenhum motor Nuvem ou código Kotlin foi alterado.
+
+### Limites e próxima operação, ainda não autorizada
+
+Metadados não garantem integridade audiovisual, conteúdo original ou continuidade
+histórica. Locks cooperativos/recoletas não são freeze contra root ou outro
+escritor que ignore a coordenação. Mudança observada expira o plano; não aplicar
+subconjunto novo silenciosamente. Exceção de origem, ausentes, coerentes e ignored
+permanecem preservados. As quantidades pessoais 264/14/1/28 continuam históricas;
+nenhum plano ou catálogo pessoal foi reavaliado/aplicado nesta missão.
+
+Após a revisão da Luna e autorização separada: pré-voo de tarefas, backup e
+instalação coerente dos helpers/módulo; verificar procedência do filesystem;
+gerar/revisar prévia metadata-only nova; confirmar ID e legado dentro de 600 s;
+conferir recibo/backup. Erro requer recuperação/classificação, sem restauração
+manual ou sobrescrita. Só depois novo teste Moto/Nuvem, sem exclusão real como
+condição. Sem benchmark integral de vídeos, R2, implantação ou migração agora.
