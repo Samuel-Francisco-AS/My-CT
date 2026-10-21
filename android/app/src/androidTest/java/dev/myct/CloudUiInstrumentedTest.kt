@@ -16,7 +16,10 @@ import java.util.concurrent.atomic.AtomicReference
 
 /** Fake SSH only. Requires an explicitly selected device; compilation is not device acceptance. */
 class CloudUiInstrumentedTest {
-    @Test fun thirteenSelectionsSurviveActualCompositionDisposalDuringSpaceQuery() {
+    @Test fun thirteenSelectionsSurviveActualCompositionDisposalDuringSpaceQuery() = spaceQueryLifecycle(dispose = true)
+    @Test fun manualRefreshDuringSpaceAllowsValidPreviewWithoutAnotherQuery() = spaceQueryLifecycle(dispose = false)
+
+    private fun spaceQueryLifecycle(dispose: Boolean) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
@@ -65,6 +68,15 @@ class CloudUiInstrumentedTest {
             if (node.text?.toString() == text) return true
             return (0 until node.childCount).any { find(node.getChild(it), text) }
         }
+        fun clickRefresh(node: AccessibilityNodeInfo?): Boolean {
+            node ?: return false
+            if (node.text?.toString() == "Atualizar") {
+                var button: AccessibilityNodeInfo = node
+                while (!button.isClickable) button = button.parent ?: return false
+                return button.isEnabled && button.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            }
+            return (0 until node.childCount).any { clickRefresh(node.getChild(it)) }
+        }
         fun scroll(node: AccessibilityNodeInfo?): Boolean {
             node ?: return false
             if (node.isScrollable && node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) return true
@@ -81,12 +93,14 @@ class CloudUiInstrumentedTest {
                 model.start(CloudWork("torrent", listOf("space", archive) + paths.flatMap { listOf("--remove-library", it) }))
             }; idle()
             assertEquals(paths, parseCloudTask(JSONObject(row.get())).work.librarySelection)
-            instrumentation.runOnMainSync { mounted.value = false }; idle()
+            assertTrue(clickRefresh(instrumentation.uiAutomation.rootInActiveWindow)); idle()
+            assertTrue(model.tasks.single { it.active }.active)
+            if (dispose) { instrumentation.runOnMainSync { mounted.value = false }; idle() }
             row.set(JSONObject(row.get()).put("state", "succeeded").put("result", plan(paths)).toString())
             instrumentation.runOnMainSync { model.refresh() }; idle()
-            instrumentation.runOnMainSync { mounted.value = true }; idle()
+            if (dispose) { instrumentation.runOnMainSync { mounted.value = true }; idle() }
             assertEquals(13, model.selectedLinks(archive).size)
-            assertFalse(model.canRelease(model.space!!, paths)) // Disposal revokes consent, retains choices.
+            assertEquals(!dispose, model.canRelease(model.space!!, paths)) // Only disposal revokes consent.
             repeat(16) {
                 if (!find(instrumentation.uiAutomation.rootInActiveWindow, "13/256 links selecionados")) {
                     scroll(instrumentation.uiAutomation.rootInActiveWindow); instrumentation.waitForIdleSync()

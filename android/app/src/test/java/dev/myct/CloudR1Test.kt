@@ -18,16 +18,20 @@ class CloudR1Test {
         var now = CLOUD_NOW
         @Volatile var row = cloudTaskJson(CloudWork("torrent", listOf("space", CLOUD_ARCHIVE)), result = plan())
         val starts = CopyOnWriteArrayList<CloudQuery.Start>()
-        val model = CloudModel(scope, { now }) { _, query -> when (query) {
-            CloudQuery.Snapshot -> cloudSnapshot(row)
-            is CloudQuery.Task -> JSONObject().put("ok", true).put("task", row).toString()
-            is CloudQuery.Start -> {
-                starts += query
-                row = cloudTaskJson(query.work, "running").put("id", query.id)
-                JSONObject().put("ok", true).put("task", row).toString()
+        val calls = CopyOnWriteArrayList<CloudQuery>()
+        val model = CloudModel(scope, { now }) { _, query ->
+            calls += query
+            when (query) {
+                CloudQuery.Snapshot -> cloudSnapshot(row)
+                is CloudQuery.Task -> JSONObject().put("ok", true).put("task", row).toString()
+                is CloudQuery.Start -> {
+                    starts += query
+                    row = cloudTaskJson(query.work, "running").put("id", query.id)
+                    JSONObject().put("ok", true).put("task", row).toString()
+                }
+                else -> error("space is non-cancellable")
             }
-            else -> error("space is non-cancellable")
-        } }
+        }
         fun waitIdle() = runBlocking { withTimeout(3000) { while (model.busy) delay(5) } }
         init {
             model.attach(SshConnection()); model.select(CLOUD_ARCHIVE); model.refresh(); waitIdle()
@@ -40,6 +44,74 @@ class CloudR1Test {
             model.refresh(); waitIdle()
         }
         override fun close() { scope.cancel() }
+    }
+    @Test fun manualRefreshDuringAcceptedSpaceKeepsThirteenLinksAndCanAuthorizeAtCompletion() = Fixture().use { f ->
+        val m = f.model
+        f.start()
+        assertFalse(m.busy); assertTrue(m.tasks.single { it.active }.active)
+        assertEquals(paths, f.starts.single().work.librarySelection)
+        val snapshots = f.calls.count { it == CloudQuery.Snapshot }
+        val taskReads = f.calls.count { it is CloudQuery.Task }
+        repeat(2) {
+            f.now += 100000
+            m.refreshFromUser(); f.waitIdle() // Exactly the action wired to Atualizar.
+            assertEquals(13, m.selectedLinks(CLOUD_ARCHIVE).size)
+            assertTrue(m.tasks.single { it.active }.active); assertNull(m.space)
+        }
+        assertEquals(snapshots, f.calls.count { it == CloudQuery.Snapshot })
+        assertEquals(taskReads + 2, f.calls.count { it is CloudQuery.Task })
+        f.now += 31400
+        f.complete() // succeeded, same 13 paths, can_release=true, blockers=[]
+        val p = m.space!!
+        assertEquals(paths, p.selected); assertTrue(p.canRelease); assertTrue(p.blockers.isEmpty())
+        assertEquals(13, m.selectedLinks(CLOUD_ARCHIVE).size)
+        assertTrue(m.canRelease(p, paths))
+        assertEquals(1, f.starts.size) // No second space request and no release execution.
+    }
+    @Test fun manualRefreshCannotUndoLegitimateInvalidationOrExpiryDuringSpace() {
+        for (event in listOf("navigation", "background", "reconnect", "expiry", "other-package")) Fixture().use { f ->
+            val m = f.model; f.start()
+            when (event) {
+                "navigation" -> { m.select(null); m.select(CLOUD_ARCHIVE) }
+                "background" -> m.invalidatePreview()
+                "reconnect" -> { m.attach(null); m.attach(SshConnection()); m.refresh(); f.waitIdle() }
+                "expiry" -> f.now += 600001
+                "other-package" -> m.select("e".repeat(64))
+            }
+            m.refreshFromUser(); f.waitIdle()
+            assertTrue(m.tasks.single { it.active }.active)
+            f.complete()
+            if (event == "other-package") assertNull(m.space)
+            m.viewTask(m.tasks.single()); f.waitIdle()
+            assertNotNull(m.space)
+            assertFalse(event, m.canRelease(m.space!!, paths))
+            assertEquals(1, f.starts.size)
+        }
+    }
+    @Test fun selectionEditsAreBlockedDuringSpaceAndAnActualEditStillRevokesAfterCompletion() = Fixture().use { f ->
+        val m = f.model; f.start()
+        assertFalse(m.actionsEnabled)
+        m.toggleLink(CLOUD_ARCHIVE, paths.first()) // Disabled by both model and UI while active.
+        assertEquals(paths.toSet(), m.selectedLinks(CLOUD_ARCHIVE))
+        m.refreshFromUser(); f.waitIdle(); f.complete()
+        assertTrue(m.canRelease(m.space!!, paths))
+        m.toggleLink(CLOUD_ARCHIVE, paths.first())
+        assertEquals(12, m.selectedLinks(CLOUD_ARCHIVE).size); assertNull(m.space)
+        m.refreshFromUser(); f.waitIdle()
+        m.viewTask(m.tasks.single()); f.waitIdle()
+        assertFalse(m.canRelease(m.space!!, m.selectedLinks(CLOUD_ARCHIVE).sorted()))
+        assertEquals(1, f.starts.size)
+    }
+    @Test fun manualRefreshAfterCompletedPreviewRevokesItAndHistoryNeverRearmsConsent() = Fixture().use { f ->
+        val m = f.model; f.start(); f.complete()
+        val completed = m.space!!
+        assertTrue(m.canRelease(completed, paths))
+        m.refreshFromUser(); f.waitIdle()
+        assertEquals(13, m.selectedLinks(CLOUD_ARCHIVE).size)
+        assertNull(m.space); assertFalse(m.canRelease(completed, paths))
+        m.viewTask(m.tasks.single()); f.waitIdle()
+        assertNotNull(m.space); assertFalse(m.canRelease(m.space!!, paths))
+        assertEquals(1, f.starts.size)
     }
     @Test fun thirteenLinksRemainAfterLongQueryAndRecreatedViewAndConfirmationIsExact() = Fixture().use { f ->
         val m = f.model
@@ -62,11 +134,11 @@ class CloudR1Test {
         assertTrue(release.args.contains("--confirm-library"))
     }
     @Test fun navigationAndBackgroundPreserveVisualSelectionButRevokePendingAuthorization() {
-        for (event in listOf("navigation", "background", "refresh")) Fixture().use { f ->
+        for (event in listOf("navigation", "background")) Fixture().use { f ->
             val m = f.model; f.start()
             when (event) {
                 "navigation" -> { m.select(null); m.select("e".repeat(64)); assertTrue(m.selectedLinks("e".repeat(64)).isEmpty()); m.select(CLOUD_ARCHIVE) }
-                else -> m.invalidatePreview() // ON_STOP / onDispose / manual refresh use this boundary.
+                else -> m.invalidatePreview() // ON_STOP / onDispose still revoke the request identity.
             }
             f.complete()
             assertEquals(13, m.selectedLinks(CLOUD_ARCHIVE).size)
@@ -93,7 +165,7 @@ class CloudR1Test {
     }
     @Test fun divergenceBlockedResultsExpiryChangedSelectionAndSeparateConsentNeverRelease() {
         for (case in listOf("request-result", "wrong-package", "blocked", "can-release", "expiry", "selection", "no-consent")) Fixture().use { f ->
-            f.start()
+            f.start(); f.model.refreshFromUser(); f.waitIdle()
             val result = when (case) {
                 "request-result" -> plan(paths.dropLast(1))
                 "wrong-package" -> plan(paths).put("id", "e".repeat(64))

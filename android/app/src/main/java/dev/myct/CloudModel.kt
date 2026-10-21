@@ -110,6 +110,15 @@ internal class CloudModel(
                 else "${work.title}: aceito pelo Fedora. Continua mesmo ao fechar o aplicativo."
         }
     }
+    /** Follow the current live space request; never restore a revoked consent. */
+    fun refreshFromUser() {
+        if (!connected || busy) return
+        val followingSpace = previewRequest?.let { (id, work) ->
+            work.action == "space" && tasks.any { it.active && it.id == id && it.work == work }
+        } == true
+        if (!followingSpace) invalidatePreview()
+        refresh()
+    }
     fun refresh() {
         if (busy) return
         request { call ->

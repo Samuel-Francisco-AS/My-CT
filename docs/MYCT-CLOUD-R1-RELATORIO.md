@@ -62,8 +62,10 @@ continuam necessários.
   Divergência bloqueia a prévia e mostra mensagem própria. A seleção atual também
   precisa coincidir; a resposta nunca marca caixas automaticamente.
 - Só o resultado `succeeded` da consulta iniciada e ainda válida nesta sessão pode
-  autorizar. Abrir histórico, trocar pacote, alterar seleção, atualizar manualmente,
-  sair da tela/segundo plano ou reconectar revoga essa autorização. A seleção
+  autorizar. Abrir histórico, trocar pacote, alterar seleção, atualizar uma prévia
+  já concluída, sair da tela/segundo plano ou reconectar revoga essa autorização.
+  Após a correção A01 abaixo, Atualizar apenas acompanha o `space` corrente ativo
+  sem apagar sua identidade; isso não recupera autorizações já revogadas. A seleção
   visual é preservada na mesma conexão; uma **nova consulta explícita** a revalida.
   Mesmo uma consulta que termine fora da tela não rearma consentimento ao voltar.
 - `canRelease()` exige também `authorized === plan`, seleção atual exata e
@@ -159,7 +161,7 @@ Arquivos de produção: `CloudModel.kt`, `CloudScreen.kt`, `Cloud.kt`,
 `ops/setup/tests/test_cloud_setup.py`. Documentação: este relatório, README e
 `docs/05-DECISOES-E-QUESTOES.md`.
 
-## Validação e custos
+## Validação e custos da entrega inicial (head `02c9678`)
 
 Ferramentas observadas: Fedora 44/Linux 7.2.8, Python 3.14.7, Git 2.55.0,
 Java 21.0.10, Gradle wrapper 8.14.3, SDK/build-tools 36, Podman 5.8.7.
@@ -221,7 +223,7 @@ Diagnóstico SHA-256:
 `745819c977f21498bd5a057151fbe179836d66753b4d01bf8cda822197256a63`.
 Certificado SHA-256 público, igual ao code 48:
 `b788958be4c919889fc30813f13f1aceb5b6b69670514c82e16288f4b60b83b3`.
-Hash do APK local final: `e78d4c32f0dac869f1f341bf0fe0c9bc90716b50d57b8e0df839d0ef14f80a1b`. Não é artefato de distribuição.
+Hash do APK local da entrega inicial: `e78d4c32f0dac869f1f341bf0fe0c9bc90716b50d57b8e0df839d0ef14f80a1b`. Não é artefato de distribuição.
 
 A suíte JVM simula 231,4 s com relógio controlável, cobre 13 caminhos no pedido e
 resposta, navegação, retorno de segundo plano, reconexão, processo novo, seleção
@@ -303,3 +305,115 @@ corretamente bloqueada pelo contrato de conta normal. Harness refeito como
   Isso fica mensurável para R2, sem introduzir um serviço de telemetria.
 
 Após publicar a PR draft, parar e aguardar a auditoria independente da Luna.
+
+
+## Correção pós-auditoria R1-A01 — Atualizar durante `space`
+
+21/10/2026. [Auditoria independente da Luna, comentário 6309324947](https://github.com/Samuel-Francisco-AS/My-CT/pull/60#issuecomment-6309324947),
+no head `02c9678b4b379a0df92d09e5cf40943d39879ebd`: **CHANGES REQUESTED**.
+Esta correção é proposta na mesma branch/PR draft #60, com os dois commits
+anteriores preservados. Não equivale a aceite da reauditoria ou do Moto.
+
+**Causa confirmada:** o botão Atualizar fazia `invalidatePreview(); refresh()`.
+`busy` só cobre a entrega/consulta SSH, não os minutos de execução do trabalho
+Fedora. Portanto, depois do aceite, o botão habilitado apagava `previewRequest`;
+`readResult()` depois não podia associar a prévia à consulta da sessão, mesmo
+com 13 caminhos idênticos, sucesso autoritativo e ausência de bloqueios.
+
+**Solução mínima:** `CloudScreen` passa a usar `CloudModel.refreshFromUser()`.
+O método recusa chamada desconectada/ocupada. Preserva o pedido somente se há
+`previewRequest` e uma tarefa **ativa com o mesmo ID e o mesmo CloudWork**, cuja
+ação é `space`. Nessa situação chama a consulta de acompanhamento existente.
+Sem essa correspondência, invalida a prévia antes de consultar, como antes.
+Atualização manual após conclusão continua revogando a autorização; atualizar
+um histórico ou trabalho após invalidação não reconstrói `previewRequest`.
+
+O polling automático e a execução Fedora não mudam. Se o Fedora já tiver
+concluído, mas o Android ainda souber da tarefa como ativa, a atualização pode
+receber o resultado autoritativo e autorizar a prévia na mesma consulta. Se o
+Android já tiver publicado a prévia concluída, Atualizar a revoga. Navegação,
+ON_STOP/disposal, troca de pacote, reconexão e mudança efetiva da seleção mantêm
+as invalidações existentes. Comparações exatas, token, prazo máximo de 600 s,
+`can_release`, blockers e confirmação específica Jellyfin não foram alterados.
+
+Arquivos modificados nesta correção: `CloudModel.kt`, `CloudScreen.kt`,
+`CloudR1Test.kt`, `CloudUiInstrumentedTest.kt` e este relatório. Sem alterações
+em helpers Fedora, telemetria, manifesto/builder SETUP ou configuração Gradle.
+`dev.myct`, versionCode **49** e certificado anterior permanecem preservados.
+O bundle SETUP permanece byte a byte igual ao da entrega inicial; os testes
+Python/integração não foram repetidos por não haver alteração dos seus inputs.
+
+### Regressões A01 e evidência
+
+O teste positivo usa a mesma função do botão: seleciona 13 episódios, recebe
+aceite, confirma `busy=false`/tarefa ativa, toca Atualizar duas vezes durante
+231,4 s simulados e conclui com os mesmos 13, `can_release=true`/`blockers=[]`.
+Exige seleção 13, `canRelease=true`, somente um início `space` e consultas de
+tarefa, sem novo snapshot durante o acompanhamento nem execução de `release`.
+
+Os negativos atualizam durante navegação/segundo plano, reconexão, expiração,
+troca de pacote e divergência de resultado; continuam bloqueantes. Edição de
+seleção durante a tarefa permanece recusada pelo modelo/UI (13 inalterados);
+a edição efetiva após conclusão revoga a prévia, e abrir histórico não a rearma.
+Outro teste comprova que Atualizar após prévia concluída a revoga e histórico
+não recupera o consentimento. O teste instrumentado usa o botão acessível
+Atualizar e compara os casos com/sem descarte da composição, sem executar
+liberação; apenas compilado nesta missão.
+
+| Verificação A01 | Resultado final |
+| --- | --- |
+| Cloud JVM dirigido (`Cloud*`) | **34 PASS, 0 FAIL, 0 SKIP** |
+| JVM completo (328 casos) | **326 PASS, 0 FAIL, 2 SKIP** |
+| `assembleDebug` | PASS |
+| `assembleDebugAndroidTest` | PASS; três cenários Cloud compilados, não executados em dispositivo |
+| `lintDebug` | PASS: 0 erros, 1 warning UseKtx e 2 hints anteriores |
+| Certificado / applicationId / versionCode | PASS: certificado anterior, `dev.myct`, 49 |
+| Bundle SETUP / diagnóstico no APK | PASS: hashes idênticos aos da entrega inicial |
+| `git diff --check` | PASS |
+| Helpers/Python/integração Fedora | Não alterados; testes não repetidos nesta correção |
+| Moto G06 / teste físico | NÃO EXECUTADO; distribuição aguarda reauditoria |
+
+Os dois SKIP são os testes opcionais já existentes de SSH/SFTP reais
+(`FedoraHandshakeTest` e `IdeFedoraSftpTest`). Seus flags foram explicitamente
+removidos do ambiente desta rodada para preservar os serviços pessoais.
+Logs: `cloud-build-lint.log` + `cloud-results.json` para os 34 testes dirigidos;
+`android-final.log` + `jvm-results.json` para a rodada final completa, que também
+compilou os testes instrumentados e executou build/lint. A primeira rodada
+agregada terminou com falha no helper de teste nullable mencionado abaixo;
+os resultados PASS de build/lint referem-se à rodada final corrigida.
+
+```bash
+ANDROID_HOME=/home/sam/Android/Sdk ./android/gradlew -p android \
+  :app:testDebugUnitTest --tests 'dev.myct.Cloud*' \
+  :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug \
+  --offline --console=plain
+# Rodada completa após correção do helper do teste de clique:
+env -u MYCT_TEST_LOCAL_SSH -u MYCT_TEST_LOCAL_SFTP \
+  ANDROID_HOME=/home/sam/Android/Sdk ./android/gradlew -p android \
+  :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest \
+  :app:lintDebug --offline --console=plain
+```
+
+APK local A01: **19.399.434 bytes**, SHA-256
+`133d40bfb6ee9eaec7c2a608f302c31a23731cb1f629b1ae57a65763237700dc`.
+Continua com a assinatura pública SHA-256
+`b788958be4c919889fc30813f13f1aceb5b6b69670514c82e16288f4b60b83b3`.
+Payload SETUP e diagnóstico no APK foram verificados contra os dois hashes
+registrados na entrega inicial; igualdade comprovada sem alterar o bundle.
+Rodada final Android: **1m13,56s**, pico RSS **1.623.760 KiB**, custo de
+desenvolvimento, não medição de runtime Fedora. Nenhuma dependência, parâmetro
+de Gradle ou limite pessoal foi modificado.
+
+Logs locais privados em `artifacts/myct-cloud-r1-a01-validation/`.
+A reprodução válida antes da correção terminou em **1 FAIL**, na asserção
+`canRelease` (log `reproduction-before-fix-corrected.log` e XML
+`reproduction-confirmed.xml`); esse resultado é evidência do defeito, não PASS.
+A primeira versão da fixture usava `single()` ignorando a tarefa histórica já
+presente; foi corrigida para identificar a tarefa ativa. A primeira compilação
+do novo helper de clique instrumentado apontou nullable indevido; tipo explícito
+corrigido antes da validação final. Nenhum guard de produção foi relaxado para
+satisfazer testes.
+Nenhuma distribuição de APK, instalação no Moto, consulta Drive, operação no
+acervo, deploy ou alteração de serviços pessoais. R2 não foi iniciada.
+A PR permanece draft, aguardando reauditoria da Luna antes de distribuição e
+teste físico autorizado; ainda sem aceite funcional R1.

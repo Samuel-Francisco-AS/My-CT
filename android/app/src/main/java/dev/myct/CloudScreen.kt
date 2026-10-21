@@ -48,7 +48,7 @@ internal fun CloudScreen(model: CloudModel, openFiles: (String) -> Unit, modifie
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             if (selected != null) MyCtTextButton(onClick = { model.select(null) }) { Text("‹ Nuvem") }
             else Text("Nuvem", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(8.dp))
-            MyCtTextButton(onClick = { model.invalidatePreview(); model.refresh() }, enabled = model.connected && !model.busy) { Text("Atualizar") }
+            MyCtTextButton(onClick = { model.refreshFromUser() }, enabled = model.connected && !model.busy) { Text("Atualizar") }
         }
         if (model.busy || model.tasks.any { it.active }) LinearProgressIndicator(Modifier.fillMaxWidth())
         Text(model.message, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 6.dp),
