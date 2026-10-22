@@ -20,13 +20,13 @@ class IdeContentTest {
         val doc = IdeDocument("connection-a", initial)
         doc.content.insert(0, 1, "b")
         val version = doc.content.documentVersion
-        val saved = EditSaved(initial.copy(bytes = encodeCode(doc.content.toString())), "/work/backup")
+        val saved = EditSaved(initial.copy(bytes = encodeCode(doc.content.toString())))
         doc.content.insert(0, 2, "c") // Queued IME after snapshot, before save response.
         doc.confirmSaved(saved, version)
         assertTrue(doc.dirty)
         assertEquals("abc\n", doc.content.toString())
         assertEquals("ab\n", doc.snapshot.bytes.toString(Charsets.UTF_8))
-        doc.confirmSaved(EditSaved(initial.copy(bytes = encodeCode(doc.content.toString())), "/work/backup2"), doc.content.documentVersion)
+        doc.confirmSaved(EditSaved(initial.copy(bytes = encodeCode(doc.content.toString()))), doc.content.documentVersion)
         assertFalse(doc.dirty)
     }
     @Test fun visualStateChangesKeepSoraContentSelectionVersionDirtyAndUndo() {

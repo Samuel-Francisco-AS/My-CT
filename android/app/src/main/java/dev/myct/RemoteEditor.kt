@@ -23,7 +23,8 @@ internal data class EditSnapshot(val path: String, val bytes: ByteArray, val met
 internal class EditConflict : Exception()
 internal class EditRejected(val explanation: String) : Exception()
 internal class EditUncertain(val backupPath: String) : Exception()
-internal data class EditSaved(val snapshot: EditSnapshot, val backupPath: String)
+internal class EditCleanupFailed(val directory: String, cause: Exception) : Exception(cause)
+internal data class EditSaved(val snapshot: EditSnapshot, val cleanupPath: String? = null)
 internal fun editDigest(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
     .digest(bytes).joinToString("") { "%02x".format(it) }
 internal fun decodeCode(bytes: ByteArray): String {
@@ -45,7 +46,7 @@ internal fun encodeCode(text: CharSequence): ByteArray {
 }
 
 /** Optimistic SFTP transaction. Original is never opened for truncating writes.
- * Same-directory atomic rename + retained hardlink backup; no shell or silent force-save.
+ * Same-directory atomic rename with a transaction-only hardlink backup; no silent force-save.
  * SFTP has no compare-and-swap: another writer must not edit during the final check/rename.
  */
 internal object RemoteEditor {
@@ -88,9 +89,10 @@ internal object RemoteEditor {
         val temporary = RemotePath.child(directory, "new")
         val backup = RemotePath.child(directory, "original")
         store.privateDirectory(directory)
-        var backupCreated = false
         var publishing = false
-        var saved = false
+        var confirmed: EditSnapshot? = null
+        var failure: Exception? = null
+        var cleanupIncomplete = false
         try {
             store.writeNewTemporary(temporary).use { out ->
                 control.check(); out.write(bytes); out.flush(); control.check()
@@ -100,26 +102,31 @@ internal object RemoteEditor {
             if (!prepared.bytes.contentEquals(bytes)) throw IntegrityFailure()
             unchanged()
             store.backup(original.path, backup)
-            backupCreated = true
             val backedUp = load(store, backup, control)
             if (backedUp.metadata != original.metadata || !backedUp.bytes.contentEquals(original.bytes)) throw EditConflict()
             unchanged()
             control.check()
-            publishing = true // After this point interruption has an uncertain outcome; keep backup.
+            publishing = true // A failed or disconnected commit is uncertain; retain the recovery copy.
             store.replace(temporary, original.path)
             val verified = load(store, original.path, control)
             if (!verified.bytes.contentEquals(bytes) || verified.metadata.mode != original.metadata.mode ||
                 verified.metadata.uid != original.metadata.uid || verified.metadata.gid != original.metadata.gid) throw IntegrityFailure()
-            saved = true
-            return EditSaved(verified, backup)
+            confirmed = verified
         } catch (error: Exception) {
-            if (publishing) throw EditUncertain(backup)
-            throw error
+            failure = if (publishing) EditUncertain(backup) else error
         } finally {
-            // Retain backup on success/uncertainty. Never delete the original or a published target.
+            // The only persistent recovery copy is for an unconfirmed publish.
+            // Never touch the destination file during cleanup.
             runCatching { store.removeTemporary(temporary) }
-            if (!publishing && backupCreated) runCatching { store.removeTemporary(backup) }
-            if (!saved && !publishing) runCatching { store.removeTemporaryDirectory(directory) }
+            if (!publishing || confirmed != null) {
+                runCatching { store.removeTemporary(backup) }
+                cleanupIncomplete = runCatching { store.removeTemporaryDirectory(directory) }.isFailure
+            }
         }
+        failure?.let { error ->
+            if (!publishing && cleanupIncomplete) throw EditCleanupFailed(directory, error)
+            throw error
+        }
+        return EditSaved(requireNotNull(confirmed), if (cleanupIncomplete) directory else null)
     }
 }

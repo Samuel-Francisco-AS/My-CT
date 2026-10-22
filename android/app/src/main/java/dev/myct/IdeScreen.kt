@@ -390,7 +390,7 @@ private fun IdeSessionScreen(owner: IdeModel, model: IdeSession, terminal: () ->
             Text("CTRL: atalhos locais na faixa temporária; CTRL + setas move por palavra e CTRL + HOME/END vai ao início/fim do documento. ALT oferece CTRL+ALT+ENTER (linha acima). Modificadores são consumidos pela próxima tecla da barra/atalho e cancelados ao editar pelo Gboard, abrir menu ou sair da tela. Sem alterar a composição do teclado Android.")
             Text("Selecione o código para copiar/colar. Indentação: 4 espaços. Busca literal diferencia maiúsculas. Sem autosave. Limite: 1 MiB / 30 mil linhas. Um arquivo aberto por origem (privada, compartilhada e remota).")
             Text("Alternar seções ou desconectar mantém o buffer e undo em memória. Fechar o processo Android perde o buffer; salve antes de sair. Não edite o mesmo arquivo simultaneamente em outro programa.")
-            doc?.backupPath?.let { Text("Caminho de recuperação (se criado): $it") }
+            doc?.backupPath?.let { Text(if (doc.uncertain) "Cópia de recuperação (gravação incerta): $it" else "Diretório temporário pendente de limpeza: $it") }
             if (doc?.uncertain == true) Text(if (local)
                 "Resultado incerto: confira o arquivo na pasta de origem; copie o buffer pelo clipboard antes de descartar/reabrir. Não há backup local automático."
                 else "Resultado incerto: confira original/backup em Arquivos ou Terminal, preserve uma cópia do buffer e reabra antes de salvar novamente.")
