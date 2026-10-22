@@ -48,7 +48,7 @@ internal fun CloudScreen(model: CloudModel, openFiles: (String) -> Unit, modifie
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             if (selected != null) MyCtTextButton(onClick = { model.select(null) }) { Text("‹ Nuvem") }
             else Text("Nuvem", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(8.dp))
-            MyCtTextButton(onClick = { model.invalidatePreview(); model.refresh() }, enabled = model.connected && !model.busy) { Text("Atualizar") }
+            MyCtTextButton(onClick = { model.refreshFromUser() }, enabled = model.connected && !model.busy) { Text("Atualizar") }
         }
         if (model.busy || model.tasks.any { it.active }) LinearProgressIndicator(Modifier.fillMaxWidth())
         Text(model.message, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 6.dp),
@@ -167,7 +167,7 @@ private fun CloudTasks(model: CloudModel) {
 private fun CloudTransferProgress(task: CloudTask, connected: Boolean) {
     val progress = task.progress
     if (progress == null) {
-        if (task.active && task.work.action in setOf("archive", "restore")) {
+        if (task.active && task.work.action in setOf("archive", "restore", "space")) {
             LinearProgressIndicator(Modifier.fillMaxWidth())
             Text("Telemetria indisponível para esta operação. Tempo estimado indisponível.", style = MaterialTheme.typography.bodySmall)
         }
@@ -180,14 +180,18 @@ private fun CloudTransferProgress(task: CloudTask, connected: Boolean) {
     val percent = progress.percent?.takeIf { task.state == "succeeded" || (task.active && it < 100) }
     if (percent != null) LinearProgressIndicator(progress = { (percent / 100).toFloat() }, modifier = Modifier.fillMaxWidth())
     else if (task.active) LinearProgressIndicator(Modifier.fillMaxWidth())
+    val reading = progress.metric == "read"
+    Text(task.label, style = MaterialTheme.typography.labelSmall)
+    if (reading && progress.readPass != null) Text("Leitura ${progress.readPass} · porcentagem e ETA desta leitura", style = MaterialTheme.typography.labelSmall)
+    if (reading) Text("Métricas desta fase de leitura; podem incluir releituras/cache. Não são tráfego de rede nem bytes físicos do SSD.", style = MaterialTheme.typography.bodySmall)
     val fraction = percent?.let { String.format(java.util.Locale.forLanguageTag("pt-BR"), "%.1f%%", kotlin.math.floor(it * 10) / 10) }
         ?: if (task.active && progress.bytesTotal != null && progress.bytesTotal > 0 && progress.bytesDone == progress.bytesTotal)
-            "Transporte finalizado; verificação pendente" else "Porcentagem indisponível"
-    Text(fraction, style = MaterialTheme.typography.bodySmall)
+            if (reading) "Leitura da fase finalizada; consulta ainda em andamento" else "Transporte finalizado; verificação pendente" else "Porcentagem indisponível"
+    Text(if (reading && percent != null) "$fraction desta fase" else fraction, style = MaterialTheme.typography.bodySmall)
     val total = progress.bytesTotal?.let { "${formatCleanupBytes(it)} ($it bytes)" } ?: "total desconhecido"
-    Text("${formatCleanupBytes(progress.bytesDone)} (${progress.bytesDone} bytes) / $total", style = MaterialTheme.typography.bodySmall)
+    Text("${if (reading) "Lidos: " else ""}${formatCleanupBytes(progress.bytesDone)} (${progress.bytesDone} bytes) / $total", style = MaterialTheme.typography.bodySmall)
     val liveRate = connected && task.active && !task.cancelRequested && progress.transferring(now)
-    Text(if (liveRate && progress.speed != null) "Velocidade: ${formatCleanupBytes(progress.speed.toLong())}/s"
+    Text(if (liveRate && progress.speed != null) "${if (reading) "Leitura observada" else "Velocidade"}: ${formatCleanupBytes(progress.speed.toLong())}/s"
         else "Velocidade indisponível", style = MaterialTheme.typography.bodySmall)
     Text(if (connected && task.active && !task.cancelRequested) progress.estimate(now) else "Tempo estimado indisponível", style = MaterialTheme.typography.bodySmall)
     if (progress.totalFiles != null && progress.totalFiles > 0) Text("Etapa de transferência ${progress.fileIndex ?: 0}/${progress.totalFiles} (inclui metadados)", style = MaterialTheme.typography.labelSmall)
@@ -199,14 +203,11 @@ private fun CloudDetail(model: CloudModel, entry: CloudEntry?, torrent: ServerTo
     val key = model.selected ?: return
     val archiveHash = entry?.hash ?: key
     val plan = model.space?.takeIf { it.id == key }
-    var selectedLinks by remember(key) { mutableStateOf(emptySet<String>()) }
-    var choices by remember(key) { mutableStateOf(emptyList<String>()) }
+    val selectedLinks = model.selectedLinks(key)
+    val choices = model.libraryChoices(key)
     var confirm by remember(key) { mutableStateOf<CloudSpace?>(null) }
     var libraryConfirmed by remember(confirm) { mutableStateOf(false) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(plan) {
-        if (plan != null) choices = plan.library.filter { it.optBoolean("present") && it.optBoolean("linked_to_package") }.map { it.getString("path") }
-    }
     LaunchedEffect(Unit) { while (isActive) { now = System.currentTimeMillis(); delay(1000) } }
     val paths = selectedLinks.sorted()
     LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
@@ -257,8 +258,7 @@ private fun CloudDetail(model: CloudModel, entry: CloudEntry?, torrent: ServerTo
                     choices.forEach { path ->
                         val enabled = model.actionsEnabled && (path in selectedLinks || selectedLinks.size < 256)
                         Row(Modifier.fillMaxWidth().clickable(enabled = enabled) {
-                            selectedLinks = if (path in selectedLinks) selectedLinks - path else selectedLinks + path
-                            model.invalidatePreview()
+                            model.toggleLink(key, path)
                         }) {
                             Checkbox(path in selectedLinks, null, enabled = enabled)
                             Text(path, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
@@ -282,6 +282,7 @@ private fun CloudDetail(model: CloudModel, entry: CloudEntry?, torrent: ServerTo
                     Text("A liberação encerra o seeding e remove a entrada do Transmission e as árvores indicadas.")
                     ExpandDetails("Arquivos atingidos (${plan.paths.size})") { plan.paths.forEach { Text(it, style = MaterialTheme.typography.bodySmall) } }
                     plan.blockers.forEach { StatusNotice("Bloqueio: $it", true) }
+                    if (!model.previewAuthorized(plan)) StatusNotice("Seleção visual preservada. Consulte espaço novamente para obter autorização atual.", true)
                     if (now >= plan.expiresAt) StatusNotice("Prévia expirada. Consulte espaço novamente.", true)
                     MyCtButton(onClick = { confirm = plan }, enabled = model.canRelease(plan, paths) && plan.valid(now)) { Text("Liberar espaço…") }
                 }
@@ -289,11 +290,20 @@ private fun CloudDetail(model: CloudModel, entry: CloudEntry?, torrent: ServerTo
             item("links") {
                 ScreenPanel {
                     Text("Vínculos Jellyfin", style = MaterialTheme.typography.titleSmall)
+                    if (!plan.libraryComplete) StatusNotice("Inventário incompleto. Opções anteriores preservadas; a liberação permanece bloqueada.", true)
                     if (plan.library.isEmpty()) Text("Nenhum vínculo associado.", style = MaterialTheme.typography.bodySmall)
                     plan.library.forEach { link ->
                         val path = link.getString("path")
-                        DetailValue(if (link.optBoolean("linked_to_package")) "Hardlink presente" else if (link.optBoolean("present")) "Destino ocupado — conferir" else "Vínculo ausente", path)
-                        if (!link.optBoolean("present")) MyCtTextButton(onClick = {
+                        val status = when (link.optString("status")) {
+                            "managed" -> "Hardlink gerenciado e comprovado"
+                            "unmanaged" -> "Hardlink presente sem registro Media"
+                            "divergent" -> "Registro ou origem divergente — protegido"
+                            "absent" -> "Vínculo ausente"
+                            "uninspectable" -> "Vínculo não inspecionado — protegido"
+                            else -> if (link.optBoolean("linked_to_package")) "Hardlink presente" else if (link.optBoolean("present")) "Destino ocupado — conferir" else "Vínculo ausente"
+                        }
+                        DetailValue(status, path)
+                        if (plan.libraryComplete && link.optString("status") != "uninspectable" && !link.optBoolean("present")) MyCtTextButton(onClick = {
                             model.start(CloudWork("torrent", listOf("relink", key, "--library", path)))
                         }, enabled = model.actionsEnabled && entry?.recoveryState == "verified" && torrent?.paused == true && !link.optBoolean("ignored")) { Text("Reconstruir vínculo") }
                     }

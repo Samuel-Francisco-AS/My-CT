@@ -296,7 +296,7 @@ class TorrentTest(unittest.TestCase):
             self.assertEqual('submitted', torrent.organize(rpc, HASH)['naming'])
             self.assertEqual(1, sum(m == 'torrent_set_location' for m, _ in rpc.calls))
 
-    def test_delete_data_delegates_to_transmission_and_blocks_hardlinks(self):
+    def test_whole_torrent_delete_preserves_other_hardlinks(self):
         import os
         with tempfile.TemporaryDirectory() as home, patch.object(torrent.Path, 'home', return_value=Path(home)):
             root = torrent.destination()
@@ -309,17 +309,13 @@ class TorrentTest(unittest.TestCase):
             other.mkdir(parents=True)
             linked = other / 'Demo S01E01.mkv'
             os.link(data, linked)
-            with self.assertRaisesRegex(torrent.Failure, 'hardlinks'):
-                torrent.run(['delete-data', HASH], rpc)
-            self.assertFalse(any(method == 'torrent_remove' for method, _ in rpc.calls))
-            self.assertTrue(data.exists())
-            linked.unlink()
-            reply = torrent.run(['delete-data', HASH], rpc)
+            reply = torrent.run(['delete-data', HASH, str(root / HASH)], rpc)
+            self.assertTrue(linked.exists())
             self.assertTrue(reply['deleted_data'])
             self.assertEqual('torrent_remove', rpc.calls[-1][0])
             self.assertEqual({'ids': [HASH], 'delete_local_data': True}, rpc.calls[-1][1])
 
-    def test_delete_data_blocks_indexed_media_even_with_no_original_files(self):
+    def test_whole_torrent_delete_does_not_require_removing_library_records(self):
         with tempfile.TemporaryDirectory() as home, patch.object(torrent.Path, 'home', return_value=Path(home)):
             root = torrent.destination(); (root / HASH).mkdir(parents=True)
             state = Path(home) / '.local/share/myct/media'
@@ -327,9 +323,19 @@ class TorrentTest(unittest.TestCase):
             (state / 'state.json').write_text(json.dumps({'links': {
                 'Series/Demo/Season 01/Demo S01E01.mkv': {'id': HASH + ':ep.mkv', 'dev': 1, 'ino': 2}}, 'ignored': []}))
             rpc = FakeRpc(root)
-            with self.assertRaisesRegex(torrent.Failure, 'Jellyfin'):
-                torrent.run(['delete-data', HASH], rpc)
+            reply = torrent.run(['delete-data', HASH, str(root / HASH)], rpc)
+            self.assertTrue(reply['deleted_data'])
+            self.assertTrue((state / 'state.json').exists())
+
+    def test_whole_torrent_delete_binds_displayed_directory(self):
+        with tempfile.TemporaryDirectory() as home, patch.object(torrent.Path, 'home', return_value=Path(home)):
+            root = torrent.destination(); (root / HASH).mkdir(parents=True)
+            rpc = FakeRpc(root)
+            with self.assertRaisesRegex(torrent.Failure, 'Diretório mudou'):
+                torrent.run(['delete-data', HASH, str(root / 'another-directory')], rpc)
             self.assertFalse(any(method == 'torrent_remove' for method, _ in rpc.calls))
+            with self.assertRaises(torrent.Failure):
+                torrent.run(['delete-data', HASH], rpc)  # No implicit directory authorization.
 
     def test_delete_data_rejects_symlink_inside_torrent(self):
         with tempfile.TemporaryDirectory() as home, patch.object(torrent.Path, 'home', return_value=Path(home)):
@@ -337,7 +343,7 @@ class TorrentTest(unittest.TestCase):
             (root / HASH / 'escape.mkv').symlink_to('/etc/passwd')
             rpc = FakeRpc(root)
             with self.assertRaises(torrent.Failure):
-                torrent.run(['delete-data', HASH], rpc)
+                torrent.run(['delete-data', HASH, str(root / HASH)], rpc)
             self.assertFalse(any(method == 'torrent_remove' for method, _ in rpc.calls))
 
     def test_rpc_engine_error_exposes_code_without_leaking_magnet(self):

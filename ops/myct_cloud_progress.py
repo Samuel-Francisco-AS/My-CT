@@ -8,7 +8,9 @@ import stat
 import tempfile
 import time
 
-PHASES = {'preparing', 'hashing', 'uploading', 'downloading', 'verifying', 'done', 'failed'}
+PHASES = {'preparing', 'hashing', 'uploading', 'downloading', 'verifying', 'done', 'failed',
+          'remote_check', 'local_inventory', 'local_read', 'library_inventory', 'library_read',
+          'transmission_check', 'finalizing'}
 
 
 def number(value):
@@ -20,11 +22,18 @@ def read_progress(root, identity):
         if not re.fullmatch('[0-9a-f]{32}', identity):
             return None
         path = root / (identity + '.progress')
-        info = path.lstat()
-        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
-                or info.st_mode & 0o077 or info.st_nlink != 1 or info.st_size > 4096):
-            return None
-        row = json.loads(path.read_text())
+        # Inspect and read the same descriptor. Atomic replacement may unlink this
+        # already-open private snapshot (nlink=0), which remains a valid sample.
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, 'r') as stream:
+            info = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                    or info.st_mode & 0o077 or info.st_nlink > 1 or info.st_size > 4096):
+                return None
+            raw = stream.read(4097)
+            if len(raw) > 4096:
+                return None
+            row = json.loads(raw)
         if row.get('phase') not in PHASES:
             return None
         fields = ('bytes_done', 'bytes_total', 'percent', 'speed_bps', 'eta_seconds', 'updated_at',
@@ -35,6 +44,19 @@ def read_progress(root, identity):
             if value is not None and not number(value):
                 return None
             clean[key] = value
+        metric = row.get('metric')
+        if metric is not None:
+            if metric != 'read' or row.get('scope') != 'phase':
+                return None
+            clean.update(metric=metric, scope='phase')
+            read_pass = row.get('read_pass')
+            if read_pass is not None and (type(read_pass) is not int or not number(read_pass)):
+                return None
+            clean['read_pass'] = read_pass
+            timings = row.get('phase_seconds', {})
+            if not isinstance(timings, dict) or any(k not in PHASES or not number(v) for k, v in timings.items()):
+                return None
+            clean['phase_seconds'] = timings
         integers = ('bytes_done', 'bytes_total', 'current_file_index', 'total_files')
         if any(clean[k] is not None and type(clean[k]) is not int for k in integers):
             return None
@@ -148,6 +170,72 @@ class Progress:
         saved = read_progress(self.root, self.identity)
         if saved:
             self.row = saved
-        self.row['percent'] = (100 if success and self.row['bytes_total'] and
+        self.row['percent'] = (100 if success and self.row.get('metric') != 'read' and self.row['bytes_total'] and
                                self.row['bytes_done'] == self.row['bytes_total'] else None)
         self.phase('done' if success else 'failed')
+
+
+class SpaceProgress:
+    """Phase-local bytes returned by read(), never physical SSD or network bytes.
+
+    Only space opts in. No measurements enter the preview/token or catalogs.
+    All phase boundaries publish; block callbacks publish at most every 2 seconds.
+    """
+    def __init__(self, progress, clock=time.monotonic):
+        self.progress = progress
+        self.clock = clock
+        self.started = clock()
+        self.phase_name = 'preparing'
+        self.timings = {}
+        self.samples = []
+        self.last_tick = self.started
+        self.last_bytes = 0
+        self.read_pass = 0
+        self.progress.row = {'phase': 'preparing', 'metric': 'read', 'scope': 'phase',
+                             'bytes_done': 0, 'bytes_total': None, 'percent': None,
+                             'speed_bps': None, 'eta_seconds': None, 'phase_seconds': {}}
+        self.phase('preparing')
+
+    def phase(self, name):
+        now = self.clock()
+        self.timings[self.phase_name] = self.timings.get(self.phase_name, 0) + now - self.started
+        self.phase_name = name; self.started = now
+        self.progress.row.update(phase=name, bytes_done=0, bytes_total=None, percent=None,
+                                 speed_bps=None, eta_seconds=None,
+                                 phase_seconds=dict(self.timings), read_pass=None)
+        self.progress.publish()
+
+    def reading(self, total, library=False):
+        self.phase('library_read' if library else 'local_read')
+        self.read_pass += 1
+        self.progress.row.update(bytes_total=total, read_pass=self.read_pass)
+        self.samples = []; self.last_tick = self.clock(); self.last_bytes = 0
+        self.progress.publish()
+
+    def end_read(self):
+        # Flush the last short interval once per phase, never once per block.
+        self.progress.row.update(speed_bps=None, eta_seconds=None)
+        self.progress.publish()
+
+    def advance(self, count):
+        row = self.progress.row
+        row['bytes_done'] += count  # Called only after a successful read, including rereads.
+        total = row['bytes_total']
+        if total is not None and row['bytes_done'] > total:
+            row['bytes_total'] = total = None  # File changed: no trustworthy denominator.
+        row['percent'] = 100 * row['bytes_done'] / total if total and row['bytes_done'] < total else None
+        now = self.clock()
+        if now - self.last_tick < 2:
+            return
+        rate = (row['bytes_done'] - self.last_bytes) / (now - self.last_tick)
+        self.samples = (self.samples + [rate])[-5:]
+        row['speed_bps'] = rate
+        # >= 3 timed intervals (>= 6 s), positive and reasonably stable observations.
+        mean = sum(self.samples) / len(self.samples)
+        stable = len(self.samples) >= 3 and min(self.samples) > 0 and max(abs(x - mean) for x in self.samples) <= mean * .5
+        row['eta_seconds'] = (total - row['bytes_done']) / mean if stable and total and row['bytes_done'] < total else None
+        self.last_tick = now; self.last_bytes = row['bytes_done']
+        timings = dict(self.timings)
+        timings[self.phase_name] = timings.get(self.phase_name, 0) + now - self.started
+        row['phase_seconds'] = timings
+        self.progress.publish()

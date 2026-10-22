@@ -5,6 +5,8 @@ No torrent files are moved/renamed/deleted, and there are no external dependenci
 besides the existing myct-torrent adapter and setfacl on Fedora.
 """
 import fcntl
+import copy
+import hashlib
 import importlib.machinery
 import importlib.util
 import json
@@ -13,6 +15,7 @@ from pathlib import Path
 import re
 import shutil
 import stat
+import struct
 import subprocess
 import sys
 import unicodedata
@@ -97,22 +100,222 @@ def safe_relative(relative):
         raise MediaError('Caminho fora da biblioteca.')
     return candidate
 
-def read_torrents():
+def read_torrents(include_files=False, rows=None):
     cli = Path.home() / '.local/bin/myct-torrent'
     if not cli.is_file() or cli.is_symlink():
         raise MediaError('Instale primeiro ~/.local/bin/myct-torrent.')
     loader = importlib.machinery.SourceFileLoader('myct_torrent_for_media', str(cli))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     module = importlib.util.module_from_spec(spec)
-    loader.exec_module(module)
-    return module.records(module.Rpc())
+    # A read-only preview must not create __pycache__ beside installed helpers.
+    exec(compile(cli.read_bytes(), str(cli), 'exec'), module.__dict__)
+    if include_files:
+        module.FIELDS = module.FIELDS + ['files']
+    class SnapshotRpc:
+        def call(self, method, params):
+            assert method == 'torrent_get'
+            return {'torrents': rows}
+    return module.records(module.Rpc() if rows is None else SnapshotRpc())
 
-def media_files(rows, download_root=None):
+
+def filesystem_identity(path):
+    """Read-only Btrfs UUID + subvolume id, never an ephemeral st_dev anchor.
+
+    Unsupported/unavailable identity is explicit: such files cannot be reanchored.
+    Linux UAPI btrfs.h: FS_INFO (1024 bytes), INO_LOOKUP (4096 bytes, root inode 256).
+    """
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return None
+    try:
+        fs = bytearray(1024)
+        fcntl.ioctl(fd, 0x8400941f, fs)
+        lookup = bytearray(4096)
+        struct.pack_into('=QQ', lookup, 0, 0, 256)
+        fcntl.ioctl(fd, 0xd0009412, lookup)
+        uuid = bytes(fs[16:32]).hex()
+        subvolume = struct.unpack_from('=Q', lookup)[0]
+        return {'kind': 'btrfs', 'uuid': uuid, 'subvolume': subvolume} if uuid != '0' * 32 and subvolume > 0 else None
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+
+
+def link_record(identity, path):
+    s = path.stat()
+    return {'id': identity, 'dev': s.st_dev, 'ino': s.st_ino,
+            'metadata': {'size': s.st_size, 'mtime_ns': s.st_mtime_ns, 'uid': s.st_uid},
+            'filesystem': filesystem_identity(path)}
+
+
+def record_matches(info, identity, path, source=None):
+    """Recognize a current hardlink; st_dev is not a persistent filesystem ID.
+
+    A supplied source must be the caller's trusted path for this exact torrent ID.
+    Without a current source use the saved filesystem identity when available;
+    unanchored legacy records retain the strict fallback for absent originals. Neither branch writes/adopts a record or reads video content.
+    """
+    if not isinstance(info, dict) or info.get('id') != identity:
+        return False
+    no_symlink_path(path, Path.home())
+    s = path.lstat()
+    if not stat.S_ISREG(s.st_mode) or info.get('ino') != s.st_ino:
+        return False
+    fs = None
+    if source is not None:
+        no_symlink_path(source, Path.home())
+        original = source.lstat()
+        if not stat.S_ISREG(original.st_mode) or (original.st_dev, original.st_ino) != (s.st_dev, s.st_ino):
+            return False
+        if info.get('dev') != s.st_dev or info.get('filesystem'):
+            fs = filesystem_identity(path)
+            if fs is None or fs != filesystem_identity(source):
+                return False
+    elif not info.get('filesystem') and info.get('dev') != s.st_dev:
+        # No source and no persistent identity: historical inode alone is insufficient.
+        return False
+    if 'metadata' in info and info['metadata'] != {
+            'size': s.st_size, 'mtime_ns': s.st_mtime_ns, 'uid': s.st_uid}:
+        return False
+    return not info.get('filesystem') or info['filesystem'] == (fs or filesystem_identity(path))
+
+
+def reconciliation_plan(rows=None, state=None):
+    """No writes/locks/hash reads. Propose metadata reanchoring; never authorize deletion.
+
+    v1 has no historical UUID/size/mtime. Its candidates are explicitly marked as
+    legacy re-registration, NOT proof that the historical filesystem is unchanged.
+    Only the expected, currently recognized torrent source can supply that trust.
+    """
+    state = load_state() if state is None else state
+    rows = read_torrents(include_files=True, rows=rows)
+    sources, source_inodes = {}, {}
+    for candidate in media_files(rows):
+        sources.setdefault(candidate['id'], []).append(candidate)
+        s = candidate['source'].stat()
+        source_inodes.setdefault((s.st_dev, s.st_ino), []).append(candidate)
+    by_hash = {}
+    for row in rows:
+        by_hash.setdefault(row['hash_string'], []).append(row)
+    entries = []
+    # Includes absent records: never drop them or silently adopt unrecorded links.
+    known = {}
+    for rel in state['links']:
+        try:
+            p = media_root() / safe_relative(rel)
+            no_symlink_path(p, Path.home())
+            s = p.lstat()
+            if stat.S_ISREG(s.st_mode):
+                known.setdefault((s.st_dev, s.st_ino), []).append(rel)
+        except (MediaError, OSError):
+            pass
+    for rel, info in sorted(state['links'].items()):
+        item = {'path': rel, 'eligible': False, 'reason': 'UNPROVEN'}
+        entries.append(item)
+        try:
+            dest = media_root() / safe_relative(rel)
+            no_symlink_path(dest, Path.home())
+            d = dest.lstat()
+            if not stat.S_ISREG(d.st_mode) or d.st_uid != os.getuid():
+                raise MediaError('UNSAFE_PATH')
+            if not isinstance(info, dict) or type(info.get('dev')) is not int or type(info.get('ino')) is not int:
+                raise MediaError('INVALID_RECORD')
+            identity = info.get('id', '')
+            if identity in state['ignored']:
+                raise MediaError('IGNORED')
+            candidates = sources.get(identity, [])
+            if len(candidates) != 1:
+                raise MediaError('SOURCE_ABSENT_OR_AMBIGUOUS')
+            source = candidates[0]['source']
+            no_symlink_path(source, Path.home())
+            s = source.lstat()
+            if not stat.S_ISREG(s.st_mode) or s.st_uid != os.getuid():
+                raise MediaError('UNSAFE_SOURCE')
+            if (s.st_dev, s.st_ino) != (d.st_dev, d.st_ino):
+                raise MediaError('SOURCE_INODE_MISMATCH')
+            if info.get('ino') != d.st_ino:
+                raise MediaError('RECORDED_INODE_MISMATCH')
+            torrent_rows = by_hash[candidates[0]['torrent']]
+            if len(torrent_rows) != 1:
+                raise MediaError('AMBIGUOUS_TORRENT')
+            row = torrent_rows[0]
+            relative_source = str(source.relative_to(Path(row['download_dir'])))
+            expected = [f for f in row.get('files', []) if f.get('name') == relative_source]
+            if len(expected) != 1 or expected[0].get('length') != d.st_size or not d.st_size:
+                raise MediaError('TORRENT_METADATA_MISMATCH')
+            # One expected source plus all recorded library aliases; no unknown links.
+            aliases = known[(d.st_dev, d.st_ino)]
+            if any(not isinstance(state['links'][p], dict) or state['links'][p].get('id') != identity for p in aliases):
+                raise MediaError('AMBIGUOUS_LIBRARY')
+            if d.st_nlink != 1 + len(aliases):
+                raise MediaError('UNKNOWN_LINKS')
+            source_aliases = source_inodes[(d.st_dev, d.st_ino)]
+            if len(source_aliases) != 1:
+                raise MediaError('AMBIGUOUS_SOURCE')
+            current = link_record(identity, dest)
+            if current['filesystem'] is None or current['filesystem'] != filesystem_identity(source):
+                raise MediaError('FILESYSTEM_UNPROVEN')
+            if info.get('filesystem') and info['filesystem'] != current['filesystem']:
+                raise MediaError('FILESYSTEM_CHANGED')
+            if 'metadata' in info and info['metadata'] != current['metadata']:
+                raise MediaError('RECORDED_METADATA_MISMATCH')
+            fields = ('st_dev', 'st_ino', 'st_size', 'st_mtime_ns', 'st_ctime_ns', 'st_nlink', 'st_uid', 'st_mode')
+            if (any(getattr(source.lstat(), k) != getattr(s, k) for k in fields) or
+                    any(getattr(dest.lstat(), k) != getattr(d, k) for k in fields) or
+                    (current['dev'], current['ino']) != (d.st_dev, d.st_ino)):
+                raise MediaError('CHANGED_DURING_PLAN')
+            item.update(before=copy.deepcopy(info), after=current,
+                        evidence={'source': str(source), 'source_stat': {
+                            'dev': s.st_dev, 'ino': s.st_ino, 'size': s.st_size,
+                            'mtime_ns': s.st_mtime_ns, 'ctime_ns': s.st_ctime_ns,
+                            'nlink': s.st_nlink, 'uid': s.st_uid},
+                            'library_ctime_ns': d.st_ctime_ns, 'aliases': sorted(aliases),
+                            'expected_length': expected[0]['length']})
+            if info.get('dev') == d.st_dev and record_matches(info, identity, dest, source):
+                item['reason'] = 'CURRENT'
+            else:
+                item['reason'] = 'LEGACY_REANCHOR' if not info.get('filesystem') else 'DEVICE_REANCHOR'
+                item['eligible'] = True
+        except FileNotFoundError:
+            item['reason'] = 'ABSENT'
+        except MediaError as error:
+            item['reason'] = str(error)
+        except (OSError, ValueError, KeyError, TypeError):
+            item['reason'] = 'UNSAFE_OR_INVALID'
+    plan = {'version': 1, 'application_supported': False,
+            'state_sha256': hashlib.sha256(json.dumps(state, sort_keys=True).encode()).hexdigest(),
+            'entries': entries, 'eligible': sum(x['eligible'] for x in entries),
+            'legacy_requires_explicit_reanchor': any(x['eligible'] and x['reason'] == 'LEGACY_REANCHOR' for x in entries)}
+    plan['fingerprint'] = hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()
+    return plan
+
+
+def reconciled_state(state, plan, fresh, confirmation, accept_legacy=False):
+    """Pure transformation; only myct_media_reconcile may persist its proposal.
+
+    This function does not implement or substitute transaction/backup/lock duties.
+    """
+    digest = hashlib.sha256(json.dumps({k: v for k, v in fresh.items() if k != 'fingerprint'}, sort_keys=True).encode()).hexdigest()
+    if plan != fresh or confirmation != digest or digest != fresh['fingerprint']:
+        raise MediaError('Plano de reconciliação mudou; gere nova prévia.')
+    if hashlib.sha256(json.dumps(state, sort_keys=True).encode()).hexdigest() != fresh['state_sha256']:
+        raise MediaError('Índice mudou; gere nova prévia.')
+    if fresh['legacy_requires_explicit_reanchor'] and not accept_legacy:
+        raise MediaError('Legado sem identidade histórica de filesystem exige reancoramento explícito.')
+    result = copy.deepcopy(state)
+    for entry in fresh['entries']:
+        if entry['eligible']:
+            result['links'][entry['path']] = copy.deepcopy(entry['after'])
+    return result
+
+def media_files(rows, download_root=None, include_incomplete=False):
     root = download_root or Path.home() / 'Downloads/My-CT/Torrents'
     no_symlink_path(root, Path.home())
     count = 0
     for row in rows:
-        if row.get('left_until_done') != 0 or row.get('metadata_percent_complete') != 1 or row.get('error', 0):
+        if not include_incomplete and (row.get('left_until_done') != 0 or row.get('metadata_percent_complete') != 1 or row.get('error', 0)):
             continue
         key = row.get('hash_string', '')
         if not isinstance(key, str) or not re.fullmatch(r'[0-9a-f]{40}', key):
@@ -225,7 +428,7 @@ def add_one(candidate, relative, state, acl=ensure_access):
     except Exception:
         dest.unlink(missing_ok=True)  # only the just-created library link
         raise
-    state['links'][str(relative)] = {'id': candidate['id'], 'dev': d.st_dev, 'ino': d.st_ino}
+    state['links'][str(relative)] = link_record(candidate['id'], dest)
     return 'added'
 
 def inspect(rows, state, apply=False, override=None, acl=ensure_access):
@@ -242,7 +445,20 @@ def inspect(rows, state, apply=False, override=None, acl=ensure_access):
             result['ignored'] += 1
             continue
         if key in previously_imported:
-            result['existing'].append({'id': key, 'managed': True})
+            registered = [(rel, info) for rel, info in state['links'].items() if info.get('id') == key]
+            try:
+                valid = True
+                for rel, info in registered:
+                    target = root / safe_relative(rel)
+                    no_symlink_path(target, Path.home())
+                    a, b = candidate['source'].stat(), target.stat()
+                    valid = valid and (a.st_dev, a.st_ino) == (b.st_dev, b.st_ino) and record_matches(info, key, target, candidate['source'])
+            except (MediaError, OSError, ValueError, KeyError, TypeError):
+                valid = False
+            if valid:
+                result['existing'].append({'id': key, 'managed': True})
+            else:
+                result['pending'].append({'id': key, 'reason': 'Origem ou registro Media divergente; revise a procedência. Exclusão local continua disponível em Armazenamento.', 'name': candidate['name']})
             continue
         try:
             spec = override[key] if override and key in override else classify(candidate['name'])
@@ -277,16 +493,26 @@ def remove_one(relative, state):
     dest = media_root() / relative
     no_symlink_path(dest, media_root())
     st = dest.stat()
-    if (st.st_dev, st.st_ino) != (info['dev'], info['ino']):
-        raise MediaError('Arquivo mudou desde a importação; remoção recusada.')
+    if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid():
+        raise MediaError('O alvo não é arquivo regular do proprietário.')
     dest.unlink()  # original torrent remains untouched
     state['links'].pop(str(relative))
     if info['id'] not in state['ignored']:
         state['ignored'].append(info['id'])  # timer must never recreate after explicit removal
 
 def run(argv, rows=None, acl=ensure_access):
+    if argv == ['reconcile-plan']:
+        return reconciliation_plan(rows=rows)
+    if argv and argv[0] in {'reconcile-preview', 'reconcile-apply', 'reconcile-recover'}:
+        source = Path(__file__).with_name('myct_media_reconcile.py')
+        if source.is_symlink() or not source.is_file():
+            raise MediaError('Instale o módulo auditado myct_media_reconcile.py junto do helper.')
+        spec = importlib.util.spec_from_file_location('myct_media_transaction', source)
+        module = importlib.util.module_from_spec(spec)
+        exec(compile(source.read_bytes(), str(source), 'exec'), module.__dict__)
+        return module.run(sys.modules[__name__] if __name__ in sys.modules else _module_view(), argv)
     if not argv or argv[0] not in {'scan', 'sync', 'list', 'approve', 'skip', 'remove'}:
-        raise MediaError('Uso: myct-media scan|sync|list|skip ID|remove RELPATH|approve ID series TITULO TEMP EP|approve ID movie TITULO ANO')
+        raise MediaError('Uso: myct-media reconcile-plan|scan|sync|list|skip ID|remove RELPATH|approve ID series TITULO TEMP EP|approve ID movie TITULO ANO')
     action = argv[0]
     lock_path = state_path().with_suffix('.lock')
     lock_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -330,6 +556,11 @@ def run(argv, rows=None, acl=ensure_access):
         if action == 'sync':
             save_state(state)
         return report
+
+def _module_view():
+    # SourceFileLoader callers may not register their module in sys.modules.
+    from types import SimpleNamespace
+    return SimpleNamespace(**globals())
 
 def main():
     os.umask(0o077)

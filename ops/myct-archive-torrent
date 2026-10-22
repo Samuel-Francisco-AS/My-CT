@@ -32,6 +32,7 @@ def load(name):
 
 try:
     common = load('myct-archive')
+    from myct_cloud_progress import SpaceProgress
     torrent = load('myct-torrent')
     cleanup = load('myct-media-cleanup')
 except Exception:
@@ -309,13 +310,20 @@ def inspect(key, rpc):
             'blockers': blockers, 'can_archive': not blockers}
 
 
-def digest_tree(root):
+def digest_tree(root, telemetry=None):
+    if telemetry:
+        telemetry.phase('local_inventory')
     paths, directories = tree(root)
+    if telemetry:
+        telemetry.reading(sum(file.stat().st_size for file in paths.values()))
     files, snapshots = [], {}
     for path, file in paths.items():
-        value, snapshot = common.fingerprint(file)
+        value, snapshot = (common.fingerprint(file, on_read=telemetry.advance) if telemetry
+                           else common.fingerprint(file))
         files.append({'path': path, **value})
         snapshots[path] = snapshot
+    if telemetry:
+        telemetry.end_read()
     return files, directories, snapshots
 
 
@@ -769,7 +777,7 @@ def check_mounts(root):
         need(not mounted.is_relative_to(root), 'UNSAFE_PATH', 'Árvore contém ponto de montagem; liberação recusada.')
 
 
-def storage_inventory(row, rpc, selected=()):
+def storage_inventory(row, rpc, selected=(), telemetry=None):
     """Read only, including when blocked. No locks, directories or catalog writes."""
     mf, key = row['manifest'], row['manifest']['infohash']
     selected = sorted(set(selected))
@@ -781,7 +789,7 @@ def storage_inventory(row, rpc, selected=()):
               'package_logical_bytes': mf['total_size'],
               'extra_files': [f['path'] for f in mf['files'] if f['path'] not in {t['path'] for t in mf['torrent_files']}],
               'remote': {'verified': False}, 'metainfo_available': False, 'trees': trees,
-              'library': [], 'inodes': [], 'remove_paths': [], 'directories': directories,
+              'library': [], 'library_complete': False, 'inodes': [], 'remove_paths': [], 'directories': directories,
               'remove_library': selected, 'blockers': blockers}
     result['release'] = {k: row['release'][k] for k in ('state', 'phase', 'error_code', 'removed')
                          if k in row.get('release', {})}
@@ -794,23 +802,29 @@ def storage_inventory(row, rpc, selected=()):
         release_resolved(row, load_catalog())
     except Failure as error:
         blocked(error.code)
+    if telemetry:
+        telemetry.phase('remote_check')
     try:
         remote_objects(row)  # Covers data AND canonical manifest AND metainfo, size/MD5.
         result['remote'] = {'verified': True, 'checks': ['size', 'md5', 'manifest', 'metainfo']}
     except (Failure, OSError) as error:
         result['remote']['error_code'] = common.failure_code(error)
         blocked(common.failure_code(error))
+    if telemetry:
+        telemetry.phase('local_inventory')
     try:
         local_bundle_verified(row)
         result['metainfo_available'] = True
     except (Failure, OSError) as error:
         blocked(common.failure_code(error))
+    targets_complete = True
+    targets = {x['path']: x['source'] for x in mf['library_links']}
     try:
         state = media.load_state()
         targets = library_targets(row, state)
         result['media_fingerprint'] = hashlib.sha256(encoded(state)).hexdigest()
     except (Failure, media.MediaError, OSError, ValueError, TypeError, KeyError):
-        blocked('MEDIA'); state = {'links': {}, 'ignored': []}; targets = {}
+        blocked('MEDIA'); state = {'links': {}, 'ignored': []}; targets_complete = False
     original = Path(mf['original_download_dir'])
     roots = list(dict.fromkeys([original, restored_path(row)]))
     for root in roots:
@@ -825,7 +839,7 @@ def storage_inventory(row, rpc, selected=()):
             if not present:
                 continue
             check_mounts(root)
-            files, dirs, _ = digest_tree(root)
+            files, dirs, _ = digest_tree(root, telemetry)
             info['verified'] = files == mf['files'] and dirs == mf['directories']
             need(info['verified'], 'LOCAL_DIVERGENCE', 'Árvore local mudou; nova auditoria necessária.')
             for f in files:
@@ -834,6 +848,8 @@ def storage_inventory(row, rpc, selected=()):
             directories.extend(disk_record(root / d) for d in dirs + [''])
         except (Failure, OSError) as error:
             blocked(common.failure_code(error))
+    if telemetry:
+        telemetry.phase('transmission_check')
     current = None
     try:
         current = get_torrent(rpc, key, optional=True)
@@ -863,11 +879,15 @@ def storage_inventory(row, rpc, selected=()):
                      'SHARED_TORRENT', 'Outra entrada Transmission referencia estes dados.')
     except (Failure, OSError, KeyError, TypeError, ValueError) as error:
         blocked(error.code if isinstance(error, Failure) else 'RPC')
+    if telemetry:
+        telemetry.phase('library_inventory')
     # Scan all regular library files, not only videos/active RPC sources. Matching
     # dev+ino discovers aliases even while RPC points to an independent restore.
     by_inode = {}
     for p in paths:
         by_inode.setdefault((p['dev'], p['ino']), set()).add(p['source'])
+    root = media.media_root()
+    scan_complete = True
     try:
         root = common.safe_path(media.media_root())
         check_mounts(root)
@@ -882,44 +902,75 @@ def storage_inventory(row, rpc, selected=()):
                 for name in names:
                     count += 1
                     need(count <= media.LIMIT, 'LIMIT', 'Biblioteca excede limite de inspeção.')
-                    file = Path(folder) / name
-                    if file.is_symlink():
-                        continue
-                    s = file.lstat()
-                    rel = file.relative_to(root).as_posix()
-                    candidates = by_inode.get((s.st_dev, s.st_ino), set())
-                    source = None
-                    item = state['links'].get(rel, {})
-                    recorded = item.get('id', '')
-                    if candidates:
-                        source = recorded[41:] if recorded.startswith(key + ':') and recorded[41:] in candidates else sorted(candidates)[0]
-                    elif rel in targets:
-                        # Original names may already have been released. The library
-                        # inode still consumes SSD and must remain visible in space.
-                        expected = next(f for f in mf['files'] if f['path'] == targets[rel])
-                        measured, _ = common.fingerprint(file)
-                        if measured == {k: expected[k] for k in measured}:
-                            source = targets[rel]
-                    if source is None:
-                        continue
-                    relative(rel); media.safe_relative(rel)
-                    managed = item == {'id': key + ':' + source, 'dev': s.st_dev, 'ino': s.st_ino}
-                    paths.append({**disk_record(file), 'source': source, 'role': 'library',
-                                  'relative': rel, 'managed': managed, 'remove': rel in selected})
-                    targets.setdefault(rel, source)
-        for rel, source in sorted(targets.items()):
+                    try:
+                        file = Path(folder) / name
+                        if file.is_symlink():
+                            continue
+                        s = file.lstat()
+                        rel = file.relative_to(root).as_posix()
+                        candidates = by_inode.get((s.st_dev, s.st_ino), set())
+                        source = None
+                        item = state['links'].get(rel, {})
+                        recorded = item.get('id', '')
+                        if candidates:
+                            source = recorded[41:] if recorded.startswith(key + ':') and recorded[41:] in candidates else sorted(candidates)[0]
+                        elif rel in targets:
+                            # Original names may already have been released. The library
+                            # inode still consumes SSD and must remain visible in space.
+                            expected = next(f for f in mf['files'] if f['path'] == targets[rel])
+                            if telemetry:
+                                telemetry.reading(s.st_size, library=True)
+                            measured, _ = (common.fingerprint(file, on_read=telemetry.advance) if telemetry
+                                           else common.fingerprint(file))
+                            if telemetry:
+                                telemetry.end_read()
+                                telemetry.phase('library_inventory')
+                            if measured == {k: expected[k] for k in measured}:
+                                source = targets[rel]
+                        if source is None:
+                            continue
+                        relative(rel); media.safe_relative(rel)
+                        current_sources = [base / source for base in roots if (base / source).is_file() and
+                                           (base / source).stat().st_dev == s.st_dev and
+                                           (base / source).stat().st_ino == s.st_ino]
+                        managed = media.record_matches(item, key + ':' + source, file,
+                                                       current_sources[0] if current_sources else None)
+                        paths.append({**disk_record(file), 'source': source, 'role': 'library',
+                                      'relative': rel, 'managed': managed, 'remove': rel in selected})
+                        targets.setdefault(rel, source)
+                    except (Failure, media.MediaError, OSError, ValueError, KeyError, TypeError) as error:
+                        scan_complete = False
+                        blocked(error.code if isinstance(error, Failure) else 'MEDIA')
+        result['library_complete'] = targets_complete and scan_complete
+    except (Failure, media.MediaError, OSError, ValueError, KeyError, TypeError) as error:
+        blocked(error.code if isinstance(error, Failure) else 'MEDIA')
+    # Enumeration must continue after a bad selected link. A scan failure is
+    # explicit; all known targets are still reported, never a successful subset.
+    for rel, source in sorted(targets.items()):
+        try:
             file = common.safe_path(root / rel)
             matching = next((p for p in paths if p['path'] == str(file)), None)
             item = {'path': rel, 'source': source, 'present': file.exists(),
                     'linked_to_package': matching is not None, 'selected': rel in selected,
-                    'ignored': key + ':' + source in state['ignored']}
+                    'ignored': key + ':' + source in state['ignored'],
+                    'managed': bool(matching and matching['managed'])}
+            item['status'] = ('absent' if not item['present'] else 'managed' if item['managed'] else
+                              'unmanaged' if rel not in state['links'] and matching else 'divergent')
             result['library'].append(item)
-            if rel in selected:
-                need(matching is not None and matching['managed'], 'LIBRARY_SELECTION',
-                     'Selecione somente hardlinks gerenciados e comprovados do pacote.')
-        need(set(selected) <= set(targets), 'LIBRARY_SELECTION', 'Seleção de biblioteca desconhecida.')
-    except (Failure, media.MediaError, OSError, ValueError, KeyError, TypeError) as error:
-        blocked(error.code if isinstance(error, Failure) else 'MEDIA')
+            if rel in selected and not item['managed']:
+                blocked('LIBRARY_SELECTION')
+        except (Failure, media.MediaError, OSError, ValueError, KeyError, TypeError) as error:
+            result['library_complete'] = False
+            result['library'].append({'path': rel, 'source': source, 'present': False,
+                                      'linked_to_package': False, 'managed': False, 'status': 'uninspectable',
+                                      'selected': rel in selected, 'ignored': False})
+            blocked(error.code if isinstance(error, Failure) else 'MEDIA')
+    if not set(selected) <= set(targets):
+        blocked('LIBRARY_SELECTION')
+    if not result['library_complete']:
+        blocked('LIBRARY_INCOMPLETE')
+    if telemetry:
+        telemetry.phase('finalizing')
     groups = {}
     for p in paths:
         groups.setdefault((p['dev'], p['ino']), []).append(p)
@@ -957,7 +1008,9 @@ def preview_token(plan, issued):
 
 
 def space(row, rpc, selected=()):
-    plan = storage_inventory(row, rpc, selected)
+    telemetry = SpaceProgress(common.progress)
+    plan = storage_inventory(row, rpc, selected, telemetry=telemetry)
+    telemetry.phase('finalizing')
     token = preview_token(plan, int(time.time()))
     return {**plan, 'preview': token, 'expires_in_seconds': 600,
             'confirmation': token, 'library_confirmation': token if selected else None}
@@ -1108,8 +1161,7 @@ def relink(row, data, rpc, selected, acl=None):
                 outcome = media.add_one(candidate, rel, state, acl=acl or media.ensure_access)
             except (media.MediaError, OSError, media.subprocess.CalledProcessError):
                 raise Failure('MEDIA', 'Falha ao reconstruir vínculo/acesso Jellyfin; consulte os caminhos e o estado de mídia antes de repetir.') from None
-            s = candidate['source'].stat()
-            state['links'][rel] = {'id': candidate['id'], 'dev': s.st_dev, 'ino': s.st_ino}
+            state['links'][rel] = media.link_record(candidate['id'], media.media_root() / rel)
             media.save_state(state)  # Keep partial successes idempotent after interruption.
             outcomes.append({'path': rel, 'outcome': outcome})
         return {'id': row['id'], 'state': 'verified', 'library': outcomes, 'ignored': ignored,

@@ -532,3 +532,95 @@ validações funcionais SETUP-1/2/3 no Moto; instalação física limpa permanec
 VALIDADA. As auditorias independentes Codex/Luna serão solicitadas depois desta
 candidata; nenhuma auditoria global ou integração foi realizada aqui.
 [Contrato, provas e pendências](MYCT-SETUP-4-RELATORIO.md).
+
+
+## 21/10/2026 — MYCT-CLOUD-R1: seleção efêmera por pacote e leitura por fase
+
+Pedido do proprietário: corrigir seleção de 13 hardlinks perdida durante `space`
+e tornar a consulta observável, preservando as proteções C1B/C1C e o SETUP integrado.
+Seleção sai de `remember` da tela para o modelo em memória, por archive ID.
+Autorização exige a tarefa iniciada na sessão e igualdade pedido/resultado/seleção;
+histórico, navegação, segundo plano e reconexão não rearmam consentimento.
+Telemetria opt-in `metric:read/scope:phase` mede bytes devolvidos pelo leitor de
+hashes e tempos por fase, sem alterar plano/token ou semântica de rede.
+R2 permanece separada: sem caches, paralelismo ou redução de verificações.
+Contrato SETUP/recuperação mantém sua versão; hashes do bundle refletem helpers
+novos e divergentes preexistentes exigem intervenção. Sem implantação ou aceite
+físico nesta entrega. [Evidências e limites](MYCT-CLOUD-R1-RELATORIO.md).
+
+## 21/10/2026 — R1 pós-teste: reancoramento explícito e inventário completo
+
+O índice legado persistiu device de uma montagem como identidade durável; os
+mesmos inodes estão em device diferente após o boot. Não normalizar o campo nem
+aceitar inode isolado. Acrescentar UUID/subvolume Btrfs e metadados nos registros
+novos; manter comparações antigas estritas até reconciliação supervisionada.
+O plano exige origem atual reconhecida, ID anterior, metadado do torrent,
+hardlink atual comprovado, ausência de links desconhecidos e revalidação.
+Legado sem UUID/metadados históricos requer confirmação explícita de reinscrição;
+não há como fabricar a prova histórica ausente. Esta entrega tem apenas consulta
+de plano e transformação pura em fixtures, sem escritor/aplicação CLI.
+
+A Nuvem enumera conhecidos mesmo com seleção reprovada e marca incompletude;
+Android não troca opções anteriores por subconjunto bloqueado. Bloqueios,
+tokens, confirmações e revogação de consentimento continuam obrigatórios.
+O vínculo excepcional com outra origem RPC segue protegido. Nenhuma migração
+pessoal, deploy ou publicação; PR #60 draft para a Luna. [Provas, limites e
+procedimento futuro](MYCT-CLOUD-R1-POS-TESTE-DIAGNOSTICO.md).
+
+## 21/10/2026 — R1: escritor supervisionado Media, sem rollback automático
+
+Após revisão estática favorável da Luna ao plano, autorização separada para
+implementar o aplicador em módulo próprio, empacotado pelo SETUP. Prévia readonly
+com conteúdo/estado/procedência vinculados ao ID e prazo de 600 s; aceite legado
+específico, sem fabricar identidade histórica. Delivery/catalogs/naming/Media
+serializam operações cooperantes; reconsulta sob locks, backup exclusivo e intent
+durável precedem temporário/fsync/rename/fsync/recibo. Só registros aprovados mudam.
+
+Recuperação classifica o hash atual e atualiza recibo, sem restaurar backup nem
+sobrescrever catálogo mais recente. Transação incerta impede outra aplicação.
+Essa decisão reduz risco de retry/rollback após interrupção sem introduzir um
+framework de migrações. Nenhuma migração real ou implantação autorizada nesta
+entrega. [Contrato, limites e operação futura](MYCT-MEDIA-RECONCILE-APLICADOR.md).
+
+## 21/10/2026 — Histórico superado: aceitação curta e execução integral limitada
+
+**Substituído pela reconciliação por metadados descrita na decisão seguinte.**
+
+Após MA01/MA02 da [auditoria da Luna](https://github.com/Samuel-Francisco-AS/My-CT/pull/60#issuecomment-6325881368),
+separam-se os 600 s de aceitação do plano (rechecados sob locks) do deadline
+monotônico de uma execução contínua: `max(600, ceil(3 * tempo_da_prévia + 120))`,
+teto de 24 h. Orçamento medido e volume/passagens participam do ID schema 2.
+Projeção acima do teto recusa antes do hashing de apply; execução acima da margem
+recusa publicação. Não remover SHA-256, soltar locks ou renovar consentimento para
+acomodar leitura longa. Token de release/space continua independente e inalterado.
+A projeção não garante desempenho; custo real dos 264 não foi medido nesta missão.
+
+Falha do primeiro intent preserva o diretório e exige recuperação com o plano
+exato. Só classifica `not_applied` se o catálogo anterior permanecer igual e as
+evidências forem reconhecidas; nunca restaura catálogo nem apaga órfãos.
+[Contrato e procedimento](MYCT-MEDIA-RECONCILE-APLICADOR.md). Desenvolvimento em
+fixtures, PR #60 draft, sem implantação, migração pessoal ou nova APK; aguardar
+reauditoria antes de qualquer operação real.
+
+
+## 21/10/2026 — Reconciliação Media somente por metadados
+
+Por autorização expressa do proprietário, remover hashing/leitura dos vídeos e a
+complexidade temporal criada para acomodá-los. Reconciliação corrige identidade
+de hardlinks; não audita conteúdo. Plano schema 3 vincula metadados/RPC/estado/
+procedência, com resumo e ID exato; validade única de 600 s, inclusive antes do
+rename. SHA-256 só para controles pequenos. Backup exclusivo, locks na ordem
+existente, publicação atômica e recuperação MA02 preservados. Sem orçamento por
+GiB, throughput, passagens ou comando estimate. Proteções de archive/restore/
+space/release permanecem. UUID/subvolume acrescentam evidência, mas não promovem
+migração automática em outro boot. [Contrato atual](MYCT-MEDIA-RECONCILE-APLICADOR.md).
+Nenhuma implantação, reconciliação pessoal ou APK publicada; aguardar Luna.
+
+## Exclusão local independente da Nuvem e identidade Media (PR #60)
+
+Por determinação do proprietário, retirada da biblioteca e exclusão permanente
+local exigem uma confirmação dos alvos e consequências, sem backup/arquivamento
+obrigatórios. Exclusão parcial de torrent retira a transferência preservando dados
+antes de remover somente os arquivos exibidos. O reconhecimento usa a identidade
+atual origem/destino e UUID/subvolume persistente, sem depender do número de device
+histórico. [Contrato, limites e validação](MYCT-MEDIA-LOCAL-RELATORIO.md).

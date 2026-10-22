@@ -37,6 +37,34 @@ class CloudTests(unittest.TestCase):
             plan=self.m.cloud_diagnose(self.selection)
             self.assertTrue(all(c.args[0]==['version'] for c in calls.call_args_list))
             return plan
+    def test_r1_bundle_is_deterministic_hashes_current_helpers_and_protects_divergence(self):
+        second=self.home/'second';build(second)
+        first=self.home/'bundle'
+        for name in ('payload.pyz','diagnose.py','integrity.json'):
+            self.assertEqual((first/name).read_bytes(),(second/name).read_bytes())
+        integrity=json.loads((first/'integrity.json').read_text())
+        self.assertEqual(hashlib.sha256((first/'payload.pyz').read_bytes()).hexdigest(),integrity['payload_sha256'])
+        self.assertEqual(hashlib.sha256((first/'diagnose.py').read_bytes()).hexdigest(),integrity['diagnose_sha256'])
+        root=Path(__file__).resolve().parents[3]
+        self.assertIn('ops/myct_media_reconcile.py',self.m.MANIFEST['sources'])
+        self.assertIn('myct_media_reconcile.py',self.m.MANIFEST['cloud']['helpers'])
+        with zipfile.ZipFile(first/'payload.pyz') as archive:
+            self.assertEqual({'__main__.py',*self.m.MANIFEST['sources']},set(archive.namelist()))
+            for name in self.m.MANIFEST['sources']:
+                data=archive.read(name)
+                self.assertEqual((root/name).read_bytes(),data)
+                self.assertEqual(hashlib.sha256(data).hexdigest(),self.m.MANIFEST['sha256'][name])
+            for name in self.m.MANIFEST['cloud']['helpers']:
+                path=self.m.cloud_paths()[1]/name;path.parent.mkdir(parents=True,exist_ok=True)
+                path.write_bytes(archive.read('ops/'+name));path.chmod(0o600 if name.endswith('.py') else 0o700)
+        plan=self.diagnose()
+        self.assertTrue(all(state=='compatible' for state in plan['cloud']['helpers'].values()))
+        previous=self.m.cloud_paths()[1]/'myct_cloud_progress.py'
+        previous.write_bytes(b'# Previous personal helper; must not overwrite.\n')
+        before=previous.read_bytes();plan=self.diagnose()
+        self.assertEqual('previous',plan['cloud']['helpers'][previous.name])
+        self.assertFalse(plan['can_apply']);self.assertEqual(before,previous.read_bytes())
+
     def test_passive_missing_and_existing_never_network_or_write(self):
         self.configure();before=self.config.read_bytes()
         for installed in (False,True):

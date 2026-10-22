@@ -1,5 +1,23 @@
 # My-CT
 
+**Armazenamento local — candidata code 51:** identidade de hardlinks resistente à
+renumeração de device Btrfs, retirada da biblioteca e exclusão permanente por alvos
+exatos, com uma confirmação e sem backup Cloud obrigatório.
+[APK 0.13.4-media-local-rc1/code 51](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-media-local-v0.13.4-rc1) ·
+[Contrato e validação](docs/MYCT-MEDIA-LOCAL-RELATORIO.md).
+A PR #60 permanece draft; novo aceite físico Moto pendente. Atualizar a APK não
+substitui os helpers pessoais automaticamente.
+
+**MYCT-CLOUD-R1:** candidata code 49 publicada anteriormente, seleção Jellyfin,
+Atualizar durante `space` e progresso real de leitura preservados.
+[Pre-release anterior](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-cloud-r1-v0.13.2-rc1).
+O reparo real do cadastro Media reconciliou 264 registros com recibo `succeeded`;
+[fechamento técnico](docs/MYCT-CLOUD-R1-RELATORIO.md). Os arquivos pessoais,
+backups e registros excepcionais foram preservados. O reconhecimento corrente
+não exige repetir esse reparo só por renumeração do device.
+[Diagnóstico](docs/MYCT-CLOUD-R1-POS-TESTE-DIAGNOSTICO.md) ·
+[Publicação anterior](docs/MYCT-CLOUD-R1-DEPLOY-RELATORIO.md).
+
 **MYCT-SETUP integrada à `main` (21/10/2026):** [PR #59 MERGED](https://github.com/Samuel-Francisco-AS/My-CT/pull/59),
 marco `567d51409b10f2ca01c0f822942efd8c0baaf21e`, reúne documentação,
 SETUP-1/2/3/4 e AUDIT-FIX-1 com históricos preservados. APK **code 48** aceito

@@ -16,6 +16,100 @@ import java.util.concurrent.atomic.AtomicReference
 
 /** Fake SSH only. Requires an explicitly selected device; compilation is not device acceptance. */
 class CloudUiInstrumentedTest {
+    @Test fun thirteenSelectionsSurviveActualCompositionDisposalDuringSpaceQuery() = spaceQueryLifecycle(dispose = true)
+    @Test fun manualRefreshDuringSpaceAllowsValidPreviewWithoutAnotherQuery() = spaceQueryLifecycle(dispose = false)
+
+    private fun spaceQueryLifecycle(dispose: Boolean) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val archive = "a".repeat(64); val hash = "c".repeat(40)
+        val paths = (1..13).map { "Series/Fixture/E%02d.mkv".format(it) }
+        val token = "${System.currentTimeMillis() / 1000}-" + "d".repeat(64)
+        fun plan(selected: List<String>) = JSONObject().put("ok", true).put("id", archive)
+            .put("preview", token).put("confirmation", token).put("library_confirmation", token)
+            .put("expires_in_seconds", 600).put("can_release", true).put("remove_library", JSONArray(selected))
+            .put("remove_paths", JSONArray()).put("trees", JSONArray()).put("blockers", JSONArray())
+            .put("library", JSONArray(paths.map { JSONObject().put("path", it).put("present", true).put("linked_to_package", true) }))
+        val base = CloudWork("torrent", listOf("space", archive))
+        val row = AtomicReference(JSONObject().put("id", "b".repeat(32)).put("work", base.json())
+            .put("state", "succeeded").put("result", plan(emptyList())).toString())
+        val mounted = androidx.compose.runtime.mutableStateOf(true)
+        val model = CloudModel(scope) { _, query ->
+            when (query) {
+                CloudQuery.Snapshot -> {
+                    val entry = JSONObject().put("id", archive).put("infohash", hash).put("name", "Fixture").put("size", 100).put("state", "verified")
+                    JSONObject().put("ok", true).put("tasks", JSONArray().put(JSONObject(row.get())))
+                        .put("catalogs", JSONObject().put("torrent", JSONObject().put("ok", true).put("entries", JSONArray().put(entry)))
+                            .put("file", JSONObject().put("ok", true).put("entries", JSONArray())))
+                        .put("transmission", JSONObject().put("ok", true).put("torrents", JSONArray())).toString()
+                }
+                is CloudQuery.Start -> {
+                    check(query.work.action == "space") // This test cannot submit release.
+                    row.set(JSONObject().put("id", query.id).put("work", query.work.json()).put("state", "running").toString())
+                    JSONObject().put("ok", true).put("task", JSONObject(row.get())).toString()
+                }
+                is CloudQuery.Task -> JSONObject().put("ok", true).put("task", JSONObject(row.get())).toString()
+                else -> error("No cancellation or destructive operation")
+            }
+        }
+        fun idle() {
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            do {
+                instrumentation.waitForIdleSync()
+                if (!model.busy) return
+                Thread.sleep(20)
+            } while (System.nanoTime() < deadline)
+            error("Model did not become idle")
+        }
+        fun find(node: AccessibilityNodeInfo?, text: String): Boolean {
+            node ?: return false
+            if (node.text?.toString() == text) return true
+            return (0 until node.childCount).any { find(node.getChild(it), text) }
+        }
+        fun clickRefresh(node: AccessibilityNodeInfo?): Boolean {
+            node ?: return false
+            if (node.text?.toString() == "Atualizar") {
+                var button: AccessibilityNodeInfo = node
+                while (!button.isClickable) button = button.parent ?: return false
+                return button.isEnabled && button.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            }
+            return (0 until node.childCount).any { clickRefresh(node.getChild(it)) }
+        }
+        fun scroll(node: AccessibilityNodeInfo?): Boolean {
+            node ?: return false
+            if (node.isScrollable && node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) return true
+            return (0 until node.childCount).any { scroll(node.getChild(it)) }
+        }
+        try {
+            instrumentation.runOnMainSync { model.attach(SshConnection()); model.select(archive); model.refresh() }; idle()
+            instrumentation.runOnMainSync { model.viewTask(model.tasks.single()) }; idle()
+            instrumentation.runOnMainSync {
+                paths.forEach { model.toggleLink(archive, it) }
+                activity.setContent { if (mounted.value) MyCtTheme { CloudScreen(model, {}) } }
+            }; idle()
+            instrumentation.runOnMainSync {
+                model.start(CloudWork("torrent", listOf("space", archive) + paths.flatMap { listOf("--remove-library", it) }))
+            }; idle()
+            assertEquals(paths, parseCloudTask(JSONObject(row.get())).work.librarySelection)
+            assertTrue(clickRefresh(instrumentation.uiAutomation.rootInActiveWindow)); idle()
+            assertTrue(model.tasks.single { it.active }.active)
+            if (dispose) { instrumentation.runOnMainSync { mounted.value = false }; idle() }
+            row.set(JSONObject(row.get()).put("state", "succeeded").put("result", plan(paths)).toString())
+            instrumentation.runOnMainSync { model.refresh() }; idle()
+            if (dispose) { instrumentation.runOnMainSync { mounted.value = true }; idle() }
+            assertEquals(13, model.selectedLinks(archive).size)
+            assertEquals(!dispose, model.canRelease(model.space!!, paths)) // Only disposal revokes consent.
+            repeat(16) {
+                if (!find(instrumentation.uiAutomation.rootInActiveWindow, "13/256 links selecionados")) {
+                    scroll(instrumentation.uiAutomation.rootInActiveWindow); instrumentation.waitForIdleSync()
+                }
+            }
+            assertTrue(find(instrumentation.uiAutomation.rootInActiveWindow, "13/256 links selecionados"))
+        } finally { instrumentation.runOnMainSync { scope.cancel(); activity.finish() } }
+    }
+
     @Test fun cancelDialogRequiresConfirmationAndSilentPollingNeverDisablesControls() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext, MainActivity::class.java)

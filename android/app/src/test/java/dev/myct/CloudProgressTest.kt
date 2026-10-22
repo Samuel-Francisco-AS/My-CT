@@ -13,6 +13,25 @@ internal fun cloudProgressJson(phase: String = "uploading", done: Long = 50, tot
     .put("current_file_index", 1).put("total_files", 2)
 
 class CloudProgressTest {
+    @Test fun spaceReadMetricsHaveExplicitPhaseScopeAndNeverBorrowTransferSemantics() {
+        val row = cloudProgressJson("local_read").put("metric", "read").put("scope", "phase").put("read_pass", 2)
+        val read = parseCloudProgress(row)!!
+        assertEquals("Verificando arquivos locais", read.label); assertEquals(2, read.readPass)
+        assertEquals("Tempo estimado desta leitura: 2 s", read.estimate(CLOUD_NOW))
+        assertEquals("Tempo estimado indisponível", read.estimate(CLOUD_NOW + 9000))
+        assertNull(parseCloudProgress(JSONObject(row.toString()).apply { remove("scope") }))
+        assertNull(parseCloudProgress(JSONObject(row.toString()).put("metric", "network")))
+        for (phase in listOf("remote_check", "local_inventory", "library_inventory", "transmission_check", "finalizing")) {
+            val unknown = parseCloudProgress(cloudProgressJson(phase, 0, null, null, null, null)
+                .put("metric", "read").put("scope", "phase"))!!
+            assertNull(unknown.percent); assertEquals("Tempo estimado indisponível", unknown.estimate(CLOUD_NOW))
+        }
+        assertNull(parseCloudProgress(row.put("percent", 100)))
+        val active = parseCloudTask(cloudTaskJson(CloudWork("torrent", listOf("space", CLOUD_ARCHIVE)), "running")
+            .put("progress", cloudProgressJson("done", 100, percent = 100.0).put("metric", "read").put("scope", "phase")))
+        assertEquals("Em andamento", active.label); assertFalse(active.canCancel)
+    }
+
     @Test fun parsesBytesPercentRateAndNullsForBothDirections() {
         for (phase in listOf("uploading", "downloading")) {
             val p = parseCloudProgress(cloudProgressJson(phase))!!

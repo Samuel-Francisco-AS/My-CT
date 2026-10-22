@@ -11,8 +11,8 @@ android {
         applicationId = "dev.myct"
         minSdk = 26
         targetSdk = 36
-        versionCode = 48
-        versionName = "0.13.1-setup-audit-fix1-rc1"
+        versionCode = 51
+        versionName = "0.13.4-media-local-rc1"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -47,7 +47,7 @@ dependencies {
 val setupAssets = layout.buildDirectory.dir("generated/setupAssets")
 val buildSetupBundle by tasks.registering(Exec::class) {
     inputs.files(fileTree("../../ops/setup") { include("*.py", "manifest.json") },
-        fileTree("../../ops") { include("myct-archive", "myct-archive-torrent", "myct-cloud", "myct_cloud_progress.py", "myct_cloud_config.py", "myct-media", "myct-media-cleanup", "myct-torrent", "myct-search", "torrent/myct-torrent-done", "torrent/myct-transmission.service") },
+        fileTree("../../ops") { include("myct-archive", "myct-archive-torrent", "myct-cloud", "myct_cloud_progress.py", "myct_cloud_config.py", "myct_media_reconcile.py", "myct-media", "myct-media-cleanup", "myct-torrent", "myct-search", "torrent/myct-torrent-done", "torrent/myct-transmission.service") },
         fileTree("../../server") { include("main.cpp", "postgres.cpp", "postgres.hpp", "Makefile", "migrations/*.sql") })
     outputs.dir(setupAssets)
     commandLine("python3", "../../ops/setup/build_bundle.py", setupAssets.get().dir("myct-setup").asFile.absolutePath)

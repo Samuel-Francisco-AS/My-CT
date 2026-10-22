@@ -51,7 +51,7 @@ class TorrentsTest {
     }
 
     @Test fun explicitDataDeletionRequiresFullHashAndDistinctVerb() {
-        assertTrue(torrentCommand(TorrentAction.Control("delete-data", hash))
+        assertTrue(torrentCommand(TorrentAction.Control("delete-data", hash, "/home/sam/Downloads/My-CT/Torrents/$hash"))
             .contains("delete-data '$hash'"))
         assertThrows(IllegalArgumentException::class.java) {
             torrentCommand(TorrentAction.Control("delete-data", "all"))

@@ -152,17 +152,19 @@ internal fun TorrentsScreen(model: TorrentsModel, filesBusy: Boolean, openFiles:
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     DetailValue("Torrent", item.name)
+                    DetailValue("Diretório selecionado", item.directory)
                     Text("O Transmission encerrará esta transferência e apagará seus dados, " +
                         "inclusive arquivos parciais. O seeding será interrompido. " +
-                        "Se houver hardlinks na biblioteca, a operação será recusada: " +
-                        "retire-os primeiro em Mídia → Armazenamento.")
+                        "Outros hardlinks, inclusive na biblioteca, serão preservados e podem " +
+                        "reter o espaço. Todos os arquivos deste torrent estão no escopo; " +
+                        "para escolher episódios individualmente, use Mídia → Armazenamento.")
                     Text("A exclusão de dados é irreversível.")
                 }
             },
             confirmButton = {
                 MyCtTextButton(onClick = {
                     deleteData = null
-                    model.control("delete-data", item.hash)
+                    model.control("delete-data", item.hash, item.directory)
                 }, enabled = model.actionsEnabled && !model.stale) {
                     Text("Excluir torrent e arquivos")
                 }

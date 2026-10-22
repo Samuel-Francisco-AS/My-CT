@@ -36,7 +36,7 @@ internal class TorrentsModel internal constructor(
     fun refresh(passive: Boolean = false) = operate(TorrentAction.List, passive)
     fun add(magnet: String) = operate(TorrentAction.Add(magnet.trim()))
     fun addFile(query: String, indexerId: Int, resultRef: String) = operate(TorrentAction.AddFile(query, indexerId, resultRef))
-    fun control(verb: String, hash: String) = operate(TorrentAction.Control(verb, hash))
+    fun control(verb: String, hash: String, directory: String? = null) = operate(TorrentAction.Control(verb, hash, directory))
     // Leaving the tab stops queries. A mutation already sent may have succeeded: never retry it.
     fun hide() {
         if (!busy) return

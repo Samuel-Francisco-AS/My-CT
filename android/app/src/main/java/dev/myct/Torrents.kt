@@ -50,7 +50,7 @@ internal sealed interface TorrentAction {
     data object List : TorrentAction
     data class Add(val magnet: String) : TorrentAction
     data class AddFile(val query: String, val indexerId: Int, val resultRef: String) : TorrentAction
-    data class Control(val verb: String, val hash: String) : TorrentAction
+    data class Control(val verb: String, val hash: String, val directory: String? = null) : TorrentAction
 }
 internal fun torrentCommand(action: TorrentAction): String {
     fun quote(value: String): String {
@@ -67,7 +67,12 @@ internal fun torrentCommand(action: TorrentAction): String {
         }
         is TorrentAction.Control -> {
             require(action.verb in setOf("pause", "resume", "remove", "delete-data") && torrentHash.matches(action.hash))
-            "${action.verb} ${quote(action.hash)}"
+            if (action.verb == "delete-data") {
+                val directory = requireNotNull(action.directory)
+                require(directory.startsWith('/') && directory.substringBeforeLast('/').endsWith("/Downloads/My-CT/Torrents") &&
+                    directory.split('/').none { it == "." || it == ".." })
+                "delete-data ${quote(action.hash)} ${quote(directory)}"
+            } else "${action.verb} ${quote(action.hash)}"
         }
     }
     return "if [ -x \"\$HOME/.local/bin/myct-torrent\" ]; then exec \"\$HOME/.local/bin/myct-torrent\" $args; else exit 127; fi"
@@ -78,9 +83,6 @@ internal fun executeTorrent(action: TorrentAction, open: () -> DownloadExec, tim
         DownloadFailure(when {
             status == 127 -> "CLI myct-torrent ausente. Atualize o helper no Fedora."
             status == 3 -> "Transmission indisponível. Confira o serviço myct-transmission no Fedora."
-            action is TorrentAction.Control && action.verb == "delete-data" &&
-                (reason.contains("hardlinks") || reason.contains("vinculada ao Jellyfin")) ->
-                "Exclusão bloqueada: há hardlinks na biblioteca. Retire-os em Mídia → Armazenamento."
             action is TorrentAction.Control && action.verb == "delete-data" ->
                 "Não foi possível confirmar a exclusão. Consulte o Transmission antes de tentar novamente."
             else -> "Pedido recusado pelo motor. Confira magnet, diretório e Transmission 4.1+. Atualize antes de repetir."

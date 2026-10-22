@@ -181,7 +181,8 @@ internal data class CleanupTorrent(val hash: String, val name: String,
     val videosOutsideLibrary: Int, val examples: List<String>)
 internal data class CleanupPlan(val mode: String, val selected: Int, val bytes: Long,
     val blockers: List<String>, val torrents: List<CleanupTorrent>,
-    val canApply: Boolean, val fingerprint: String)
+    val canApply: Boolean, val fingerprint: String,
+    val paths: List<String>, val targets: List<String>)
 
 internal fun parseCleanupFiles(text: String): List<CleanupFile> {
     val files = JSONObject(text).getJSONArray("files")
@@ -198,6 +199,19 @@ internal fun parseCleanupFiles(text: String): List<CleanupFile> {
 }
 internal fun parseCleanupPlan(text: String): CleanupPlan {
     val j = JSONObject(text)
+    require(j.optInt("version") == 2) { "Atualize o helper myct-media-cleanup no Fedora." }
+    val paths = j.getJSONArray("paths").let { a ->
+        require(a.length() in 1..256)
+        (0 until a.length()).map { a.getString(it).also { p -> require(validMediaPath(p)) } }
+    }
+    val targets = j.getJSONArray("targets").let { a ->
+        require(a.length() in 1..512)
+        (0 until a.length()).map { a.getJSONObject(it).getString("path").also { p ->
+            require(p.startsWith('/') && p.length <= 8192 && p.none { it.isISOControl() } &&
+                p.split('/').drop(1).none { it.isEmpty() || it == "." || it == ".." })
+        } }
+    }
+    require(paths.distinct().size == paths.size && targets.distinct().size == targets.size)
     val warnings = j.getJSONArray("blocked")
     val torrentRows = j.getJSONArray("torrents")
     require(warnings.length() <= 256 && torrentRows.length() <= 256)
@@ -213,9 +227,9 @@ internal fun parseCleanupPlan(text: String): CleanupPlan {
         }
     }
     val result = CleanupPlan(j.getString("mode"), j.getInt("selected"), j.getLong("bytes"),
-        blocked, torrents, j.getBoolean("can_apply"), j.getString("fingerprint"))
+        blocked, torrents, j.getBoolean("can_apply"), j.getString("fingerprint"), paths, targets)
     require(result.mode in setOf("links", "storage") &&
-        result.selected in 1..256 && result.bytes >= 0 &&
+        result.selected == paths.size && result.bytes >= 0 &&
         result.canApply == result.blockers.isEmpty() &&
         Regex("[0-9a-f]{64}").matches(result.fingerprint))
     return result
