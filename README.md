@@ -1,18 +1,21 @@
 # My-CT
 
-**MYCT-CLOUD-R1 candidata publicada (21/10/2026):** seleção Jellyfin por pacote,
-correção de Atualizar durante `space` e progresso real de leitura.
-[Pre-release 0.13.2-cloud-r1-rc1/code 49](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-cloud-r1-v0.13.2-rc1),
-commit auditado `f239bee`; helpers atualizados sob autorização e backup privado.
-**Aceite Moto pendente; PR #60 permanece draft, sem merge.**
-Teste físico identificou device persistido antigo no índice Media e lista parcial
-de vínculos. Correção pós-teste em auditoria: plano/aplicador supervisionado
-somente por metadados (sem leitura dos vídeos),
-inventário completo e UI protegida; fonte code 50, **sem nova publicação/deploy
-ou migração pessoal**. [Contrato do aplicador](docs/MYCT-MEDIA-RECONCILE-APLICADOR.md).
-[Diagnóstico preservado, correção e migração futura](docs/MYCT-CLOUD-R1-POS-TESTE-DIAGNOSTICO.md).
-[Publicação, implantação e roteiro físico](docs/MYCT-CLOUD-R1-DEPLOY-RELATORIO.md) ·
-[Implementação e testes](docs/MYCT-CLOUD-R1-RELATORIO.md).
+**Armazenamento local — candidata code 51:** identidade de hardlinks resistente à
+renumeração de device Btrfs, retirada da biblioteca e exclusão permanente por alvos
+exatos, com uma confirmação e sem backup Cloud obrigatório.
+[Contrato e validação](docs/MYCT-MEDIA-LOCAL-RELATORIO.md).
+A PR #60 permanece draft; novo aceite físico Moto pendente. Atualizar a APK não
+substitui os helpers pessoais automaticamente.
+
+**MYCT-CLOUD-R1:** candidata code 49 publicada anteriormente, seleção Jellyfin,
+Atualizar durante `space` e progresso real de leitura preservados.
+[Pre-release anterior](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-cloud-r1-v0.13.2-rc1).
+O reparo real do cadastro Media reconciliou 264 registros com recibo `succeeded`;
+[fechamento técnico](docs/MYCT-CLOUD-R1-RELATORIO.md). Os arquivos pessoais,
+backups e registros excepcionais foram preservados. O reconhecimento corrente
+não exige repetir esse reparo só por renumeração do device.
+[Diagnóstico](docs/MYCT-CLOUD-R1-POS-TESTE-DIAGNOSTICO.md) ·
+[Publicação anterior](docs/MYCT-CLOUD-R1-DEPLOY-RELATORIO.md).
 
 **MYCT-SETUP integrada à `main` (21/10/2026):** [PR #59 MERGED](https://github.com/Samuel-Francisco-AS/My-CT/pull/59),
 marco `567d51409b10f2ca01c0f822942efd8c0baaf21e`, reúne documentação,

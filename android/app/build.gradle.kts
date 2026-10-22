@@ -11,8 +11,8 @@ android {
         applicationId = "dev.myct"
         minSdk = 26
         targetSdk = 36
-        versionCode = 50
-        versionName = "0.13.3-cloud-r1-rc2"
+        versionCode = 51
+        versionName = "0.13.4-media-local-rc1"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

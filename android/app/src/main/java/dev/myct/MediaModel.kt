@@ -11,6 +11,7 @@ internal class MediaModel internal constructor(
     val cloud = CloudModel()
     private var connection: SshConnection? = null
     private var generation = 0
+    private var cleanupRevision = 0
     private var job: Job? = null
     var connected by mutableStateOf(false)
         private set
@@ -57,9 +58,20 @@ internal class MediaModel internal constructor(
     fun loadSources() = operate(MediaAction.BulkSources)
     fun loadLibrary() = operate(MediaAction.LibraryList)
     fun loadCleanup() = operate(MediaAction.CleanupList)
-    fun previewCleanup(selection: CleanupSelection) = operate(MediaAction.CleanupPreview(selection))
-    fun applyCleanup(selection: CleanupSelection, fingerprint: String) =
+    fun invalidateCleanup() { cleanupRevision++; cleanupPlan = null; cleanupSelection = null }
+    fun previewCleanup(selection: CleanupSelection) {
+        if (busy) return
+        invalidateCleanup()
+        operate(MediaAction.CleanupPreview(selection))
+    }
+    fun applyCleanup(selection: CleanupSelection, fingerprint: String) {
+        val plan = cleanupPlan ?: return
+        if (!actionsEnabled || cleanupSelection != selection || plan.mode != selection.mode ||
+            plan.paths.sorted() != selection.paths.sorted() || !plan.canApply ||
+            plan.fingerprint != fingerprint) return
+        cleanupPlan = null; cleanupSelection = null
         operate(MediaAction.CleanupApply(selection, fingerprint))
+    }
     fun planManual(spec: ManualBatch) = operate(MediaAction.BulkPlan(spec))
     fun importManual(spec: ManualBatch) = operate(MediaAction.BulkImport(spec))
     fun sync() = operate(MediaAction.Sync)
@@ -74,6 +86,7 @@ internal class MediaModel internal constructor(
         val ssh = connection ?: return
         if (busy) return
         val epoch = ++generation
+        val cleanupEpoch = cleanupRevision
         busy = true
         job = scope.launch {
             try {
@@ -93,7 +106,9 @@ internal class MediaModel internal constructor(
                     val plan = parseCleanupPlan(
                         runInterruptible(Dispatchers.IO) { execute(ssh, action) }
                     )
-                    if (epoch == generation) {
+                    require(plan.mode == action.selection.mode &&
+                        plan.paths.sorted() == action.selection.paths.sorted())
+                    if (epoch == generation && cleanupEpoch == cleanupRevision) {
                         cleanupPlan = plan
                         cleanupSelection = action.selection
                         stale = false
@@ -119,8 +134,8 @@ internal class MediaModel internal constructor(
                         cleanupFiles = files; cleanupPlan = null; cleanupSelection = null
                         libraryGroups = groups; entries = managed
                         stale = false
-                        message = "${summary.getInt("removed_links")} hardlinks retirados; " +
-                            "${summary.getInt("removed_torrents")} torrents excluídos."
+                        message = "${summary.getInt("removed_links")} caminhos retirados da biblioteca; " +
+                            "${summary.getInt("removed_torrents")} transferências encerradas."
                     }
                     return@launch
                 }

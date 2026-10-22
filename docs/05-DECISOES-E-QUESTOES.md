@@ -615,3 +615,12 @@ GiB, throughput, passagens ou comando estimate. Proteções de archive/restore/
 space/release permanecem. UUID/subvolume acrescentam evidência, mas não promovem
 migração automática em outro boot. [Contrato atual](MYCT-MEDIA-RECONCILE-APLICADOR.md).
 Nenhuma implantação, reconciliação pessoal ou APK publicada; aguardar Luna.
+
+## Exclusão local independente da Nuvem e identidade Media (PR #60)
+
+Por determinação do proprietário, retirada da biblioteca e exclusão permanente
+local exigem uma confirmação dos alvos e consequências, sem backup/arquivamento
+obrigatórios. Exclusão parcial de torrent retira a transferência preservando dados
+antes de remover somente os arquivos exibidos. O reconhecimento usa a identidade
+atual origem/destino e UUID/subvolume persistente, sem depender do número de device
+histórico. [Contrato, limites e validação](MYCT-MEDIA-LOCAL-RELATORIO.md).

@@ -255,7 +255,7 @@ def enable_naming(rpc):
     return {'naming': 'enabled-on-completion'}
 
 def refuse_shared_data(folder):
-    """Reject deleting any original with external hardlinks (e.g. Jellyfin)."""
+    """Validate the selected whole-torrent directory without following symlinks."""
     if folder.is_symlink() or folder.resolve() != folder:
         raise Failure('Diretório do torrent redirecionado; exclusão recusada.')
     if not folder.exists():
@@ -275,14 +275,12 @@ def refuse_shared_data(folder):
             if entry.is_dir():
                 stack.append(entry)
             elif entry.is_file():
-                if entry.stat().st_nlink > 1:
-                    raise Failure('Torrent possui hardlinks em outra biblioteca. ' +
-                                  'Use Mídia → Armazenamento para remover os vínculos primeiro.')
+                pass  # Other hardlinks remain intact and may retain all allocated data.
             else:
                 raise Failure('Torrent contém entrada não regular. Exclusão recusada.')
 
 
-def delete_torrent_data(rpc, key):
+def delete_torrent_data(rpc, key, expected_directory):
     """Only a dedicated My-CT torrent folder may be deleted by Transmission."""
     state = Path.home() / '.local/share/myct/media'
     if state.is_symlink() or state.resolve() != state:
@@ -298,19 +296,11 @@ def delete_torrent_data(rpc, key):
             raise Failure('Torrent ausente ou fora do diretório My-CT.')
         row = items[0]
         folder = Path(row['download_dir'])
+        if str(folder) != expected_directory:
+            raise Failure('Diretório mudou desde a confirmação; atualize a lista.')
         if folder.parent != destination() or folder.is_symlink():
             raise Failure('Diretório não gerenciado; operação recusada.')
         refuse_shared_data(folder)
-        # Check metadata, too: links may have been registered before a source vanished.
-        index = state / 'state.json'
-        if index.exists():
-            if index.is_symlink():
-                raise Failure('Índice de mídia inválido.')
-            data = json.loads(index.read_text())
-            if any(info.get('id', '').startswith(key + ':')
-                   for info in data.get('links', {}).values()):
-                raise Failure('Torrent ainda possui mídia vinculada ao Jellyfin. ' +
-                              'Retire esses hardlinks na aba Armazenamento antes de excluir.')
         rpc.call('torrent_remove', {'ids': [key], 'delete_local_data': True})
         # Transmission removes payload; never recurse through the directory ourselves.
         try:
@@ -508,11 +498,11 @@ def run(args, rpc, raw=None):
         return enable_naming(rpc)
     if len(args) == 2 and args[0] == 'organize':
         return organize(rpc, args[1].lower())
-    if len(args) == 2 and args[0] == 'delete-data':
+    if len(args) == 3 and args[0] == 'delete-data':
         key = args[1].lower()
         if not re.fullmatch('[0-9a-f]{40}', key):
             raise Failure('Use o hash completo do torrent.')
-        return delete_torrent_data(rpc, key)
+        return delete_torrent_data(rpc, key, args[2])
     if len(args) == 2 and args[0] in {'pause', 'resume', 'remove', 'status'}:
         key = args[1]
         if not re.fullmatch('[0-9a-fA-F]{40}', key):

@@ -1,9 +1,10 @@
 #!/usr/bin/python3
 """My-CT Media storage cleanup: preview first, explicit confirmation thereafter.
 
-Only verified hardlinks from managed Transmission torrents can be selected.
-Deleting original data is whole-torrent-only, delegated to Transmission RPC.
+Local deletion is independent of cloud backup and Media verification.
+Only the exact previewed paths are unlinked; torrent removal always preserves data.
 """
+from contextlib import ExitStack
 import base64
 import fcntl
 import hashlib
@@ -27,6 +28,7 @@ def load(name):
     return module
 
 core = load('myct-media')
+reconcile = load('myct_media_reconcile.py')
 MAX_PATHS = 256
 MAX_VIDEOS = 2000
 TOKEN = re.compile('[A-Za-z0-9_-]{1,48000}')
@@ -34,7 +36,7 @@ LIBRARIES = ('Series', 'Series-TV', 'Filmes')
 
 
 def snapshot(rows=None, state=None):
-    """Only paths physically hardlinked to a currently recognized completed torrent."""
+    """Safe library paths plus current source associations, including partial downloads."""
     state = state if state is not None else core.load_state()
     rows = rows if rows is not None else core.read_torrents()
     root = core.media_root()
@@ -42,9 +44,9 @@ def snapshot(rows=None, state=None):
     source_by_inode = {}
     source_by_hash = {}
     by_hash = {row['hash_string']: row for row in rows}
-    for source in core.media_files(rows):
+    for source in core.media_files(rows, include_incomplete=True):
         inode = source['source'].stat()
-        source_by_inode.setdefault((inode.st_dev, inode.st_ino), source)
+        source_by_inode.setdefault((inode.st_dev, inode.st_ino), []).append(source)
         source_by_hash.setdefault(source['torrent'], []).append(source)
     items = []
     if root.exists():
@@ -71,17 +73,22 @@ def snapshot(rows=None, state=None):
                         relative = str(file.relative_to(root))
                         core.safe_relative(relative)
                         inode = file.stat()
-                        source = source_by_inode.get((inode.st_dev, inode.st_ino))
+                        candidates = source_by_inode.get((inode.st_dev, inode.st_ino), [])
+                        source = candidates[0] if len(candidates) == 1 else None
                         info = state['links'].get(relative)
                         matched = (source is not None and inode.st_nlink >= 2 and
                                    (info is None or
-                                    core.record_matches(info, source['id'], file)))
+                                    core.record_matches(info, source['id'], file, source['source'])))
                         items.append({'path': relative,
                                       'bytes': inode.st_size,
-                                      'torrent': source['torrent'] if matched else None,
-                                      'source_id': source['id'] if matched else None,
-                                      'managed': info is not None,
-                                      'eligible': bool(matched),
+                                      'torrent': source['torrent'] if source else None,
+                                      'source_id': source['id'] if source else None,
+                                      'source': str(source['source']) if source else None,
+                                      'managed': bool(matched and info is not None),
+                                      'eligible': True,
+                                      'ambiguous': len(candidates) > 1,
+                                      'mtime_ns': inode.st_mtime_ns, 'ctime_ns': inode.st_ctime_ns,
+                                      'uid': inode.st_uid,
                                       'dev': inode.st_dev, 'ino': inode.st_ino,
                                       'nlink': inode.st_nlink})
     return {'files': items, 'sources': source_by_hash, 'torrents': by_hash}
@@ -111,118 +118,116 @@ def unpack(encoded):
     return {'mode': data['mode'], 'paths': sorted(paths)}
 
 
+def target(path, role):
+    core.no_symlink_path(path, Path.home())
+    s = path.lstat()
+    if not stat.S_ISREG(s.st_mode) or s.st_uid != os.getuid():
+        raise core.MediaError('Alvo não é arquivo regular do proprietário.')
+    return {'path': str(path), 'role': role, 'dev': s.st_dev, 'ino': s.st_ino,
+            'size': s.st_size, 'mtime_ns': s.st_mtime_ns, 'ctime_ns': s.st_ctime_ns,
+            'nlink': s.st_nlink, 'uid': s.st_uid}
+
+
 def preview(request, inventory):
     lookup = {item['path']: item for item in inventory['files']}
     selection = []
+    targets = {}
+    affected = {}
+    blockers = []
     for path in request['paths']:
         row = lookup.get(path)
         if not row or not row['eligible']:
-            raise core.MediaError('Um ou mais arquivos não são hardlinks verificados de torrents My-CT.')
+            raise core.MediaError('Arquivo ausente ou caminho inseguro; consulte novamente.')
         selection.append(row)
-    selected_paths = set(request['paths'])
-    grouped = {}
-    for item in selection:
-        grouped.setdefault(item['torrent'], []).append(item)
-    blockers = []
-    affected = []
-    if request['mode'] == 'storage':
-        for key, selected in sorted(grouped.items()):
-            all_uses = [f for f in inventory['files'] if f['torrent'] == key]
-            outside = [f['path'] for f in all_uses if f['path'] not in selected_paths]
-            if outside:
-                blockers.append('Torrent ' + key[:12] + ': há ' +
-                                str(len(outside)) + ' hardlinks fora da seleção. ' +
-                                'Selecione também esses arquivos para excluir o torrent completo.')
-            torrent = inventory['torrents'][key]
-            if torrent.get('left_until_done') != 0 or torrent.get('error', 0):
-                blockers.append('Torrent ' + key[:12] + ' não está concluído/íntegro.')
-            files = inventory['sources'].get(key, [])
-            represented = {f['source_id'] for f in all_uses}
-            selected_inodes = {(f['dev'], f['ino']) for f in selected}
-            for original in files:
-                st = original['source'].stat()
-                related = sum((f['dev'], f['ino']) == (st.st_dev, st.st_ino)
-                              for f in all_uses)
-                if (st.st_dev, st.st_ino) in selected_inodes and st.st_nlink > related + 1:
-                    blockers.append('Torrent ' + key[:12] + ': existem outros hardlinks fora da biblioteca. ' +
-                                    'Não é possível garantir a liberação de espaço.')
-            unlinked_video = [f['name'] for f in files if f['id'] not in represented]
-            if unlinked_video:
-                blockers.append('Torrent ' + key[:12] + ': há ' + str(len(unlinked_video)) +
-                                ' vídeos originais fora da seleção/biblioteca. ' +
-                                'Exclusão definitiva bloqueada para evitar perda inesperada.')
-            affected.append({'hash': key, 'name': torrent.get('name', ''),
-                             'videos_outside_library': len(unlinked_video),
-                             'examples': unlinked_video[:3],
-                             'seeding_will_stop': True})
-    material = [(f['path'], f['source_id'], f['dev'], f['ino'], f['nlink'])
-                for f in selection]
-    material.extend((key, row['download_dir'], row.get('left_until_done'))
-                    for key, row in sorted(inventory['torrents'].items())
-                    if key in grouped)
-    fingerprint = hashlib.sha256(repr((request['mode'], material, blockers, affected)).encode()).hexdigest()
-    return {'mode': request['mode'], 'selected': len(selection), 'bytes': sum(f['bytes'] for f in selection),
-            'paths': request['paths'], 'torrents': affected, 'blocked': blockers,
+        item = target(core.media_root() / core.safe_relative(path), 'library')
+        targets[item['path']] = item
+        if request['mode'] == 'storage':
+            if row.get('source'):
+                original = target(Path(row['source']), 'original')
+                if (original['dev'], original['ino']) != (item['dev'], item['ino']):
+                    raise core.MediaError('Origem mudou; consulte novamente.')
+                targets[original['path']] = original
+                key = row['torrent']
+                torrent = inventory['torrents'][key]
+                affected[key] = {'hash': key, 'name': torrent.get('name', ''),
+                                 'download_dir': torrent['download_dir'],
+                                 'videos_outside_library': 0, 'examples': [],
+                                 'seeding_will_stop': True}
+    material = {'version': 2, 'mode': request['mode'], 'paths': request['paths'],
+                'targets': sorted(targets.values(), key=lambda x: x['path']),
+                'torrents': sorted(affected.values(), key=lambda x: x['hash']),
+                'blocked': blockers}
+    fingerprint = hashlib.sha256(json.dumps(material, sort_keys=True).encode()).hexdigest()
+    return {**material, 'selected': len(selection), 'bytes': sum(f['bytes'] for f in selection),
             'can_apply': not blockers, 'fingerprint': fingerprint}
+
+
+def check_at(fd, item, after_unlink=False):
+    core.no_symlink_path(Path(item['path']), Path.home())
+    parent = Path(item['path']).parent.stat()
+    pinned = os.fstat(fd)
+    if (parent.st_dev, parent.st_ino) != (pinned.st_dev, pinned.st_ino):
+        raise core.MediaError('Diretório mudou durante a confirmação; consulte novamente.')
+    s = os.stat(Path(item['path']).name, dir_fd=fd, follow_symlinks=False)
+    fields = ('dev', 'ino', 'size', 'mtime_ns', 'uid') if after_unlink else (
+        'dev', 'ino', 'size', 'mtime_ns', 'ctime_ns', 'nlink', 'uid')
+    if not stat.S_ISREG(s.st_mode) or any(getattr(s, 'st_' + k) != item[k] for k in fields):
+        raise core.MediaError('Arquivo mudou durante a confirmação; consulte novamente.')
 
 
 def apply(request, expected, rows=None, rpc=None):
     if not re.fullmatch('[0-9a-f]{64}', expected):
         raise core.MediaError('Confirmação inválida.')
-    lock_path = core.state_path().with_suffix('.lock')
-    lock_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    if lock_path.is_symlink():
-        raise core.MediaError('Lock inválido.')
-    with lock_path.open('a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        state = core.load_state()
-        inventory = snapshot(rows, state)
-        plan = preview(request, inventory)
-        if plan['fingerprint'] != expected or not plan['can_apply']:
-            raise core.MediaError('A seleção mudou ou existe um bloqueio; refaça a prévia.')
-        # Recheck every selected link before touching Transmission.
-        for row in (x for x in inventory['files'] if x['path'] in request['paths']):
-            file = core.media_root() / core.safe_relative(row['path'])
-            core.no_symlink_path(file, core.media_root())
-            check = file.stat()
-            if (check.st_dev, check.st_ino, check.st_nlink) != (row['dev'], row['ino'], row['nlink']):
-                raise core.MediaError('Arquivo mudou durante a confirmação; nova prévia necessária.')
-        # No individual original is ever unlinked while a torrent is active.
-        if request['mode'] == 'storage':
-            if rpc is None:
-                torrent_tool = load('myct-torrent')
-                rpc = torrent_tool.Rpc()
-            for torrent in plan['torrents']:
-                # After accepting this RPC, never automatically repeat a failed/ambiguous request.
-                rpc.call('torrent_remove', {'ids': [torrent['hash']], 'delete_local_data': True})
-        removed = []
-        for path in request['paths']:
-            row = next(x for x in inventory['files'] if x['path'] == path)
-            file = core.media_root() / core.safe_relative(path)
-            core.no_symlink_path(file, core.media_root())
-            check = file.stat()
-            if (check.st_dev, check.st_ino) != (row['dev'], row['ino']):
-                raise core.MediaError('Um arquivo mudou durante a exclusão. Atualize o inventário.')
-            file.unlink()
-            state['links'].pop(path, None)
-            if row['source_id'] not in state['ignored']:
-                state['ignored'].append(row['source_id'])
-            core.save_state(state)
-            # Prune only now-empty folders belonging to this library title.
-            category, title = Path(path).parts[:2]
-            boundary = core.media_root() / category
-            current = file.parent
-            while current != boundary:
-                core.no_symlink_path(current, core.media_root())
-                try:
-                    current.rmdir()  # fails harmlessly if any other file remains
-                except OSError:
-                    break
-                current = current.parent
-            removed.append(path)
-        return {'removed_links': len(removed), 'removed_torrents': len(plan['torrents'])
-                if request['mode'] == 'storage' else 0,
-                'mode': request['mode'], 'originals_preserved': request['mode'] == 'links'}
+    initial = snapshot(rows)
+    keys = {row['torrent'] for row in initial['files']
+            if row['path'] in request['paths'] and row['torrent']}
+    try:
+        # Same lock order as Cloud/reconciliation. No cloud catalog or backup is required.
+        with reconcile.locks(core, keys), ExitStack() as stack:
+            state = core.load_state()
+            inventory = snapshot(rows, state)
+            plan = preview(request, inventory)
+            if plan['fingerprint'] != expected or not plan['can_apply']:
+                raise core.MediaError('A seleção mudou ou existe um bloqueio; consulte novamente.')
+            descriptors = []
+            for item in plan['targets']:
+                # Pin each directory from / downward. No symlink component is followed.
+                fd = os.open('/', os.O_RDONLY | os.O_DIRECTORY)
+                stack.callback(os.close, fd)
+                for component in Path(item['path']).parts[1:-1]:
+                    fd = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+                    stack.callback(os.close, fd)
+                check_at(fd, item)
+                descriptors.append((fd, item))
+            if plan['torrents']:
+                rpc = rpc if rpc is not None else load('myct-torrent').Rpc()
+                for torrent in plan['torrents']:
+                    # Stop redownload/seeding without deleting ANY payload through RPC.
+                    # Ambiguous failure aborts before unlink; never retry automatically.
+                    rpc.call('torrent_remove', {'ids': [torrent['hash']], 'delete_local_data': False})
+            for fd, item in descriptors:
+                check_at(fd, item)
+            removed = 0
+            library = {str(core.media_root() / p): p for p in request['paths']}
+            for fd, item in descriptors:
+                # Unlink changes nlink/ctime on aliases of this same inode.
+                check_at(fd, item, after_unlink=True)
+                os.unlink(Path(item['path']).name, dir_fd=fd)
+                removed += 1
+                path = library.get(item['path'])
+                if path is not None:
+                    row = next(x for x in inventory['files'] if x['path'] == path)
+                    info = state['links'].pop(path, None)
+                    identity = row['source_id'] or (info or {}).get('id')
+                    if identity and identity not in state['ignored']:
+                        state['ignored'].append(identity)
+                    # Persist completed library removals even if a later unlink fails.
+                    core.save_state(state)
+            return {'removed_links': len(request['paths']), 'removed_files': removed,
+                    'removed_torrents': len(plan['torrents']), 'mode': request['mode'],
+                    'originals_preserved': request['mode'] == 'links'}
+    except reconcile.Error as error:
+        raise core.MediaError('Armazenamento ocupado ou lock inseguro; tente após a operação atual.') from error
 
 
 def main():

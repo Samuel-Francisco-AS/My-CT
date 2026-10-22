@@ -32,7 +32,7 @@ class MediaCleanupTest {
     }
 
     @Test fun storagePreviewShowsBlockingReasonAndAffectedTorrent() {
-        val payload = """{"mode":"storage","selected":1,"bytes":1234,"paths":["$first"],"torrents":[{"hash":"$torrent","name":"Frieren torrent","videos_outside_library":1,"examples":["promo.mkv"],"seeding_will_stop":true}],"blocked":["há outro hardlink"],"can_apply":false,"fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"""
+        val payload = """{"version":2,"targets":[{"path":"/home/test/Media/$first"}],"mode":"storage","selected":1,"bytes":1234,"paths":["$first"],"torrents":[{"hash":"$torrent","name":"Frieren torrent","videos_outside_library":1,"examples":["promo.mkv"],"seeding_will_stop":true}],"blocked":["há outro hardlink"],"can_apply":false,"fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"""
         val parsed = parseCleanupPlan(payload)
         assertFalse(parsed.canApply)
         assertEquals(1, parsed.blockers.size)
@@ -50,5 +50,23 @@ class MediaCleanupTest {
         assertThrows(IllegalArgumentException::class.java) {
             mediaCommand(MediaAction.CleanupApply(CleanupSelection("links", listOf(first)), "bad"))
         }
+    }
+
+    @Test fun oldWholeTorrentDeletionContractCannotAuthorizeNewUi() {
+        assertThrows(IllegalArgumentException::class.java) {
+            parseCleanupPlan("""{"mode":"storage"}""")
+        }
+    }
+
+    @Test fun singleFilePreviewContainsExactlyTheVisibleTargetsWithoutBackup() {
+        val payload = """{"version":2,"mode":"storage","selected":1,"bytes":10,
+            "paths":["$first"],"targets":[{"path":"/home/test/Media/$first"},
+            {"path":"/home/test/Downloads/My-CT/Torrents/$torrent/episode.mkv"}],
+            "torrents":[],"blocked":[],"can_apply":true,"fingerprint":"${"a".repeat(64)}"}"""
+        val plan = parseCleanupPlan(payload)
+        assertTrue(plan.canApply)
+        assertEquals(listOf(first), plan.paths)
+        assertEquals(2, plan.targets.size)
+        assertFalse(plan.targets.any { it.contains(second) })
     }
 }

@@ -526,3 +526,14 @@ A nova identidade ainda exige reancoramento explícito se o device mudar em outr
 boot; não se declara resistência definitiva a remontagens futuras. A validação
 visual no Android e outros gates da R1 não foram executados nesta missão. Esta
 operação encerra exclusivamente o reparo real do cadastro Media autorizado.
+
+
+## Correção posterior: identidade entre boots e exclusão local independente
+
+A nova candidata code 51 mantém a reconciliação executada acima e reconhece os
+hardlinks comprovados por origem/destino atuais e UUID/subvolume, sem exigir novo
+reparo por simples renumeração de `st_dev`. Exclusão local passa a usar alvos
+exatos e uma confirmação, independente de backup ou autorização de `release`.
+A Nuvem mantém seus próprios contratos. Nenhuma exclusão no acervo, nova migração,
+implantação de helpers ou teste físico Android nesta entrega.
+[Implementação, validação, candidata e limites](MYCT-MEDIA-LOCAL-RELATORIO.md).

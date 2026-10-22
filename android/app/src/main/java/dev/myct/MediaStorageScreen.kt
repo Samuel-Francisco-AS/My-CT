@@ -1,6 +1,11 @@
 package dev.myct
 
+import androidx.activity.compose.LocalActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -39,7 +44,16 @@ private fun MediaLocalStorageScreen(model: MediaModel, modifier: Modifier = Modi
     val marked = remember { mutableStateMapOf<String, Boolean>() }
     val openFolders = remember { mutableStateMapOf<String, Boolean>() }
     var mode by remember { mutableStateOf("links") }
+    var awaiting by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
+    val activity = checkNotNull(LocalActivity.current as? androidx.activity.ComponentActivity)
+    DisposableEffect(activity) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) { confirm = false; awaiting = false; model.invalidateCleanup() }
+        }
+        activity.lifecycle.addObserver(observer)
+        onDispose { activity.lifecycle.removeObserver(observer); model.invalidateCleanup() }
+    }
     val files = model.cleanupFiles
     val grouped = files.groupBy { it.path.split('/').take(2).joinToString("/") }.toSortedMap()
     val selected = files.filter { it.eligible && marked[it.path] == true }
@@ -47,6 +61,9 @@ private fun MediaLocalStorageScreen(model: MediaModel, modifier: Modifier = Modi
     val selection = if (selectedPaths.isNotEmpty() && selectedPaths.size <= 256)
         CleanupSelection(mode, selectedPaths) else null
     val plan = model.cleanupPlan?.takeIf { it.mode == mode && model.cleanupSelection == selection }
+    LaunchedEffect(plan) {
+        if (awaiting && plan != null) { confirm = plan.canApply; awaiting = false }
+    }
     LaunchedEffect(files) {
         val allowed = files.filter { it.eligible }.map { it.path }.toSet()
         marked.keys.toList().filterNot { it in allowed }.forEach { marked.remove(it) }
@@ -58,7 +75,7 @@ private fun MediaLocalStorageScreen(model: MediaModel, modifier: Modifier = Modi
             item("header") {
                 ScreenPanel {
                     ScreenHeading("Gerenciar armazenamento",
-                        "Selecione arquivos, temporadas ou pastas. Todas as exclusões exigem prévia.")
+                        "Selecione arquivos, temporadas ou pastas. Confira os alvos em uma única confirmação.")
                     StatusNotice(model.message)
                     MyCtButton(onClick = { model.loadCleanup() },
                         enabled = model.connected && !model.busy) {
@@ -67,7 +84,7 @@ private fun MediaLocalStorageScreen(model: MediaModel, modifier: Modifier = Modi
                     if (model.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                     if (model.stale) StatusNotice(
                         "Estado incerto: consulte novamente antes de excluir.", true)
-                    Text("Só arquivos comprovadamente ligados a torrents My-CT ficam disponíveis.",
+                    Text("Arquivos locais podem ser excluídos sem backup na Nuvem.",
                         style = MaterialTheme.typography.bodySmall)
                 }
             }
@@ -153,7 +170,7 @@ private fun MediaLocalStorageScreen(model: MediaModel, modifier: Modifier = Modi
                                         style = MaterialTheme.typography.bodySmall)
                                     Text(if (!file.eligible) "Não verificado — protegido"
                                         else if (file.managed) "Link gerenciado"
-                                        else "Link verificado pelo inode",
+                                        else "Arquivo local · gestão não comprovada",
                                         style = MaterialTheme.typography.labelSmall)
                                 }
                             }
@@ -161,68 +178,52 @@ private fun MediaLocalStorageScreen(model: MediaModel, modifier: Modifier = Modi
                     }
                 }
             }
-            if (plan != null) item("preview") {
-                ScreenPanel {
-                    ScreenHeading(if (mode == "links") "Prévia: somente hardlinks"
-                        else "Prévia: exclusão definitiva", "")
-                    DataLine("Selecionados", plan.selected.toString())
-                    DataLine("Volume selecionado (não garante espaço livre)",
-                        formatCleanupBytes(plan.bytes))
-                    if (mode == "links")
-                        Text("Os arquivos originais e o seeding serão preservados.")
-                    else {
-                        Text("Esta ação remove os torrents completos, inclusive arquivos extras, " +
-                            "e encerra seu seeding.")
-                        plan.torrents.forEach { torrent ->
-                            Text(torrent.name.ifBlank { torrent.hash.take(12) },
-                                style = MaterialTheme.typography.bodySmall)
-                            if (torrent.videosOutsideLibrary > 0) Text(
-                                "${torrent.videosOutsideLibrary} outros vídeos fora da biblioteca " +
-                                "também serão excluídos.", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                    plan.blockers.forEach { StatusNotice(it, true) }
-                }
+            if (plan != null && !plan.canApply) item("blocked") {
+                plan.blockers.forEach { StatusNotice(it, true) }
             }
         }
         Surface(tonalElevation = 3.dp) {
             Column(Modifier.fillMaxWidth().padding(10.dp)) {
                 Text("${selected.size} selecionados", style = MaterialTheme.typography.labelMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     MyCtButton(onClick = {
                         mode = "links"
+                        awaiting = true
                         if (selectedPaths.isNotEmpty())
                             model.previewCleanup(CleanupSelection("links", selectedPaths))
-                    }, enabled = selection != null && model.actionsEnabled) {
-                        Text("Retirar links…")
+                    }, modifier = Modifier.fillMaxWidth(), enabled = selection != null && model.actionsEnabled) {
+                        Text("Retirar da biblioteca…")
                     }
                     MyCtTextButton(onClick = {
                         mode = "storage"
+                        awaiting = true
                         if (selectedPaths.isNotEmpty())
                             model.previewCleanup(CleanupSelection("storage", selectedPaths))
-                    }, enabled = selection != null && model.actionsEnabled) {
-                        Text("Liberar espaço…")
+                    }, modifier = Modifier.fillMaxWidth(), enabled = selection != null && model.actionsEnabled) {
+                        Text("Excluir permanentemente…")
                     }
                 }
-                if (plan != null && plan.canApply) {
-                    MyCtButton(onClick = { confirm = true }, enabled = model.actionsEnabled) {
-                        Text(if (mode == "links") "Confirmar retirada dos links…"
-                            else "Excluir dados dos torrents…")
-                    }
-                }
+
             }
         }
     }
     if (confirm && plan != null && plan.canApply && selection != null) AlertDialog(
         onDismissRequest = { confirm = false },
-        title = { Text(if (mode == "links") "Retirar hardlinks?"
-            else "EXCLUSÃO DEFINITIVA: encerrar e apagar torrents?") },
-        text = { Text(if (mode == "links")
-            "Os ${plan.selected} hardlinks serão retirados da biblioteca. " +
-            "Os arquivos originais e o seeding permanecerão intactos."
-        else "O Transmission encerrará o seeding e excluirá todos os arquivos " +
-            "dos ${plan.torrents.size} torrents mostrados na prévia, mesmo extras. " +
-            "Depois os hardlinks selecionados serão retirados. Esta ação é irreversível.") },
+        title = { Text(if (mode == "links") "Retirar da biblioteca?"
+            else "Excluir permanentemente?") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(if (mode == "links") "Somente os caminhos abaixo serão retirados. Originais existentes serão preservados. Sem outra ligação, os dados do arquivo deixarão de existir."
+                    else "Os caminhos abaixo serão apagados sem exigir backup. Esta ação é irreversível.")
+                plan.targets.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+                if (plan.torrents.isNotEmpty()) {
+                    Text("Estas transferências serão retiradas do Transmission, interrompendo download e seeding. " +
+                        "Os demais arquivos dos torrents serão preservados:")
+                    plan.torrents.forEach { Text(it.name.ifBlank { it.hash }) }
+                }
+                Text("Outros hardlinks ou snapshots podem reter os dados. A liberação de espaço não é garantida.")
+            }
+        },
         confirmButton = {
             MyCtTextButton(onClick = {
                 confirm = false

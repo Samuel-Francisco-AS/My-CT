@@ -183,3 +183,13 @@ Outra mudança futura pode bloquear gerenciamento até nova reconciliação expl
 5. Conferir recibo/backup; diante de erro, classificar conservadoramente por recover.
 6. Novo teste Nuvem/Moto com nova prévia/consentimentos, abrindo e cancelando o
    diálogo; nenhuma exclusão real como condição. R1 segue pendente de aceite.
+
+## Atualização posterior: reconhecimento entre boots
+
+O reconhecimento corrente agora compara origem/destino atuais e a identidade
+Btrfs persistente disponível. Uma mudança isolada de `st_dev` não exige aplicar
+novamente este procedimento para gerenciar os hardlinks comprovados. As categorias
+LEGACY_REANCHOR/DEVICE_REANCHOR deste aplicador descrevem possível enriquecimento
+do registro histórico, não uma exigência para excluir arquivos locais. O recibo e
+os backups da aplicação real de 264 registros permanecem preservados.
+[Contrato atual de armazenamento local](MYCT-MEDIA-LOCAL-RELATORIO.md).

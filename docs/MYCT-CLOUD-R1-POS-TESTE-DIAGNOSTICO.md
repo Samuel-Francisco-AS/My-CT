@@ -1073,3 +1073,12 @@ gerar/revisar prévia metadata-only nova; confirmar ID e legado dentro de 600 s;
 conferir recibo/backup. Erro requer recuperação/classificação, sem restauração
 manual ou sobrescrita. Só depois novo teste Moto/Nuvem, sem exclusão real como
 condição. Sem benchmark integral de vídeos, R2, implantação ou migração agora.
+
+## Correção posterior do reconhecimento e armazenamento local
+
+O reparo real dos 264 registros foi concluído e registrado no relatório R1.
+A correção seguinte elimina o device histórico como requisito de reconhecimento
+quando origem/destino atuais e identidade persistente conferem, sem nova migração.
+Também separa autorização de exclusão local da condição de gestão/backup Cloud;
+registros divergentes continuam sem receber prova falsa de origem.
+[Comportamento, riscos, validação e candidata](MYCT-MEDIA-LOCAL-RELATORIO.md).
