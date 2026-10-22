@@ -1,4 +1,4 @@
-"""R1 read-only space: real read() on disposable trees, fake Drive/RPC, controlled clock."""
+"""R1 metadata-only space and single-pass release on disposable trees, fake Drive/RPC."""
 import copy
 import json
 from pathlib import Path
@@ -36,6 +36,16 @@ class SpaceMeterTests(unittest.TestCase):
         self.assertEqual(7.5, self.progress.row['phase_seconds']['local_read'])
         self.progress.finish(True)
         self.assertEqual('done', self.progress.row['phase']); self.assertIsNone(self.progress.row['percent'])
+
+    def test_metadata_progress_has_no_content_percentage_and_cannot_report_reads(self):
+        meter = SpaceProgress(self.progress, metric='metadata')
+        meter.phase('local_inventory')
+        row = read_progress(self.root, self.progress.identity)
+        self.assertEqual('metadata', row['metric']); self.assertEqual(0, row['bytes_done'])
+        self.assertIsNone(row['bytes_total']); self.assertIsNone(row['percent'])
+        with self.assertRaises(ValueError): meter.reading(123)
+        self.progress.finish(True)
+        self.assertIsNone(read_progress(self.root, self.progress.identity)['percent'])
 
     def test_reader_keeps_atomic_snapshot_replaced_after_open_and_rejects_symlink_and_extra_link(self):
         import os
@@ -160,61 +170,128 @@ class SpaceEngineTests(unittest.TestCase):
         self.assertEqual(12, sum(r['managed'] for r in plan['library']))
         self.assertFalse(plan['library_complete']); self.assertFalse(plan['can_release'])
 
-    def test_space_measures_each_actual_tree_read_different_sizes_and_not_library_alias(self):
+    def test_space_never_reads_payload_or_calls_drive_and_token_is_selection_independent(self):
+        import builtins
+        import io
+        import os
         f = self.fixture; identity = f.prepare()
-        p = progress_fixture.ProgressTests(); p.setUp(); self.addCleanup(p.doCleanups)
+        payloads = {p.resolve() for root in (f.base, self.tool.restored_path(f.row(identity)), f.home / 'Media')
+                    for p in root.rglob('*') if p.is_file()}
+        # Block both high-level opens and descriptor reads of payloads. Metadata
+        # ioctls may open a descriptor, but cannot read any byte from it.
+        opened = set()
+        real_open, real_io, real_os, real_close = builtins.open, io.open, os.open, os.close
+        def high_level(original):
+            def guarded(path, *args, **kwargs):
+                if not isinstance(path, int) and Path(path).resolve() in payloads:
+                    raise AssertionError('payload open during preview')
+                return original(path, *args, **kwargs)
+            return guarded
+        def fd_open(path, *args, **kwargs):
+            fd = real_os(path, *args, **kwargs)
+            if not isinstance(path, int) and Path(path).resolve() in payloads:
+                opened.add(fd)
+            return fd
+        def close(fd):
+            opened.discard(fd)
+            return real_close(fd)
+        def fd_guard(original):
+            def guarded(fd, *args, **kwargs):
+                if fd in opened: raise AssertionError('payload read during preview')
+                return original(fd, *args, **kwargs)
+            return guarded
         observed = []
-        def capture(): observed.append(copy.deepcopy(p.progress.row))
-        catalog = self.tool.common.state_dir() / 'catalog.json'
-        before = catalog.read_bytes(); media_before = self.tool.media.state_path().read_bytes()
-        with patch.object(self.tool.common, 'progress', p.progress), patch.object(p.progress, 'publish', side_effect=capture):
-            result = f.preview(identity)
-        reads = [r for r in observed if r['phase'] == 'local_read' and r['bytes_done'] > 0]
-        self.assertEqual(2, len(reads))  # Original + independent restore, same content.
-        expected = sum(v['size'] for v in f.row(identity)['manifest']['files'])
-        self.assertEqual([expected, expected], [r['bytes_done'] for r in reads])
-        self.assertEqual([1, 2], [r['read_pass'] for r in reads])
-        self.assertTrue(len({v['size'] for v in f.row(identity)['manifest']['files']}) > 1)
-        self.assertTrue(all(r['bytes_total'] == expected and r['percent'] is None for r in reads))
-        self.assertFalse(any(r['phase'] == 'library_read' for r in observed))  # Known inode alias uses stat.
-        self.assertTrue(result['can_release']); self.assertEqual([], f.mutations())
-        self.assertEqual(before, catalog.read_bytes()); self.assertEqual(media_before, self.tool.media.state_path().read_bytes())
-        phases = {r['phase'] for r in observed}
-        self.assertTrue({'remote_check', 'transmission_check', 'library_inventory', 'finalizing'} <= phases)
-        self.assertNotIn('phase_seconds', result)  # Never pollute the token's authoritative snapshot.
-        self.assertNotIn(str(f.home), json.dumps(observed))
+        with patch.object(self.tool.common, 'fingerprint', side_effect=AssertionError('hash in space')), \
+                patch.object(self.tool.common, 'rclone', side_effect=AssertionError('Drive in space')), \
+                patch.object(self.tool.common.progress, 'publish', side_effect=lambda: observed.append(copy.deepcopy(self.tool.common.progress.row))), \
+                patch('builtins.open', high_level(real_open)), patch('io.open', high_level(real_io)), \
+                patch('os.open', side_effect=fd_open), patch('os.close', side_effect=close), patch('os.read', fd_guard(os.read)), \
+                patch('os.pread', fd_guard(os.pread)), patch.object(self.tool.time, 'time', return_value=100):
+            plain = f.preview(identity)
+            selected = f.preview(identity, True)
+        self.assertEqual(plain['preview'], selected['preview'])
+        self.assertEqual(2, plain['version']); self.assertTrue(plain['library_complete'])
+        self.assertFalse(plain['content_verified']); self.assertFalse(plain['remote']['revalidated'])
+        self.assertTrue(selected['can_release']); self.assertEqual([], f.mutations())
+        self.assertNotEqual(plain['remove_paths'], selected['remove_paths'])
+        self.assertEqual(0, plain['reclaim_guaranteed_bytes'])
+        self.assertFalse(any(r.get('metric') == 'metadata' and r.get('bytes_done') for r in observed))
 
-    def test_hardlink_only_read_and_failed_telemetry_cannot_mutate_catalog_or_bypass_divergence(self):
-        f = self.fixture; identity = f.prepare(restored=False)
-        # Remove only disposable original names. The library inode remains; no release operation.
+    def test_no_original_uses_saved_identity_and_unproven_replacement_stays_protected_without_hash(self):
         import shutil
+        f = self.fixture; identity = f.prepare(restored=False)
         shutil.rmtree(f.base)
+        f.engine.row = None
+        with patch.object(self.tool.common, 'fingerprint', side_effect=AssertionError('hidden fallback hash')):
+            result = f.preview(identity, True)
+            self.assertTrue(result['can_release'], result['blockers'])
+            raw = f.link.read_bytes(); f.link.unlink(); f.link.write_bytes(raw)
+            blocked = f.preview(identity, True)
+        self.assertFalse(blocked['can_release'])
+        self.assertIn('LIBRARY_SELECTION', blocked['blockers'])
+        self.assertFalse(blocked['library'][0]['linked_to_package'])
+        self.assertEqual([], f.mutations())
+
+    def test_release_reads_each_inode_once_and_remote_once_with_locally_changed_selection(self):
+        f = self.fixture; identity = f.prepare()
+        plan = f.preview(identity)  # No links selected at query time.
+        unique = len(plan['inventory']['inodes'])
+        original = self.tool.common.fingerprint
+        reads = []
+        def fingerprint(path, **kwargs):
+            inode = (path.stat().st_dev, path.stat().st_ino)
+            self.assertNotIn(inode, reads); reads.append(inode)
+            return original(path, **kwargs)
         p = progress_fixture.ProgressTests(); p.setUp(); self.addCleanup(p.doCleanups)
         observed = []
-        original = p.progress.publish
-        def publish():
-            observed.append(copy.deepcopy(p.progress.row)); original()
-        catalog = self.tool.common.state_dir() / 'catalog.json'; before = catalog.read_bytes()
-        with patch.object(self.tool.common, 'progress', p.progress), patch.object(p.progress, 'publish', side_effect=publish), \
-                patch('myct_cloud_progress.os.replace', side_effect=OSError('fixture disk full')):
-            result = f.preview(identity)
-        reads = [r for r in observed if r['phase'] == 'library_read' and r['bytes_done']]
-        self.assertEqual([f.link.stat().st_size], [r['bytes_done'] for r in reads])
-        self.assertEqual(before, catalog.read_bytes()); self.assertEqual([], f.mutations())
-        self.assertTrue(f.link.exists()); self.assertFalse(any(r.get('percent') == 100 for r in observed))
-        self.assertIsNone(read_progress(p.root, p.progress.identity))
+        with patch.object(self.tool.common, 'progress', p.progress), \
+                patch.object(p.progress, 'publish', side_effect=lambda: observed.append(copy.deepcopy(p.progress.row))), \
+                patch.object(self.tool.common, 'fingerprint', side_effect=fingerprint), \
+                patch.object(self.tool, 'remote_objects', wraps=self.tool.remote_objects) as remote:
+            f.apply(identity, plan, True)  # Same token, new explicit selection.
+        self.assertEqual(unique, len(reads)); self.assertEqual(1, remote.call_count)
+        phases = {r['phase'] for r in observed}
+        self.assertTrue({'local_read', 'remote_check', 'pausing', 'removing_entry', 'unlinking'} <= phases)
+        read = [r for r in observed if r['phase'] == 'local_read' and r['bytes_done']]
+        self.assertEqual(sum(i['logical_bytes'] for i in plan['inventory']['inodes']), read[-1]['bytes_done'])
+        self.assertFalse(f.link.exists()); self.assertFalse(f.base.exists())
 
-    def test_telemetry_does_not_change_preview_token_or_release_revalidation_contract(self):
+    def test_same_size_content_change_is_detected_only_at_execution_before_any_rpc_mutation(self):
+        f = self.fixture; identity = f.prepare()
+        file = f.base / 'Pacote/legenda.srt'
+        file.write_bytes(b'x' * file.stat().st_size)
+        plan = f.preview(identity)
+        self.assertTrue(plan['can_release'])  # Metadata preview does not claim content integrity.
+        f.assertFailure('SOURCE_CHANGED', f.apply, identity, plan)
+        self.assertTrue(file.exists()); self.assertEqual([], f.mutations())
+
+    def test_metadata_recheck_catches_same_size_change_after_hash_without_rereading(self):
+        import os
+        f = self.fixture; identity = f.prepare(); plan = f.preview(identity)
+        original = self.tool.remote_objects
+        target = f.base / 'Pacote/legenda.srt'
+        def change(row):
+            result = original(row)
+            before = target.stat()
+            target.write_bytes(b'x' * before.st_size)
+            os.utime(target, ns=(before.st_atime_ns, before.st_mtime_ns))
+            return result
+        with patch.object(self.tool, 'remote_objects', side_effect=change):
+            f.assertFailure('STATE_CHANGED', f.apply, identity, plan)
+        self.assertTrue(target.exists()); self.assertEqual([], f.mutations())
+
+    def test_telemetry_does_not_change_preview_token_and_remote_is_checked_at_execution(self):
         f = self.fixture; identity = f.prepare()
         with patch.object(self.tool.time, 'time', return_value=100):
             plain = self.tool.storage_inventory(f.row(identity), f.engine)
             plan = f.preview(identity)
         self.assertEqual(self.tool.preview_token(plain, 100), plan['preview'])
         self.assertEqual([], f.mutations())
-        # Remote corruption remains an authoritative blocker, not a telemetry success.
         f.cloud.mode = 'no_md5'
-        blocked = f.preview(identity)
-        self.assertFalse(blocked['can_release']); self.assertTrue(blocked['blockers'])
+        fresh = f.preview(identity)
+        self.assertTrue(fresh['can_release'])
+        f.assertFailure('VERIFICATION_UNAVAILABLE', f.apply, identity, fresh)
+        self.assertEqual([], f.mutations())
 
 class PersistentSpaceWorkerTests(unittest.TestCase):
     def test_space_worker_keeps_request_progress_and_result_without_live_client(self):

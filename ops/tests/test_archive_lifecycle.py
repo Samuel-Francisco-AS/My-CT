@@ -106,7 +106,8 @@ class LifecycleTest(unittest.TestCase):
         identity = self.prepare()
         plan = self.preview(identity)
         self.assertFailure('CONFIRMATION', lambda: self.apply(identity, plan, **{'--confirm': 'bad'}))
-        self.assertFailure('STALE_PREVIEW', self.apply, identity, plan, True)
+        self.assertFailure('LIBRARY_CONFIRMATION', lambda: self.run_cli('release', identity,
+            '--preview', plan['preview'], '--confirm', plan['preview'], '--remove-library', self.rel))
         with patch.object(tool.time, 'time', return_value=int(plan['preview'].split('-')[0]) + 601):
             self.assertFailure('STALE_PREVIEW', self.apply, identity, plan)
         self.assertEqual([], self.mutations()); self.assertTrue(self.base.exists()); self.assertTrue(self.link.exists())
@@ -130,18 +131,18 @@ class LifecycleTest(unittest.TestCase):
         plan = self.preview(identity)
         for mode in ('no_md5', 'duplicate'):
             self.cloud.mode = mode
-            self.assertFalse(self.preview(identity)['can_release'])
-            self.assertFailure('BLOCKED', self.apply, identity, plan)
+            self.assertTrue(self.preview(identity)['can_release'])
+            self.assertFailure('VERIFICATION_UNAVAILABLE' if mode == 'no_md5' else 'REMOTE_COLLISION', self.apply, identity, plan)
         self.cloud.mode = 'ok'
         for code in ('NETWORK', 'AUTH'):
             with patch.object(tool.common, 'rclone', side_effect=tool.Failure(code, 'Falha sanitizada.')):
-                self.assertIn(code, self.preview(identity)['blockers'])
-                self.assertFailure('BLOCKED', self.apply, identity, plan)
+                self.assertTrue(self.preview(identity)['can_release'])
+                self.assertFailure(code, self.apply, identity, plan)
         remote = self.cloud.path(tool.remote_folder(self.row(identity)))
         for name in ('manifest.json', 'original.torrent', 'data/Pacote/legenda.srt'):
             file = remote / name; raw = file.read_bytes(); file.write_bytes(b'x' * len(raw))
-            self.assertIn('INTEGRITY', self.preview(identity)['blockers'])
-            self.assertFailure('BLOCKED', self.apply, identity, plan)
+            self.assertTrue(self.preview(identity)['can_release'])
+            self.assertFailure('INTEGRITY', self.apply, identity, plan)
             file.write_bytes(raw)
         self.assertEqual([], self.mutations()); self.assertTrue(self.base.exists())
 

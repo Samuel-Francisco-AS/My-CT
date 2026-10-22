@@ -10,7 +10,7 @@ import time
 
 PHASES = {'preparing', 'hashing', 'uploading', 'downloading', 'verifying', 'done', 'failed',
           'remote_check', 'local_inventory', 'local_read', 'library_inventory', 'library_read',
-          'transmission_check', 'finalizing'}
+          'transmission_check', 'finalizing', 'pausing', 'removing_entry', 'unlinking'}
 
 
 def number(value):
@@ -46,7 +46,7 @@ def read_progress(root, identity):
             clean[key] = value
         metric = row.get('metric')
         if metric is not None:
-            if metric != 'read' or row.get('scope') != 'phase':
+            if metric not in ('read', 'metadata') or row.get('scope') != 'phase':
                 return None
             clean.update(metric=metric, scope='phase')
             read_pass = row.get('read_pass')
@@ -57,6 +57,9 @@ def read_progress(root, identity):
             if not isinstance(timings, dict) or any(k not in PHASES or not number(v) for k, v in timings.items()):
                 return None
             clean['phase_seconds'] = timings
+        if metric == 'metadata' and (clean['bytes_done'] != 0 or any(
+                clean[k] is not None for k in ('bytes_total', 'percent', 'speed_bps', 'eta_seconds'))):
+            return None
         integers = ('bytes_done', 'bytes_total', 'current_file_index', 'total_files')
         if any(clean[k] is not None and type(clean[k]) is not int for k in integers):
             return None
@@ -170,7 +173,7 @@ class Progress:
         saved = read_progress(self.root, self.identity)
         if saved:
             self.row = saved
-        self.row['percent'] = (100 if success and self.row.get('metric') != 'read' and self.row['bytes_total'] and
+        self.row['percent'] = (100 if success and self.row.get('metric') not in ('read', 'metadata') and self.row['bytes_total'] and
                                self.row['bytes_done'] == self.row['bytes_total'] else None)
         self.phase('done' if success else 'failed')
 
@@ -178,10 +181,10 @@ class Progress:
 class SpaceProgress:
     """Phase-local bytes returned by read(), never physical SSD or network bytes.
 
-    Only space opts in. No measurements enter the preview/token or catalogs.
+    Metadata preview and execution reads share phase timing. Measurements never enter tokens/catalogs.
     All phase boundaries publish; block callbacks publish at most every 2 seconds.
     """
-    def __init__(self, progress, clock=time.monotonic):
+    def __init__(self, progress, clock=time.monotonic, metric='read'):
         self.progress = progress
         self.clock = clock
         self.started = clock()
@@ -191,7 +194,7 @@ class SpaceProgress:
         self.last_tick = self.started
         self.last_bytes = 0
         self.read_pass = 0
-        self.progress.row = {'phase': 'preparing', 'metric': 'read', 'scope': 'phase',
+        self.progress.row = {'phase': 'preparing', 'metric': metric, 'scope': 'phase',
                              'bytes_done': 0, 'bytes_total': None, 'percent': None,
                              'speed_bps': None, 'eta_seconds': None, 'phase_seconds': {}}
         self.phase('preparing')
@@ -206,6 +209,8 @@ class SpaceProgress:
         self.progress.publish()
 
     def reading(self, total, library=False):
+        if self.progress.row.get('metric') != 'read':
+            raise ValueError('Metadata inventory cannot report content reads.')
         self.phase('library_read' if library else 'local_read')
         self.read_pass += 1
         self.progress.row.update(bytes_total=total, read_pass=self.read_pass)

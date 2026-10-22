@@ -1,228 +1,170 @@
 package dev.myct
 
 import kotlinx.coroutines.*
-import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
 
-/** Real model, controlled clock and fake persistent task; never executes release on disk. */
+/** Real model and inode projection; fake transport never touches a personal server. */
 class CloudR1Test {
     private val paths = (1..13).map { "Series/Fixture/S01/E%02d.mkv".format(it) }
-    private fun plan(selected: List<String> = emptyList()) = cloudPlan(selected).put("library", JSONArray(paths.map {
-        JSONObject().put("path", it).put("present", true).put("linked_to_package", true)
-    }))
     private inner class Fixture : AutoCloseable {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         var now = CLOUD_NOW
-        @Volatile var row = cloudTaskJson(CloudWork("torrent", listOf("space", CLOUD_ARCHIVE)), result = plan())
+        @Volatile var row = cloudTaskJson(CloudWork("torrent", listOf("space", CLOUD_ARCHIVE)),
+            result = cloudPlan(choices = paths))
         val starts = CopyOnWriteArrayList<CloudQuery.Start>()
         val calls = CopyOnWriteArrayList<CloudQuery>()
+        var entryState = "verified"
         val model = CloudModel(scope, { now }) { _, query ->
             calls += query
             when (query) {
-                CloudQuery.Snapshot -> cloudSnapshot(row)
+                CloudQuery.Snapshot -> cloudSnapshot(row, entryState = entryState)
                 is CloudQuery.Task -> JSONObject().put("ok", true).put("task", row).toString()
                 is CloudQuery.Start -> {
                     starts += query
                     row = cloudTaskJson(query.work, "running").put("id", query.id)
                     JSONObject().put("ok", true).put("task", row).toString()
                 }
-                else -> error("space is non-cancellable")
+                else -> error("No cancellation in this fixture")
             }
         }
         fun waitIdle() = runBlocking { withTimeout(3000) { while (model.busy) delay(5) } }
         init {
             model.attach(SshConnection()); model.select(CLOUD_ARCHIVE); model.refresh(); waitIdle()
             model.viewTask(model.tasks.single()); waitIdle()
-            paths.forEach { model.toggleLink(CLOUD_ARCHIVE, it) }
         }
-        fun start() { model.start(CloudWork("torrent", listOf("space", CLOUD_ARCHIVE) + paths.flatMap { listOf("--remove-library", it) })); waitIdle() }
-        fun complete(result: JSONObject = plan(paths)) {
+        fun start() { model.consultSpace(force = true); waitIdle() }
+        fun complete(result: JSONObject = cloudPlan(choices = paths)) {
             row = JSONObject(row.toString()).put("state", "succeeded").put("result", result)
             model.refresh(); waitIdle()
         }
+        fun load() { start(); complete() }
         override fun close() { scope.cancel() }
     }
-    @Test fun manualRefreshDuringAcceptedSpaceKeepsThirteenLinksAndCanAuthorizeAtCompletion() = Fixture().use { f ->
-        val m = f.model
-        f.start()
-        assertFalse(m.busy); assertTrue(m.tasks.single { it.active }.active)
-        assertEquals(paths, f.starts.single().work.librarySelection)
-        val snapshots = f.calls.count { it == CloudQuery.Snapshot }
-        val taskReads = f.calls.count { it is CloudQuery.Task }
-        repeat(2) {
-            f.now += 100000
-            m.refreshFromUser(); f.waitIdle() // Exactly the action wired to Atualizar.
-            assertEquals(13, m.selectedLinks(CLOUD_ARCHIVE).size)
-            assertTrue(m.tasks.single { it.active }.active); assertNull(m.space)
-        }
-        assertEquals(snapshots, f.calls.count { it == CloudQuery.Snapshot })
-        assertEquals(taskReads + 2, f.calls.count { it is CloudQuery.Task })
-        f.now += 31400
-        f.complete() // succeeded, same 13 paths, can_release=true, blockers=[]
-        val p = m.space!!
-        assertEquals(paths, p.selected); assertTrue(p.canRelease); assertTrue(p.blockers.isEmpty())
-        assertEquals(13, m.selectedLinks(CLOUD_ARCHIVE).size)
-        assertTrue(m.canRelease(p, paths))
-        assertEquals(1, f.starts.size) // No second space request and no release execution.
-    }
-    @Test fun blockedPartialInventoryPreservesThirteenChoicesAndNeverAuthorizes() {
-        for (explicit in listOf(false, true)) Fixture().use { f ->
-            f.start()
-            val blocked = plan(paths).put("can_release", false).put("blockers", JSONArray().put("LIBRARY_SELECTION"))
-                .put("library", JSONArray().put(JSONObject().put("path", paths.first()).put("present", true).put("linked_to_package", true)))
-            if (explicit) blocked.put("library_complete", false) // Old helpers omit the flag.
-            f.complete(blocked)
-            val m = f.model; val p = m.space!!
-            assertEquals(paths.toSet(), m.selectedLinks(CLOUD_ARCHIVE))
-            assertEquals(paths, m.libraryChoices(CLOUD_ARCHIVE))
-            assertFalse(p.libraryComplete); assertFalse(m.previewAuthorized(p)); assertFalse(m.canRelease(p, paths))
-            m.viewTask(m.tasks.single()); f.waitIdle()
-            assertEquals(paths, m.libraryChoices(CLOUD_ARCHIVE)); assertFalse(m.previewAuthorized(m.space!!))
-            assertEquals(1, f.starts.size)
-        }
-    }
-    @Test fun completeBlockedInventoryShowsAllThirteenWithoutGrantingConsent() = Fixture().use { f ->
-        f.start()
-        val blocked = plan(paths).put("library_complete", true).put("can_release", false)
-            .put("blockers", JSONArray().put("LIBRARY_SELECTION"))
-        blocked.getJSONArray("library").getJSONObject(0).put("managed", false).put("status", "divergent")
-        f.complete(blocked)
-        val m = f.model; val p = m.space!!
-        assertTrue(p.libraryComplete); assertEquals(13, p.library.size)
-        assertEquals("divergent", p.library.first().getString("status"))
-        assertEquals(paths.toSet(), m.selectedLinks(CLOUD_ARCHIVE)); assertEquals(13, m.libraryChoices(CLOUD_ARCHIVE).size)
-        assertFalse(m.previewAuthorized(p)); assertFalse(m.canRelease(p, paths))
-    }
-    @Test fun incompleteFlagCannotAuthorizeEvenWhenServerClaimsNoBlockers() = Fixture().use { f ->
-        f.start(); f.complete(plan(paths).put("library_complete", false))
-        assertFalse(f.model.canRelease(f.model.space!!, paths))
-        assertFalse(f.model.previewAuthorized(f.model.space!!))
-    }
-    @Test fun manualRefreshCannotUndoLegitimateInvalidationOrExpiryDuringSpace() {
-        for (event in listOf("navigation", "background", "reconnect", "expiry", "other-package")) Fixture().use { f ->
-            val m = f.model; f.start()
-            when (event) {
-                "navigation" -> { m.select(null); m.select(CLOUD_ARCHIVE) }
-                "background" -> m.invalidatePreview()
-                "reconnect" -> { m.attach(null); m.attach(SshConnection()); m.refresh(); f.waitIdle() }
-                "expiry" -> f.now += 600001
-                "other-package" -> m.select("e".repeat(64))
-            }
-            m.refreshFromUser(); f.waitIdle()
-            assertTrue(m.tasks.single { it.active }.active)
-            f.complete()
-            if (event == "other-package") assertNull(m.space)
-            m.viewTask(m.tasks.single()); f.waitIdle()
-            assertNotNull(m.space)
-            assertFalse(event, m.canRelease(m.space!!, paths))
-            assertEquals(1, f.starts.size)
-        }
-    }
-    @Test fun selectionEditsAreBlockedDuringSpaceAndAnActualEditStillRevokesAfterCompletion() = Fixture().use { f ->
-        val m = f.model; f.start()
-        assertFalse(m.actionsEnabled)
-        m.toggleLink(CLOUD_ARCHIVE, paths.first()) // Disabled by both model and UI while active.
-        assertEquals(paths.toSet(), m.selectedLinks(CLOUD_ARCHIVE))
-        m.refreshFromUser(); f.waitIdle(); f.complete()
-        assertTrue(m.canRelease(m.space!!, paths))
+    @Test fun selectionProjectsExactPathsAndBlocksWithoutAnyTransportOrSecondInventory() = Fixture().use { f ->
+        val m = f.model; f.load()
+        val initial = m.space!!; val calls = f.calls.size
+        paths.forEach { m.toggleLink(CLOUD_ARCHIVE, it) }
+        val chosen = m.space!!
+        assertEquals(initial.token, chosen.token)
+        assertEquals(paths, chosen.selected)
+        assertEquals(80L + 13 * 20L, chosen.estimate)
+        assertEquals(initial.paths.size + 13, chosen.paths.size)
+        assertTrue(m.canRelease(chosen, paths))
         m.toggleLink(CLOUD_ARCHIVE, paths.first())
-        assertEquals(12, m.selectedLinks(CLOUD_ARCHIVE).size); assertNull(m.space)
-        m.refreshFromUser(); f.waitIdle()
-        m.viewTask(m.tasks.single()); f.waitIdle()
-        assertFalse(m.canRelease(m.space!!, m.selectedLinks(CLOUD_ARCHIVE).sorted()))
+        assertFalse(m.space!!.paths.contains("/home/user/Media/${paths.first()}"))
+        assertEquals(chosen.estimate - 20, m.space!!.estimate)
+        repeat(3) { m.consultSpace() }
+        assertEquals(calls, f.calls.size); assertEquals(1, f.starts.size)
+    }
+    @Test fun dialogFreezesSelectionAndAnEditRevokesOnlyTheDialog() = Fixture().use { f ->
+        val m = f.model; f.load(); m.toggleLink(CLOUD_ARCHIVE, paths.first())
+        val frozen = m.space!!; m.beginRelease(frozen)
+        assertSame(frozen, m.confirmation)
+        m.toggleLink(CLOUD_ARCHIVE, paths.last())
+        assertNull(m.confirmation); assertNotNull(m.space)
+        m.release(frozen, frozen.selected, true); f.waitIdle()
         assertEquals(1, f.starts.size)
+        val current = m.space!!
+        m.start(current.release(true, f.now)); f.waitIdle(); assertEquals(1, f.starts.size)
+        m.beginRelease(current); m.release(current, current.selected, true); f.waitIdle()
+        val work = f.starts.last().work
+        assertEquals("release", work.action)
+        assertEquals(listOf(paths.first(), paths.last()), work.librarySelection)
+        assertTrue(work.args.contains("--confirm-library"))
     }
-    @Test fun manualRefreshAfterCompletedPreviewRevokesItAndHistoryNeverRearmsConsent() = Fixture().use { f ->
-        val m = f.model; f.start(); f.complete()
-        val completed = m.space!!
-        assertTrue(m.canRelease(completed, paths))
+    @Test fun backgroundNavigationAndRefreshKeepInventoryButCannotReplayAnOpenDialog() = Fixture().use { f ->
+        val m = f.model; f.load(); paths.forEach { m.toggleLink(CLOUD_ARCHIVE, it) }
+        val old = m.space!!; m.beginRelease(old); m.invalidatePreview() // ON_STOP/onDispose.
+        assertNull(m.confirmation); assertSame(old, m.space)
+        m.release(old, paths, true); f.waitIdle(); assertEquals(1, f.starts.size)
+        m.select(null); m.select(CLOUD_ARCHIVE)
+        val calls = f.calls.size; m.consultSpace()
+        assertEquals(calls, f.calls.size); assertEquals(paths, m.space!!.selected)
+        assertTrue(m.canRelease(m.space!!, paths)) // A fresh user dialog may be opened locally.
         m.refreshFromUser(); f.waitIdle()
-        assertEquals(13, m.selectedLinks(CLOUD_ARCHIVE).size)
-        assertNull(m.space); assertFalse(m.canRelease(completed, paths))
+        assertNotNull(m.space); assertNull(m.confirmation); assertEquals(1, f.starts.size)
+    }
+    @Test fun aLateOrHistoricalResponseCannotGrantConsentOrReplaceLiveInventory() = Fixture().use { f ->
+        val m = f.model; f.start(); m.invalidatePreview(); f.complete()
+        assertNotNull(m.space); assertFalse(m.canRelease(m.space!!, emptyList()))
+        m.beginRelease(m.space!!); assertNull(m.confirmation)
+        f.load(); val live = m.space!!
         m.viewTask(m.tasks.single()); f.waitIdle()
-        assertNotNull(m.space); assertFalse(m.canRelease(m.space!!, paths))
-        assertEquals(1, f.starts.size)
+        assertSame(live, m.space); assertTrue(m.canRelease(live, emptyList()))
+        assertNull(m.confirmation) // Reading history never opens a dialog.
+        f.row = JSONObject(f.row.toString()).put("state", "failed").put("result",
+            JSONObject().put("ok", false).put("error", JSONObject().put("code", "NETWORK")))
+        m.viewTask(parseCloudTask(f.row)); f.waitIdle()
+        assertSame(live, m.space) // Even a failed historical response cannot erase the live cache.
     }
-    @Test fun thirteenLinksRemainAfterLongQueryAndRecreatedViewAndConfirmationIsExact() = Fixture().use { f ->
-        val m = f.model
-        assertEquals(paths.toSet(), m.selectedLinks(CLOUD_ARCHIVE))
-        f.start()
-        assertEquals(paths, f.starts.single().work.librarySelection)
-        f.now += 231400 // Expensive Fedora work is simulated; token is issued at completion.
-        val token = "${f.now / 1000}-" + "d".repeat(64)
-        f.complete(plan(paths).put("preview", token).put("confirmation", token).put("library_confirmation", token))
-        // A new Composable reads these values from the same activity model, with no remember state.
-        assertEquals(13, m.selectedLinks(CLOUD_ARCHIVE).size)
-        assertEquals(13, m.libraryChoices(CLOUD_ARCHIVE).size)
-        val p = m.space!!
-        assertEquals(paths, p.selected)
-        assertTrue(m.canRelease(p, paths))
-        m.release(p, paths, true); f.waitIdle()
-        val release = f.starts.last().work
-        assertEquals("release", release.action)
-        assertEquals(paths, release.librarySelection)
-        assertTrue(release.args.contains("--confirm-library"))
-    }
-    @Test fun navigationAndBackgroundPreserveVisualSelectionButRevokePendingAuthorization() {
-        for (event in listOf("navigation", "background")) Fixture().use { f ->
-            val m = f.model; f.start()
-            when (event) {
-                "navigation" -> { m.select(null); m.select("e".repeat(64)); assertTrue(m.selectedLinks("e".repeat(64)).isEmpty()); m.select(CLOUD_ARCHIVE) }
-                else -> m.invalidatePreview() // ON_STOP / onDispose still revoke the request identity.
+    @Test fun incompleteInventoryAndUnprovenSelectedLinkCannotAuthorizeSubset() {
+        for (failure in listOf("incomplete", "unproven", "blocker")) Fixture().use { f ->
+            f.start()
+            val reply = cloudPlan(choices = paths)
+            val inventory = reply.getJSONObject("inventory")
+            when (failure) {
+                "incomplete" -> inventory.put("library_complete", false)
+                "unproven" -> inventory.getJSONArray("library").getJSONObject(0).put("managed", false)
+                else -> inventory.getJSONArray("blockers").put("UNKNOWN_LINKS")
             }
-            f.complete()
-            assertEquals(13, m.selectedLinks(CLOUD_ARCHIVE).size)
-            assertNotNull(m.space); assertFalse(m.canRelease(m.space!!, paths))
-            // Reopening the old result must not re-arm consent.
-            m.viewTask(m.tasks.single()); f.waitIdle()
-            assertFalse(m.canRelease(m.space!!, paths))
-            f.start(); f.complete(); assertTrue(m.canRelease(m.space!!, paths))
+            f.complete(reply)
+            f.model.toggleLink(CLOUD_ARCHIVE, paths.first())
+            val plan = f.model.space!!
+            assertEquals(13, plan.library.size); assertEquals(listOf(paths.first()), plan.selected)
+            assertFalse(f.model.canRelease(plan, plan.selected))
+            f.model.beginRelease(plan); assertNull(f.model.confirmation)
+            assertEquals(1, f.starts.size)
         }
     }
-    @Test fun reconnectAndNewProcessReadProgressWithoutRestoringDeletionConsent() = Fixture().use { f ->
-        f.start()
-        f.row.put("progress", cloudProgressJson("local_read").put("metric", "read").put("scope", "phase"))
-        val m = f.model
-        m.attach(null); m.attach(SshConnection()); m.refresh(); f.waitIdle()
-        assertEquals("local_read", m.tasks.single().progress!!.phase)
-        assertFalse(m.tasks.single().canCancel)
-        assertTrue(m.selectedLinks(CLOUD_ARCHIVE).isEmpty())
-        f.complete(); m.viewTask(m.tasks.single()); f.waitIdle()
-        assertFalse(m.canRelease(m.space!!, paths))
-        val fresh = CloudModel(f.scope, { f.now }) { _, _ -> cloudSnapshot(f.row) }
-        fresh.attach(SshConnection())
-        assertTrue(fresh.selectedLinks(CLOUD_ARCHIVE).isEmpty()); assertNull(fresh.space)
+    @Test fun expiryDoesNotExtendOnSelectionAndExplicitRefreshLoadsOnceAgain() = Fixture().use { f ->
+        val m = f.model; f.load(); val deadline = m.space!!.expiresAt
+        f.now += 599000; m.toggleLink(CLOUD_ARCHIVE, paths.first())
+        assertEquals(deadline, m.space!!.expiresAt)
+        f.now += 1001
+        assertFalse(m.canRelease(m.space!!, m.space!!.selected))
+        m.consultSpace(); f.waitIdle(); assertEquals(2, f.starts.size)
     }
-    @Test fun divergenceBlockedResultsExpiryChangedSelectionAndSeparateConsentNeverRelease() {
-        for (case in listOf("request-result", "wrong-package", "blocked", "can-release", "expiry", "selection", "no-consent")) Fixture().use { f ->
-            f.start(); f.model.refreshFromUser(); f.waitIdle()
-            val result = when (case) {
-                "request-result" -> plan(paths.dropLast(1))
-                "wrong-package" -> plan(paths).put("id", "e".repeat(64))
-                "blocked" -> plan(paths).put("blockers", JSONArray().put("UNKNOWN_LINKS"))
-                "can-release" -> plan(paths).put("can_release", false)
-                else -> plan(paths)
-            }
-            f.complete(result)
-            if (case in listOf("request-result", "wrong-package")) {
-                assertNull(f.model.space); assertTrue(f.model.message.contains("divergente"))
-            } else {
-                val p = f.model.space!!
-                if (case == "expiry") f.now += 600001
-                if (case == "selection") f.model.toggleLink(CLOUD_ARCHIVE, paths.first())
-                f.model.release(p, paths, case != "no-consent"); f.waitIdle()
-            }
-            assertEquals(case, 1, f.starts.size)
+    @Test fun reconnectAndRelevantCatalogChangeInvalidateCachedInventory() {
+        for (event in listOf("connection", "catalog")) Fixture().use { f ->
+            val m = f.model; f.load()
+            if (event == "connection") { m.attach(null); m.attach(SshConnection()) }
+            else f.entryState = "failed"
+            m.refresh(); f.waitIdle()
+            assertNull(m.space); assertNull(m.confirmation)
+            assertEquals(1, f.starts.size)
         }
     }
-    @Test fun switchingPackagesWhileTaskFinishesCannotReopenOtherPackagePreview() = Fixture().use { f ->
-        f.start(); f.model.select("e".repeat(64)); f.complete()
-        assertNull(f.model.space); assertEquals("e".repeat(64), f.model.selected)
-        assertEquals(13, f.model.selectedLinks(CLOUD_ARCHIVE).size)
-        f.model.select(CLOUD_ARCHIVE); f.model.viewTask(f.model.tasks.single()); f.waitIdle()
-        assertFalse(f.model.canRelease(f.model.space!!, paths))
+    @Test fun completionUsesAlreadyReceivedResultWithoutAnotherTaskQuery() = Fixture().use { f ->
+        f.start()
+        val before = f.calls.count { it is CloudQuery.Task }
+        f.complete()
+        assertEquals(before + 1, f.calls.count { it is CloudQuery.Task })
+        assertTrue(f.model.canRelease(f.model.space!!, emptyList()))
+    }
+    @Test fun manualRefreshDuringSpaceFollowsTheSameJob() = Fixture().use { f ->
+        f.start(); f.model.refreshFromUser(); f.waitIdle()
+        assertTrue(f.model.tasks.single { it.active }.active)
+        f.complete(); assertEquals(1, f.starts.size)
+        assertTrue(f.model.canRelease(f.model.space!!, emptyList()))
+    }
+    @Test fun oldContractIsReadOnlyAndIndependentRestoreDoesNotRequireSpace() = Fixture().use { f ->
+        val legacy = cloudPlan().apply { remove("version"); remove("inventory") }
+        f.start(); f.complete(legacy)
+        assertNotNull(f.model.space); assertFalse(f.model.space!!.valid(f.now))
+        f.model.start(CloudWork("torrent", listOf("restore", CLOUD_ARCHIVE))); f.waitIdle()
+        assertEquals("restore", f.starts.last().work.action)
+    }
+    @Test fun unknownAliasesRetainBlocksAndCannotBePresentedAsReclaimable() {
+        val raw = cloudPlan().apply {
+            getJSONObject("inventory").getJSONArray("inodes").getJSONObject(1)
+                .put("nlink", 3).put("unknown_links", 1)
+            getJSONObject("inventory").getJSONArray("blockers").put("UNKNOWN_LINKS")
+        }
+        val plan = parseCloudSpace(raw, CLOUD_NOW).project(listOf(CLOUD_LIB))
+        assertEquals(80L, plan.estimate); assertEquals(20L, plan.retained)
+        assertFalse(plan.valid(CLOUD_NOW))
     }
 }

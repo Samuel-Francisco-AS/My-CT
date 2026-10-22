@@ -178,6 +178,25 @@ class CloudTests(unittest.TestCase):
         self.assertTrue(entry['library_checked']); self.assertTrue(entry['local_present'])
         self.assertEqual(entry['library_existing'], 1); self.assertEqual(entry['library_linked'], 1)
 
+    def test_snapshot_loads_one_media_context_for_all_packages(self):
+        from types import SimpleNamespace
+        state = {'links': {}, 'ignored': []}
+        observed = []
+        def targets(row, index):
+            self.assertIs(index, state); observed.append(row['id']); return {}
+        context = (SimpleNamespace(library_targets=targets), state)
+        mf = {'name': 'Fixture', 'infohash': HASH, 'total_size': 42,
+              'library_links': [], 'original_download_dir': '/nonexistent-fixture'}
+        entries = [{'id': identity, 'manifest': mf, 'state': 'verified'} for identity in (ID, 'd' * 64)]
+        def invoke(kind, args):
+            return {'ok': True, 'entries': entries if kind == 'torrent' else [], 'torrents': []}
+        with patch.object(cloud, 'invoke', side_effect=invoke), \
+                patch.object(cloud, 'library_context', return_value=context) as load:
+            result = cloud.snapshot()
+        load.assert_called_once_with()
+        self.assertEqual([ID, 'd' * 64], observed)
+        self.assertTrue(all(e['library_checked'] for e in result['catalogs']['torrent']['entries']))
+
     def test_base64_request_decoding_and_invalid_request_id(self):
         work = self.work()
         payload = base64.urlsafe_b64encode(json.dumps(work).encode()).decode().rstrip('=')

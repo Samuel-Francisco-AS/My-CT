@@ -13,13 +13,33 @@ internal val CLOUD_REQUEST = "b".repeat(32)
 internal const val CLOUD_LIB = "Filmes/Fixture/Fixture.mkv"
 internal const val CLOUD_NOW = 1792454400000L
 internal val CLOUD_TOKEN = "${CLOUD_NOW / 1000}-" + "d".repeat(64)
-internal fun cloudPlan(paths: List<String> = emptyList(), canRelease: Boolean = true): JSONObject = JSONObject()
-    .put("ok", true).put("id", CLOUD_ARCHIVE).put("preview", CLOUD_TOKEN).put("confirmation", CLOUD_TOKEN)
-    .put("library_confirmation", if (paths.isEmpty()) JSONObject.NULL else CLOUD_TOKEN)
-    .put("expires_in_seconds", 600).put("can_release", canRelease).put("remove_library", JSONArray(paths))
-    .put("physical_bytes", 100).put("reclaim_estimate_bytes", 80).put("retained_known_bytes", 20)
-    .put("remove_paths", JSONArray().put(JSONObject().put("path", "/home/user/Downloads/My-CT/Torrents/tree/video.mkv")))
-    .put("trees", JSONArray()).put("library", JSONArray()).put("blockers", JSONArray())
+internal fun cloudPlan(paths: List<String> = emptyList(), canRelease: Boolean = true,
+    choices: List<String> = listOf(CLOUD_LIB)): JSONObject {
+    val root = "/home/user/Downloads/My-CT/Torrents/tree"
+    val aliases = JSONArray(); val inodes = JSONArray()
+    fun group(index: Int, names: List<Pair<String, String?>>, blocks: Long) {
+        names.forEach { (name, relative) -> aliases.put(JSONObject().put("path", name)
+            .put("role", if (relative == null) "original" else "library").apply { if (relative != null) put("relative", relative) }) }
+        inodes.put(JSONObject().put("dev", 1).put("ino", index).put("nlink", names.size)
+            .put("physical_bytes", blocks).put("known_paths", JSONArray(names.map { it.first })).put("unknown_links", 0))
+    }
+    group(1, listOf("$root/video.mkv" to null), 80)
+    choices.forEachIndexed { index, relative -> group(index + 2,
+        listOf("$root/linked$index.mkv" to null, "/home/user/Media/$relative" to relative), 20) }
+    val links = JSONArray(choices.map { JSONObject().put("path", it).put("present", true)
+        .put("managed", true).put("linked_to_package", true) })
+    val blockers = JSONArray().apply { if (!canRelease) put("TORRENT_STATE") }
+    val inventory = JSONObject().put("version", 2).put("id", CLOUD_ARCHIVE).put("paths", aliases).put("inodes", inodes)
+        .put("trees", JSONArray()).put("library", links).put("library_complete", true).put("blockers", blockers)
+        .put("content_verified", false).put("remote", JSONObject().put("revalidated", false))
+    return JSONObject().put("ok", true).put("version", 2).put("inventory", inventory)
+        .put("id", CLOUD_ARCHIVE).put("preview", CLOUD_TOKEN).put("confirmation", CLOUD_TOKEN)
+        .put("library_confirmation", if (paths.isEmpty()) JSONObject.NULL else CLOUD_TOKEN)
+        .put("expires_in_seconds", 600).put("can_release", canRelease).put("remove_library", JSONArray(paths))
+        .put("physical_bytes", 80 + 20 * choices.size).put("reclaim_estimate_bytes", 80).put("retained_known_bytes", 20 * choices.size)
+        .put("remove_paths", JSONArray()).put("trees", inventory.getJSONArray("trees")).put("library", links)
+        .put("library_complete", true).put("blockers", blockers)
+}
 internal fun cloudTaskJson(work: CloudWork, state: String = "succeeded", result: JSONObject? = null): JSONObject =
     JSONObject().put("id", CLOUD_REQUEST).put("work", work.json()).put("state", state).apply { if (result != null) put("result", result) }
 internal fun cloudSnapshot(task: JSONObject? = null, entryState: String = "verified", catalogOk: Boolean = true): String {

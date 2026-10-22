@@ -167,10 +167,16 @@ private fun CloudTasks(model: CloudModel) {
 private fun CloudTransferProgress(task: CloudTask, connected: Boolean) {
     val progress = task.progress
     if (progress == null) {
-        if (task.active && task.work.action in setOf("archive", "restore", "space")) {
+        if (task.active && task.work.action in setOf("archive", "restore", "space", "release")) {
             LinearProgressIndicator(Modifier.fillMaxWidth())
             Text("Telemetria indisponível para esta operação. Tempo estimado indisponível.", style = MaterialTheme.typography.bodySmall)
         }
+        return
+    }
+    if (progress.metric != null && progress.phase !in setOf("local_read", "library_read")) {
+        if (task.active) LinearProgressIndicator(Modifier.fillMaxWidth())
+        Text(task.label, style = MaterialTheme.typography.labelSmall)
+        if (progress.metric == "metadata") Text("Consulta por metadados, sem leitura dos vídeos ou verificação do Drive.", style = MaterialTheme.typography.bodySmall)
         return
     }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -186,7 +192,7 @@ private fun CloudTransferProgress(task: CloudTask, connected: Boolean) {
     if (reading) Text("Métricas desta fase de leitura; podem incluir releituras/cache. Não são tráfego de rede nem bytes físicos do SSD.", style = MaterialTheme.typography.bodySmall)
     val fraction = percent?.let { String.format(java.util.Locale.forLanguageTag("pt-BR"), "%.1f%%", kotlin.math.floor(it * 10) / 10) }
         ?: if (task.active && progress.bytesTotal != null && progress.bytesTotal > 0 && progress.bytesDone == progress.bytesTotal)
-            if (reading) "Leitura da fase finalizada; consulta ainda em andamento" else "Transporte finalizado; verificação pendente" else "Porcentagem indisponível"
+            if (reading) "Leitura da fase finalizada; operação ainda em andamento" else "Transporte finalizado; verificação pendente" else "Porcentagem indisponível"
     Text(if (reading && percent != null) "$fraction desta fase" else fraction, style = MaterialTheme.typography.bodySmall)
     val total = progress.bytesTotal?.let { "${formatCleanupBytes(it)} ($it bytes)" } ?: "total desconhecido"
     Text("${if (reading) "Lidos: " else ""}${formatCleanupBytes(progress.bytesDone)} (${progress.bytesDone} bytes) / $total", style = MaterialTheme.typography.bodySmall)
@@ -205,10 +211,10 @@ private fun CloudDetail(model: CloudModel, entry: CloudEntry?, torrent: ServerTo
     val plan = model.space?.takeIf { it.id == key }
     val selectedLinks = model.selectedLinks(key)
     val choices = model.libraryChoices(key)
-    var confirm by remember(key) { mutableStateOf<CloudSpace?>(null) }
+    val confirm = model.confirmation?.takeIf { it.id == key }
     var libraryConfirmed by remember(confirm) { mutableStateOf(false) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) { while (isActive) { now = System.currentTimeMillis(); delay(1000) } }
+    LaunchedEffect(Unit) { while (isActive) { now = System.currentTimeMillis(); model.expireInventories(); delay(1000) } }
     val paths = selectedLinks.sorted()
     LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
         item("summary") {
@@ -217,7 +223,8 @@ private fun CloudDetail(model: CloudModel, entry: CloudEntry?, torrent: ServerTo
                 if (entry != null) {
                     Text("${formatCleanupBytes(entry.size)} · ${cloudState(entry, torrent, model.tasks.firstOrNull { it.work.target == key })}")
                     Text("Drive: ${cloudCopyLabel(entry.state)} · ${if (entry.restorable) "pode restaurar" else "restauração bloqueada"}")
-                    MyCtButton(onClick = { model.start(CloudWork("torrent", listOf("space", key) + paths.flatMap { listOf("--remove-library", it) })) }, enabled = model.actionsEnabled) { Text("Consultar espaço / prévia") }
+                    if (entry.verifiedAt.isNotBlank()) Text("Conferência registrada: ${entry.verifiedAt}", style = MaterialTheme.typography.bodySmall)
+                    MyCtButton(onClick = { model.consultSpace(force = true) }, enabled = model.actionsEnabled) { Text("Consultar espaço / prévia") }
                     if (entry.state != "verified" && torrent?.progress == 1f) {
                         MyCtTextButton(onClick = { model.start(CloudWork("torrent", listOf("inspect", archiveHash))) }, enabled = model.actionsEnabled) { Text("Conferir para arquivar novamente") }
                     }
@@ -253,7 +260,7 @@ private fun CloudDetail(model: CloudModel, entry: CloudEntry?, torrent: ServerTo
             if (choices.isNotEmpty()) item("library-selection") {
                 ScreenPanel {
                     Text("Excluir links da biblioteca (opcional)", style = MaterialTheme.typography.titleSmall)
-                    Text("Desmarcado preserva Jellyfin. Alterar a seleção exige nova prévia.", style = MaterialTheme.typography.bodySmall)
+                    Text("Desmarcado preserva Jellyfin. A seleção e a estimativa são atualizadas localmente.", style = MaterialTheme.typography.bodySmall)
                     Text("${selectedLinks.size}/256 links selecionados", style = MaterialTheme.typography.labelSmall)
                     choices.forEach { path ->
                         val enabled = model.actionsEnabled && (path in selectedLinks || selectedLinks.size < 256)
@@ -270,21 +277,21 @@ private fun CloudDetail(model: CloudModel, entry: CloudEntry?, torrent: ServerTo
         if (plan != null) {
             item("space") {
                 ScreenPanel {
-                    ScreenHeading("Espaço e liberação", "Nada foi removido. Drive e metainfo serão preservados.")
+                    ScreenHeading("Espaço e liberação", "Nada foi removido. Conteúdo e disponibilidade no Drive não foram revalidados nesta consulta.")
                     DataLine("Blocos conhecidos ocupados", formatCleanupBytes(plan.physical))
                     DataLine("Estimativa de liberação (até)", formatCleanupBytes(plan.estimate))
                     DataLine("Blocos retidos por outros nomes", formatCleanupBytes(plan.retained))
                     Text("Economia garantida: 0 B. Btrfs, snapshots e arquivos abertos podem reter espaço.", style = MaterialTheme.typography.bodySmall)
                     plan.trees.forEach { tree ->
                         DetailValue(if (tree.getString("role") == "original") "Árvore original" else "Árvore restaurada", tree.getString("path"))
-                        Text(if (tree.getBoolean("present")) "Presente · ${if (!tree.has("verified")) "integridade não confirmada" else if (tree.getBoolean("verified")) "verificada" else "divergente"}" else "Ausente", style = MaterialTheme.typography.bodySmall)
+                        Text(if (tree.getBoolean("present")) "Presente · integridade não revalidada" else "Ausente", style = MaterialTheme.typography.bodySmall)
                     }
                     Text("A liberação encerra o seeding e remove a entrada do Transmission e as árvores indicadas.")
                     ExpandDetails("Arquivos atingidos (${plan.paths.size})") { plan.paths.forEach { Text(it, style = MaterialTheme.typography.bodySmall) } }
                     plan.blockers.forEach { StatusNotice("Bloqueio: $it", true) }
-                    if (!model.previewAuthorized(plan)) StatusNotice("Seleção visual preservada. Consulte espaço novamente para obter autorização atual.", true)
+                    if (!model.previewAuthorized(plan)) StatusNotice("Resultado histórico. Atualize o inventário antes de liberar.", true)
                     if (now >= plan.expiresAt) StatusNotice("Prévia expirada. Consulte espaço novamente.", true)
-                    MyCtButton(onClick = { confirm = plan }, enabled = model.canRelease(plan, paths) && plan.valid(now)) { Text("Liberar espaço…") }
+                    MyCtButton(onClick = { model.beginRelease(plan) }, enabled = model.canRelease(plan, paths) && plan.valid(now)) { Text("Liberar espaço…") }
                 }
             }
             item("links") {
@@ -312,14 +319,16 @@ private fun CloudDetail(model: CloudModel, entry: CloudEntry?, torrent: ServerTo
         }
     }
     confirm?.let { snapshot ->
-        val valid = model.canRelease(snapshot, paths) && snapshot.valid(now)
-        AlertDialog(onDismissRequest = { confirm = null }, title = { Text("Liberar espaço do SSD?") }, text = {
+        val valid = model.canRelease(snapshot, snapshot.selected) && snapshot.valid(now)
+        AlertDialog(onDismissRequest = { model.dismissConfirmation() }, title = { Text("Liberar espaço do SSD?") }, text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("${snapshot.paths.size} arquivos da prévia serão retirados. Estimativa: até ${formatCleanupBytes(snapshot.estimate)}, sem garantia de liberação imediata.")
                 Text("Transmission será removido e o seeding encerrado. Drive e metainfo serão preservados.")
-                if (paths.isEmpty()) Text("Hardlinks Jellyfin serão preservados.")
+                snapshot.paths.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+                Text("A execução confere o conteúdo e o backup remoto antes de remover dados.")
+                if (snapshot.selected.isEmpty()) Text("Hardlinks Jellyfin serão preservados.")
                 else {
-                    Text("${paths.size} hardlinks Jellyfin também serão removidos da biblioteca.")
+                    Text("${snapshot.selected.size} hardlinks Jellyfin também serão removidos da biblioteca.")
                     Row(Modifier.clickable { libraryConfirmed = !libraryConfirmed }) {
                         Checkbox(libraryConfirmed, null)
                         Text("Confirmo também a remoção destes hardlinks Jellyfin.", Modifier.weight(1f))
@@ -328,9 +337,9 @@ private fun CloudDetail(model: CloudModel, entry: CloudEntry?, torrent: ServerTo
                 if (!valid) StatusNotice("Prévia obsoleta ou conexão alterada. Consulte novamente.", true)
             }
         }, confirmButton = { MyCtTextButton(onClick = {
-            confirm = null; model.release(snapshot, paths, libraryConfirmed)
-        }, enabled = valid && (paths.isEmpty() || libraryConfirmed)) { Text("Confirmar liberação") } },
-            dismissButton = { MyCtTextButton(onClick = { confirm = null }) { Text("Cancelar") } })
+            model.release(snapshot, snapshot.selected, libraryConfirmed)
+        }, enabled = valid && (snapshot.selected.isEmpty() || libraryConfirmed)) { Text("Confirmar liberação") } },
+            dismissButton = { MyCtTextButton(onClick = { model.dismissConfirmation() }) { Text("Cancelar") } })
     }
 }
 
