@@ -175,3 +175,21 @@ clientes antigos sem o diretório não podem emitir a nova exclusão implicitame
 - `myct-media-cleanup`: SHA-256 `572ce87f53b9983867e598f102666e2bf9c150ed4ad25a4f8cc1d049e82cfeda`.
 - `myct-archive-torrent`: SHA-256 `a3af7e040f558dae2f1a3f7404c29ed396fe1a393391e6ba56e63081b02b11e2`.
 - `myct-torrent`: SHA-256 `3a4b820a0bc5e6ae7bf796bd39180dbe729b94a6e8413bde7117ce83f4f84581`.
+
+
+### Publicação verificada
+
+[Candidata code 51 publicada como pre-release](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-media-local-v0.13.4-rc1),
+tag `myct-media-local-v0.13.4-rc1`, commit
+`96e10261c14c80b1c8edf6f5ac1757308508088c`. O digest reportado pelo asset GitHub
+coincide com o SHA-256 local registrado acima. Publicados somente APK e checksum;
+nenhum helper pessoal, catálogo, backup ou material de assinatura privado.
+
+Commits: `ddfb9c8` preserva o fechamento operacional anterior; `65b9aa1` corrige
+identidade; `96e1026` entrega exclusão por alvos, Android, testes e documentação.
+Registro final da publicação é um commit separado somente de documentação.
+PR #60 confirmada OPEN/draft no HEAD da candidata; sem merge ou Ready for Review.
+A pre-release anterior code 49 e sua tag não foram alteradas.
+
+Instalação pessoal dos novos helpers e aceite físico permanecem pendentes,
+conforme o procedimento acima. Nenhuma reconciliação adicional é necessária.

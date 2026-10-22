@@ -3,6 +3,7 @@
 **Armazenamento local — candidata code 51:** identidade de hardlinks resistente à
 renumeração de device Btrfs, retirada da biblioteca e exclusão permanente por alvos
 exatos, com uma confirmação e sem backup Cloud obrigatório.
+[APK 0.13.4-media-local-rc1/code 51](https://github.com/Samuel-Francisco-AS/My-CT/releases/tag/myct-media-local-v0.13.4-rc1) ·
 [Contrato e validação](docs/MYCT-MEDIA-LOCAL-RELATORIO.md).
 A PR #60 permanece draft; novo aceite físico Moto pendente. Atualizar a APK não
 substitui os helpers pessoais automaticamente.
