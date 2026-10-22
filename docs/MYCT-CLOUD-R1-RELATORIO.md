@@ -446,3 +446,83 @@ Nenhuma distribuição de APK, instalação no Moto, consulta Drive, operação 
 acervo, deploy ou alteração de serviços pessoais. R2 não foi iniciada.
 A PR permanece draft, aguardando reauditoria da Luna antes de distribuição e
 teste físico autorizado; ainda sem aceite funcional R1.
+
+
+## Fechamento técnico do reparo real do catálogo Media
+
+Execução UTC 2026-10-22T00:59:33+00:00;
+implantação previamente concluída a partir de `e65a8dbacd7bd5a941b26b228eaf9c0ad1a7a1b9`.
+**Reparo do cadastro Media: SUCESSO.** Não é declaração de aceite físico Android
+ou encerramento de toda a R1. Nenhum teste no Moto, nova APK, merge ou nova
+alteração de código nesta operação.
+
+### Procedência e autorização efetivas
+
+O proprietário confirmou expressamente: mídias iguais; nenhuma formatação,
+clonagem, restauração, troca de disco ou migração de `/home` desde a criação dos
+vínculos; dev 50 → 51 sem intervenção sua nos arquivos. Autorizou imediatamente o
+conjunto específico de 264 LEGACY_REANCHOR e o uso interno do ID integral somente
+se o plano correspondesse exatamente ao estado já confirmado.
+
+Registrado em JSON privado `owner_verified_origin=true` e
+`historical_identity_missing=true`, com a declaração humana acima e somente as
+evidências observadas: UUID Btrfs consistente nos dois boots examinados,
+subvolume 257, identidade atual dos hardlinks e baseline privado da implantação.
+Não se inventou UUID histórico, prova de conteúdo ou outra evidência.
+
+A prévia schema 3 correspondeu exatamente a 307 registros: 264 LEGACY_REANCHOR,
+14 CURRENT, 1 SOURCE_INODE_MISMATCH, 28 ABSENT e 134 itens ignored. Foram
+conferidos os mesmos 264 caminhos do baseline, todos os registros, filesystem e
+hashes dos catálogos. Os quatro componentes instalados continuavam íntegros;
+16 tarefas Cloud concluídas, nenhuma transação pendente. Não houve reimplantação.
+
+### Aplicação e recibo
+
+ID integral: `7f78ecd914303108a0249cda24d113a1eb7b84301b85189a0559ebb6f417c663`.
+
+Recibo autoritativo: `state=succeeded`, `updated=264`, `planned_updates=264`,
+`already_applied=false`. Usados `--confirm ID` e `--accept-legacy ID` na execução
+instalada, sem alterar o validador, dentro da validade de 600 s.
+
+| Controle | SHA-256 |
+| --- | --- |
+| Catálogo anterior/backup | `62ad95f896f43af198fb4bdb3520525c12732b7e527bc4ce227deff0d155c391` |
+| Catálogo Media resultante | `31b8a04685ee56554c836b1a97a26c00385c908baeb3e5cd4b97e294c3fa1ad3` |
+
+Backup privado verificado byte a byte, arquivo 0600 em diretório 0700:
+`~/.local/state/myct/media-reconcile/operations/7f78ecd914303108a0249cda24d113a1eb7b84301b85189a0559ebb6f417c663/state.before.json`.
+O mesmo diretório contém `transaction.json` durável `succeeded`. Declaração,
+plano, saída do comando, recibo e conferência estão no diretório privado
+`~/.local/state/myct/media-reconcile/reviews/20261022T005802Z-01a6aba8/`.
+Nenhum desses arquivos pessoais foi incorporado ao repositório/APK.
+
+### Conferência posterior
+
+| Resultado | Quantidade |
+| --- | ---: |
+| Registros examinados | 307 |
+| CURRENT após aplicação | 278 |
+| Candidatos restantes | 0 |
+| SOURCE_INODE_MISMATCH, preservado | 1 |
+| ABSENT, preservados | 28 |
+| ignored, lista integral preservada | 134 |
+| Arquivos físicos da biblioteca | 279 |
+| Elegíveis no diagnóstico somente leitura de armazenamento | 278 |
+| Ainda protegido por origem divergente | 1 |
+
+O catálogo resultante foi comparado integralmente com a transformação esperada:
+somente os 264 registros aprovados mudaram. Os 14 já coerentes, a exceção,
+os 28 ausentes e ignored permaneceram exatamente iguais.
+
+Metadados completos de 279 arquivos da biblioteca e 290 origens permaneceram
+idênticos ao baseline; nenhuma escrita, movimentação, renomeação ou exclusão de
+mídia. Snapshot de identidade/estado/arquivos do Transmission permaneceu igual à
+prévia; nenhuma chamada de mutação RPC. Catálogos de arquivamento de arquivos e
+torrents permaneceram byte a byte iguais; ambiente de tarefas Cloud inalterado.
+Nenhum acesso de mutação ao Drive, release, limpeza ou remoção de hardlinks.
+Não foram lidos/hashiados conteúdos dos vídeos.
+
+A nova identidade ainda exige reancoramento explícito se o device mudar em outro
+boot; não se declara resistência definitiva a remontagens futuras. A validação
+visual no Android e outros gates da R1 não foram executados nesta missão. Esta
+operação encerra exclusivamente o reparo real do cadastro Media autorizado.
