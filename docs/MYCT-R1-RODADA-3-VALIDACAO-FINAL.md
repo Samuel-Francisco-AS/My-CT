@@ -124,3 +124,11 @@ Logs e manifestos privados: `artifacts/r1-round3-validation/`, ignorados pelo Gi
 Esta é a última rodada técnica. Sem nova investigação, implementação ou quarta
 rodada. Após o aceite Moto, consolidação da PR e encerramento da R1 serão feitos
 pelo GitHub, conforme determinado pelo proprietário.
+
+## Aceite físico posterior e encerramento — 22/10/2026
+
+**Aceite de usabilidade reportado pelo proprietário no Moto G06 (code 52):** consulta de espaço percebida como mais rápida e prática; mudanças de seleção funcionam sem precisar repetir a consulta. Capturas mostram o painel de espaço e liberação com 18,0 GiB para o pacote e o painel Transmission com aproximadamente 19,3 GB, sem indicação de divergência: para os **19.349.308.130 bytes** do pacote, a conversão dá aproximadamente **18,02 GiB** e **19,35 GB**. São unidades binárias e decimais diferentes, não um erro de estimativa. O painel mantém a ressalva de que a liberação é um limite superior; snapshots, reflinks, hardlinks e arquivos abertos podem reter blocos.
+
+O aceite refere-se à melhora de desempenho, apresentação e ausência de uma segunda carga obrigatória. **Não houve execução de liberação destrutiva real no acervo pessoal nem medição de duração ponta a ponta com cronômetro no Android**. Os tempos instrumentados do Fedora não substituem uma medição controlada do toque no aparelho. Este aceite posterior supera a anotação anterior de “PENDENTE” para o fluxo de consulta e seleção.
+
+**Fechamento funcional da R1:** três rodadas concluídas, sem quarta rodada. Integração final da PR #62 à `main` e encerramento da issue #61 são os atos de consolidação documental e de repositório, sem instalações adicionais de helpers nem nova APK. A exclusão local permanente continua independente de backup Cloud.
