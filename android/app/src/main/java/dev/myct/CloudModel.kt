@@ -27,7 +27,9 @@ internal class CloudModel(
     private val linkSelections = mutableStateMapOf<String, Set<String>>()
     private val linkChoices = mutableStateMapOf<String, List<String>>()
     private var previewRequest: Pair<String, CloudWork>? = null
-    private var authorized: CloudSpace? = null
+    private val inventories = mutableMapOf<String, CloudSpace>()
+    // This is an open user dialog, never a grant restored from history/polling.
+    var confirmation by mutableStateOf<CloudSpace?>(null); private set
     fun selectedLinks(key: String) = linkSelections[key].orEmpty()
     fun libraryChoices(key: String) = linkChoices[key].orEmpty()
     fun toggleLink(key: String, path: String) {
@@ -36,6 +38,7 @@ internal class CloudModel(
         if (path !in current && current.size >= 256) return
         linkSelections[key] = if (path in current) current - path else current + path
         invalidatePreview()
+        space = inventories[key]?.project(selectedLinks(key).sorted())
     }
     var connected by mutableStateOf(false); private set
     var busy by mutableStateOf(false); private set
@@ -59,33 +62,70 @@ internal class CloudModel(
         ssh = connection; connected = connection != null; busy = false; stale = true
         catalogsReady = false; needsSnapshot = true
         // Keep the last view marked stale until the next authoritative snapshot.
-        invalidatePreview(); linkSelections.clear(); linkChoices.clear()
+        invalidatePreview(); inventories.clear(); space = null; linkSelections.clear(); linkChoices.clear()
         inspection = null; selectedFile = null; result = null; resultWork = null
         // The server journal, not this memory, survives process death/reconnection.
         pending = null; handled = null
         message = if (connected) "Atualize para consultar a Nuvem no Fedora." else "SSH desconectado. Trabalhos aceitos continuam no Fedora."
     }
     fun select(key: String?) {
-        if (selected != key) { selected = key; invalidatePreview(); inspection = null; result = null; resultWork = null }
+        expireInventories()
+        if (selected != key) {
+            selected = key; invalidatePreview()
+            space = key?.let { inventories[it]?.project(selectedLinks(it).sorted()) }
+            inspection = null; result = null; resultWork = null
+        }
     }
     fun prepareFile(path: String) {
         require(cloudPath(path)); selectedFile = path
         if (!busy) refresh()
     }
     fun dismissFile() { selectedFile = null }
-    fun invalidatePreview() { space = null; authorized = null; previewRequest = null }
-    fun previewAuthorized(plan: CloudSpace) = authorized === plan
-    fun canRelease(plan: CloudSpace, paths: List<String>) = actionsEnabled && space === plan && authorized === plan &&
+    /** Revoke the open dialog and pending authorization, retaining visual inventory. */
+    fun invalidatePreview() { confirmation = null; previewRequest = null }
+    private fun discardInventory(key: String) {
+        inventories.remove(key)
+        if (space?.id == key) space = null
+        invalidatePreview()
+    }
+    fun previewAuthorized(plan: CloudSpace) = plan.inventory != null && inventories[plan.id]?.token == plan.token
+    fun canRelease(plan: CloudSpace, paths: List<String>) = actionsEnabled && space === plan && previewAuthorized(plan) &&
         selected == plan.id && selectedLinks(plan.id).sorted() == paths.sorted() &&
         plan.selected == paths.sorted() && plan.valid(clock())
-
-    fun release(plan: CloudSpace, paths: List<String>, libraryConfirmed: Boolean) {
-        if (!canRelease(plan, paths) || (paths.isNotEmpty() && !libraryConfirmed)) {
-            invalidatePreview(); message = "Confirmação obsoleta. Consulte espaço novamente."; return
+    fun beginRelease(plan: CloudSpace) {
+        if (canRelease(plan, plan.selected)) confirmation = plan
+    }
+    fun dismissConfirmation() { confirmation = null }
+    fun expireInventories() {
+        val expired = inventories.filterValues { clock() >= it.expiresAt }.keys
+        expired.forEach { inventories.remove(it) }
+        if (confirmation?.let { clock() >= it.expiresAt } == true) confirmation = null
+    }
+    /** Reuse one inventory per package. The explicit preview button passes force=true. */
+    fun consultSpace(force: Boolean = false) {
+        expireInventories()
+        val key = selected ?: return
+        if (!actionsEnabled) return
+        val cached = inventories[key]
+        if (!force && cached != null && clock() < cached.expiresAt) {
+            space = cached.project(selectedLinks(key).sorted())
+            return
         }
-        start(plan.release(libraryConfirmed, clock()))
+        start(CloudWork("torrent", listOf("space", key)))
+    }
+    fun release(plan: CloudSpace, paths: List<String>, libraryConfirmed: Boolean) {
+        if (confirmation !== plan || !canRelease(plan, paths) || (paths.isNotEmpty() && !libraryConfirmed)) {
+            invalidatePreview(); message = "Confirmação obsoleta. Confira a seleção e abra a confirmação novamente."; return
+        }
+        dispatch(plan.release(libraryConfirmed, clock()))
     }
     fun start(work: CloudWork) {
+        if (work.args.firstOrNull() == "release") {
+            message = "Abra a confirmação dos caminhos antes de liberar espaço."; return
+        }
+        dispatch(work)
+    }
+    private fun dispatch(work: CloudWork) {
         if (!actionsEnabled) return
         try {
             work.json() // Validate before opening SSH, also for common SFTP filenames.
@@ -93,10 +133,9 @@ internal class CloudModel(
             message = "Pedido inválido. Confira o arquivo ou a seleção antes de enviar."
             return
         }
-        if (work.action == "space" && (selected != work.target || work.librarySelection != selectedLinks(work.target).sorted())) {
-            message = "A seleção mudou. Confira os links e consulte espaço novamente."; return
-        }
-        invalidatePreview(); inspection = null; result = null; resultWork = null
+        if (work.action == "space" && selected != work.target) return
+        val target = entries.find { it.hash == work.target }?.id ?: work.target
+        discardInventory(target); inspection = null; result = null; resultWork = null
         val id = UUID.randomUUID().toString().replace("-", "")
         pending = id; handled = null
         if (work.action == "space") previewRequest = id to work
@@ -145,16 +184,16 @@ internal class CloudModel(
         }
     }
     private suspend fun updateActive(call: CloudCall) {
-        var finished = false
+        val finished = mutableMapOf<String, JSONObject>()
         for (task in tasks.filter { it.active }) {
             val row = cloudReply(call(CloudQuery.Task(task.id))).getJSONObject("task")
             val current = parseCloudTask(row)
             require(current.id == task.id && current.work == task.work)
             tasks = tasks.map { if (it.id == current.id) current else it }
-            if (!current.active) finished = true
+            if (!current.active) finished[current.id] = row
         }
         // Exactly one catalog read after the active work terminates, including failure/cancel.
-        if (finished) readSnapshot(call, navigate = false)
+        if (finished.isNotEmpty()) readSnapshot(call, navigate = false, completed = finished)
     }
     fun cancel(task: CloudTask) {
         val current = tasks.find { it.id == task.id && it.work == task.work } ?: return
@@ -168,7 +207,7 @@ internal class CloudModel(
             if (!next.active) readSnapshot(call, navigate = false)
         }
     }
-    private suspend fun readSnapshot(call: CloudCall, navigate: Boolean = true) {
+    private suspend fun readSnapshot(call: CloudCall, navigate: Boolean = true, completed: Map<String, JSONObject> = emptyMap()) {
         val reply = cloudReply(call(CloudQuery.Snapshot))
         val nextTasks = reply.cloudObjects("tasks").map(::parseCloudTask).map { task ->
             if (task.active && task.progress == null) task.copy(progress = tasks.find { it.id == task.id }?.progress) else task
@@ -189,14 +228,18 @@ internal class CloudModel(
         val rpc = reply.getJSONObject("transmission")
         torrents = if (rpc.getBoolean("ok")) parseTorrents(rpc.toString()) else emptyList()
         if (!rpc.getBoolean("ok")) notices += "Transmission indisponível. Estado de seeding não confirmado."
+        val previous = entries.associateBy { it.id }
+        for (key in inventories.keys.toList()) {
+            if (previous[key] != nextEntries.find { it.id == key }) discardInventory(key)
+        }
         tasks = nextTasks; entries = nextEntries; catalogsReady = ready
         if (navigate) entries.firstOrNull { it.kind == "torrent" && it.hash == selected }?.let { select(it.id) }
         stale = false; needsSnapshot = false
-        message = if (notices.isEmpty()) "Catálogo do Fedora atualizado. Cópias no Drive conferidas na data indicada; consulte espaço para revalidar."
+        message = if (notices.isEmpty()) "Catálogo do Fedora atualizado. Cópias no Drive conferidas na data indicada; a liberação fará nova verificação."
             else notices.joinToString(" ")
         val last = pending?.let { id -> tasks.find { it.id == id } }
         if (last != null && !last.active && !last.uncertain && handled != last.id) {
-            readResult(call, last)
+            readResult(call, last, completed[last.id])
             handled = last.id
         }
     }
@@ -206,10 +249,10 @@ internal class CloudModel(
             val destination = entries.firstOrNull { it.hash == task.work.target }?.id ?: task.work.target
             select(destination)
         }
-        request { call -> readResult(call, task) }
+        request { call -> readResult(call, task, fromHistory = true) }
     }
-    private suspend fun readResult(call: CloudCall, task: CloudTask) {
-        val row = cloudReply(call(CloudQuery.Task(task.id))).getJSONObject("task")
+    private suspend fun readResult(call: CloudCall, task: CloudTask, completed: JSONObject? = null, fromHistory: Boolean = false) {
+        val row = completed ?: cloudReply(call(CloudQuery.Task(task.id))).getJSONObject("task")
         val current = parseCloudTask(row)
         require(current.id == task.id && current.work == task.work)
         tasks = tasks.map { if (it.id == current.id) current else it }
@@ -217,7 +260,12 @@ internal class CloudModel(
             message = "${current.label} no Fedora. O trabalho continua após desconectar."
             return
         }
-        if (task.active && !current.active) readSnapshot(call, navigate = false)
+        if (fromHistory && task.active) {
+            if (pending == current.id) handled = current.id
+            readSnapshot(call, navigate = false)
+        }
+        if (current.work.action == "space" && inventories.containsKey(current.work.target) &&
+            (fromHistory || previewRequest != (current.id to current.work))) return
         val reply = row.optJSONObject("result")
         result = reply; resultWork = current.work
         if (current.uncertain || reply == null) {
@@ -238,24 +286,23 @@ internal class CloudModel(
         when (current.work.action) {
             "space" -> {
                 val plan = parseCloudSpace(reply, clock())
-                if (plan.id != current.work.target || plan.selected.sorted() != current.work.librarySelection) {
-                    invalidatePreview()
-                    message = "Seleção divergente entre pedido e resultado. Liberação bloqueada; consulte espaço novamente."
+                if (plan.id != current.work.target) {
+                    invalidatePreview(); message = "Pacote divergente no resultado. Atualize o inventário."
                     return
                 }
-                // Choices may be displayed from history; history cannot grant deletion consent.
+                val live = !fromHistory && current.state == "succeeded" &&
+                    previewRequest == (current.id to current.work) && plan.inventory != null && clock() < plan.expiresAt
+                // A historical/late response cannot replace a newer live cache or grant a dialog.
+                if (!live && inventories.containsKey(plan.id)) return
                 val reported = plan.library.map { it.getString("path") }
                 linkChoices[plan.id] = if (plan.libraryComplete) reported else
                     (libraryChoices(plan.id).ifEmpty { entries.find { it.id == plan.id }?.links.orEmpty() } + reported).distinct()
+                if (live) inventories[plan.id] = plan
                 if (selected == plan.id) {
-                    space = plan
-                    if (plan.valid(clock()) && current.state == "succeeded" && previewRequest == (current.id to current.work) &&
-                        plan.selected.sorted() == selectedLinks(plan.id).sorted()) authorized = plan
-                    else {
-                        authorized = null
-                        message = "Prévia para consulta. Seleção preservada; consulte espaço novamente para autorizar a liberação."
-                    }
+                    space = if (live) plan.project(selectedLinks(plan.id).sorted()) else plan
+                    if (!live) message = "Inventário histórico para consulta. Atualize a prévia antes de liberar."
                 }
+                previewRequest = null
             }
             "inspect" -> if (selected == current.work.target || entries.any { it.id == selected && it.hash == current.work.target }) inspection = reply
             "recover" -> message = if (reply.optBoolean("seed_started"))
@@ -283,7 +330,7 @@ internal class CloudModel(
                 throw cancelled
             } catch (failure: Exception) {
                 if (generation == epoch) {
-                    stale = true; invalidatePreview(); inspection = null
+                    stale = true; invalidatePreview(); inventories.clear(); space = null; inspection = null
                     message = (failure as? DownloadFailure)?.safeMessage
                         ?: "Falha de rede/SSH ou resposta inválida. Atualize para consultar o resultado; o pedido não será repetido."
                 }

@@ -753,7 +753,8 @@ def disk_record(path):
     need(s.st_uid == os.getuid(), 'UNSAFE_PATH', 'Caminho não pertence ao usuário.')
     return {'path': str(path), 'dev': s.st_dev, 'ino': s.st_ino, 'nlink': s.st_nlink,
             'size': s.st_size, 'blocks_bytes': s.st_blocks * 512,
-            'mtime_ns': s.st_mtime_ns, 'ctime_ns': s.st_ctime_ns}
+            'mtime_ns': s.st_mtime_ns, 'ctime_ns': s.st_ctime_ns,
+            'mode': s.st_mode, 'uid': s.st_uid}
 
 
 def library_targets(row, state):
@@ -777,20 +778,20 @@ def check_mounts(root):
         need(not mounted.is_relative_to(root), 'UNSAFE_PATH', 'Árvore contém ponto de montagem; liberação recusada.')
 
 
-def storage_inventory(row, rpc, selected=(), telemetry=None):
+def storage_inventory(row, rpc, telemetry=None):
     """Read only, including when blocked. No locks, directories or catalog writes."""
     mf, key = row['manifest'], row['manifest']['infohash']
-    selected = sorted(set(selected))
     blockers, trees, paths, directories = [], [], [], []
-    result = {'id': row['id'], 'infohash': key, 'name': mf['name'],
+    result = {'version': 2, 'id': row['id'], 'infohash': key, 'name': mf['name'],
               'catalog_verified': row['state'] == 'verified',
               'catalog_path': str(common.state_dir() / 'catalog.json'),
               'bundle_path': str(common.state_dir() / 'bundles' / row['id']),
               'package_logical_bytes': mf['total_size'],
               'extra_files': [f['path'] for f in mf['files'] if f['path'] not in {t['path'] for t in mf['torrent_files']}],
-              'remote': {'verified': False}, 'metainfo_available': False, 'trees': trees,
-              'library': [], 'library_complete': False, 'inodes': [], 'remove_paths': [], 'directories': directories,
-              'remove_library': selected, 'blockers': blockers}
+              'remote': {'verified': False, 'revalidated': False, 'catalog_verified_at': row.get('verified_at')},
+              'content_verified': False, 'metainfo_available': False, 'trees': trees,
+              'library': [], 'library_complete': False, 'inodes': [], 'paths': paths,
+              'directories': directories, 'blockers': blockers}
     result['release'] = {k: row['release'][k] for k in ('state', 'phase', 'error_code', 'removed')
                          if k in row.get('release', {})}
 
@@ -802,14 +803,6 @@ def storage_inventory(row, rpc, selected=(), telemetry=None):
         release_resolved(row, load_catalog())
     except Failure as error:
         blocked(error.code)
-    if telemetry:
-        telemetry.phase('remote_check')
-    try:
-        remote_objects(row)  # Covers data AND canonical manifest AND metainfo, size/MD5.
-        result['remote'] = {'verified': True, 'checks': ['size', 'md5', 'manifest', 'metainfo']}
-    except (Failure, OSError) as error:
-        result['remote']['error_code'] = common.failure_code(error)
-        blocked(common.failure_code(error))
     if telemetry:
         telemetry.phase('local_inventory')
     try:
@@ -839,13 +832,16 @@ def storage_inventory(row, rpc, selected=(), telemetry=None):
             if not present:
                 continue
             check_mounts(root)
-            files, dirs, _ = digest_tree(root, telemetry)
-            info['verified'] = files == mf['files'] and dirs == mf['directories']
-            need(info['verified'], 'LOCAL_DIVERGENCE', 'Árvore local mudou; nova auditoria necessária.')
-            for f in files:
-                paths.append({**disk_record(root / f['path']), 'source': f['path'],
-                              'role': info['role'], 'remove': True})
+            files, dirs = tree(root)
+            records = [{**disk_record(file), 'source': rel, 'role': info['role']}
+                       for rel, file in files.items()]
+            info['metadata_matches'] = ([{'path': f['source'], 'size': f['size']} for f in records] ==
+                                        [{'path': f['path'], 'size': f['size']} for f in mf['files']]
+                                        and dirs == mf['directories'])
+            info['content_verified'] = False
+            paths.extend(records)
             directories.extend(disk_record(root / d) for d in dirs + [''])
+            need(info['metadata_matches'], 'LOCAL_DIVERGENCE', 'Estrutura/tamanho local mudou; atualize o inventário.')
         except (Failure, OSError) as error:
             blocked(common.failure_code(error))
     if telemetry:
@@ -859,7 +855,7 @@ def storage_inventory(row, rpc, selected=(), telemetry=None):
         if current:
             need(current['download_dir'] in [str(p) for p in roots] and complete(current)
                  and current['status'] in (0, 5, 6), 'TORRENT_STATE', 'Torrent incompatível/incompleto/ocupado.')
-            need(any(t['present'] and t['path'] == current['download_dir'] and t.get('verified') for t in trees),
+            need(any(t['present'] and t['path'] == current['download_dir'] and t.get('metadata_matches') for t in trees),
                  'TORRENT_STATE', 'Diretório RPC ausente ou divergente.')
             need([{'path': f['name'], 'size': f['length']} for f in current['files']] ==
                  [{'path': f['path'], 'size': f['size']} for f in mf['torrent_files']],
@@ -915,17 +911,11 @@ def storage_inventory(row, rpc, selected=(), telemetry=None):
                         if candidates:
                             source = recorded[41:] if recorded.startswith(key + ':') and recorded[41:] in candidates else sorted(candidates)[0]
                         elif rel in targets:
-                            # Original names may already have been released. The library
-                            # inode still consumes SSD and must remain visible in space.
+                            # No content fallback: a saved identity may prove a remaining
+                            # hardlink, never an arbitrary same-sized replacement.
                             expected = next(f for f in mf['files'] if f['path'] == targets[rel])
-                            if telemetry:
-                                telemetry.reading(s.st_size, library=True)
-                            measured, _ = (common.fingerprint(file, on_read=telemetry.advance) if telemetry
-                                           else common.fingerprint(file))
-                            if telemetry:
-                                telemetry.end_read()
-                                telemetry.phase('library_inventory')
-                            if measured == {k: expected[k] for k in measured}:
+                            if s.st_size == expected['size'] and media.record_matches(
+                                    item, key + ':' + targets[rel], file):
                                 source = targets[rel]
                         if source is None:
                             continue
@@ -936,7 +926,7 @@ def storage_inventory(row, rpc, selected=(), telemetry=None):
                         managed = media.record_matches(item, key + ':' + source, file,
                                                        current_sources[0] if current_sources else None)
                         paths.append({**disk_record(file), 'source': source, 'role': 'library',
-                                      'relative': rel, 'managed': managed, 'remove': rel in selected})
+                                      'relative': rel, 'managed': managed})
                         targets.setdefault(rel, source)
                     except (Failure, media.MediaError, OSError, ValueError, KeyError, TypeError) as error:
                         scan_complete = False
@@ -951,22 +941,18 @@ def storage_inventory(row, rpc, selected=(), telemetry=None):
             file = common.safe_path(root / rel)
             matching = next((p for p in paths if p['path'] == str(file)), None)
             item = {'path': rel, 'source': source, 'present': file.exists(),
-                    'linked_to_package': matching is not None, 'selected': rel in selected,
+                    'linked_to_package': matching is not None,
                     'ignored': key + ':' + source in state['ignored'],
                     'managed': bool(matching and matching['managed'])}
             item['status'] = ('absent' if not item['present'] else 'managed' if item['managed'] else
                               'unmanaged' if rel not in state['links'] and matching else 'divergent')
             result['library'].append(item)
-            if rel in selected and not item['managed']:
-                blocked('LIBRARY_SELECTION')
         except (Failure, media.MediaError, OSError, ValueError, KeyError, TypeError) as error:
             result['library_complete'] = False
             result['library'].append({'path': rel, 'source': source, 'present': False,
                                       'linked_to_package': False, 'managed': False, 'status': 'uninspectable',
-                                      'selected': rel in selected, 'ignored': False})
+                                      'ignored': False})
             blocked(error.code if isinstance(error, Failure) else 'MEDIA')
-    if not set(selected) <= set(targets):
-        blocked('LIBRARY_SELECTION')
     if not result['library_complete']:
         blocked('LIBRARY_INCOMPLETE')
     if telemetry:
@@ -977,15 +963,35 @@ def storage_inventory(row, rpc, selected=(), telemetry=None):
     for (dev, ino), aliases in sorted(groups.items()):
         first = aliases[0]
         unknown = first['nlink'] - len(aliases)
-        removed = [p['path'] for p in aliases if p['remove']]
         item = {'dev': dev, 'ino': ino, 'nlink': first['nlink'], 'logical_bytes': first['size'],
                 'physical_bytes': first['blocks_bytes'], 'known_paths': [p['path'] for p in aliases],
-                'remove_paths': removed, 'unknown_links': max(unknown, 0),
-                'reclaim_candidate_bytes': first['blocks_bytes'] if len(removed) == first['nlink'] else 0}
+                'unknown_links': max(unknown, 0)}
         result['inodes'].append(item)
-        if unknown != 0 or any(p['nlink'] != first['nlink'] for p in aliases):
+        fields = ('nlink', 'size', 'blocks_bytes', 'mtime_ns', 'ctime_ns', 'mode', 'uid')
+        if unknown != 0 or any(any(p[k] != first[k] for k in fields) for p in aliases):
             blocked('UNKNOWN_LINKS')
-    result['remove_paths'] = [p for p in paths if p['remove']]
+    paths.sort(key=lambda p: p['path'])
+    for inode in result['inodes']:
+        inode['known_paths'].sort()
+    return result
+
+
+def selection_plan(inventory, selected=()):
+    """Pure projection; identical inode/path arithmetic is used by Android."""
+    selected = sorted(set(selected))
+    result = {**inventory, 'inventory': inventory, 'remove_library': selected,
+              'blockers': list(inventory['blockers']), 'inodes': [],
+              'library': [{**link, 'selected': link['path'] in selected} for link in inventory['library']]}
+    allowed = {link['path'] for link in inventory['library'] if link['managed']}
+    if not set(selected) <= allowed:
+        result['blockers'].append('LIBRARY_SELECTION')
+    result['remove_paths'] = [{**p, 'remove': True} for p in inventory['paths']
+                              if p['role'] != 'library' or p['relative'] in selected]
+    removed = {p['path'] for p in result['remove_paths']}
+    for inode in inventory['inodes']:
+        names = [p for p in inode['known_paths'] if p in removed]
+        result['inodes'].append({**inode, 'remove_paths': names, 'reclaim_candidate_bytes':
+                                inode['physical_bytes'] if len(names) == inode['nlink'] and not inode['unknown_links'] else 0})
     result['physical_bytes'] = sum(i['physical_bytes'] for i in result['inodes'])
     result['reclaim_estimate_bytes'] = sum(i['reclaim_candidate_bytes'] for i in result['inodes'])
     result['retained_known_bytes'] = result['physical_bytes'] - result['reclaim_estimate_bytes']
@@ -994,22 +1000,22 @@ def storage_inventory(row, rpc, selected=(), telemetry=None):
     result['reclaim_guaranteed_bytes'] = 0
     result['estimate_kind'] = 'inode_blocks_upper_bound_not_guaranteed'
     result['estimate_note'] = 'st_blocks por inode, sem diretórios; reflinks, snapshots e arquivos abertos podem reter blocos. Economia garantida: 0.'
-    result['effects'] = {'torrent_entry_removed': current is not None,
+    result['effects'] = {'torrent_entry_removed': inventory.get('torrent') is not None,
                          'seeding_stops': True, 'library_preserved': not selected,
                          'drive_and_metainfo_preserved': True}
     if not result['remove_paths']:
-        blocked('NO_LOCAL_DATA')
-    result['can_release'] = not blockers
+        result['blockers'].append('NO_LOCAL_DATA')
+    result['can_release'] = not result['blockers']
     return result
 
 
 def preview_token(plan, issued):
-    return str(issued) + '-' + hashlib.sha256(encoded([issued, plan])).hexdigest()
+    return str(issued) + '-' + hashlib.sha256(encoded(['space-inventory-v2', issued, plan.get('inventory', plan)])).hexdigest()
 
 
 def space(row, rpc, selected=()):
-    telemetry = SpaceProgress(common.progress)
-    plan = storage_inventory(row, rpc, selected, telemetry=telemetry)
+    telemetry = SpaceProgress(common.progress, metric='metadata')
+    plan = selection_plan(storage_inventory(row, rpc, telemetry=telemetry), selected)
     telemetry.phase('finalizing')
     token = preview_token(plan, int(time.time()))
     return {**plan, 'preview': token, 'expires_in_seconds': 600,
@@ -1030,6 +1036,30 @@ def open_parent(path):
         raise
 
 
+STAT_FIELDS = {'dev': 'st_dev', 'ino': 'st_ino', 'nlink': 'st_nlink', 'size': 'st_size',
+               'mtime_ns': 'st_mtime_ns', 'ctime_ns': 'st_ctime_ns', 'mode': 'st_mode', 'uid': 'st_uid'}
+
+
+def stat_record_matches(value, record):
+    return all(getattr(value, field) == record[name] for name, field in STAT_FIELDS.items())
+
+
+def verify_release_content(row, plan, telemetry):
+    """One real content read per inode, before RPC mutation; never part of preview."""
+    expected = {f['path']: f for f in row['manifest']['files']}
+    groups = {}
+    for item in plan['remove_paths']:
+        groups.setdefault((item['dev'], item['ino']), []).append(item)
+    telemetry.reading(sum(items[0]['size'] for items in groups.values()))
+    for items in groups.values():
+        first = items[0]
+        measured, snapshot = common.fingerprint(Path(first['path']), on_read=telemetry.advance)
+        need(snapshot == tuple(first[k] for k in ('dev', 'ino', 'size', 'mtime_ns', 'ctime_ns')) and
+             all(measured == {k: expected[item['source']][k] for k in measured} for item in items),
+             'SOURCE_CHANGED', 'Conteúdo/identidade diverge do pacote; dados preservados.')
+    telemetry.end_read()
+
+
 def release(row, data, rpc, token, confirmation, selected=(), library_confirmation=None):
     need(isinstance(token, str) and re.fullmatch('[0-9]{1,12}-[0-9a-f]{64}', token)
          and confirmation == token, 'CONFIRMATION', 'Confirme explicitamente o identificador da prévia.')
@@ -1038,66 +1068,87 @@ def release(row, data, rpc, token, confirmation, selected=(), library_confirmati
     release_resolved(row, data)
     previous = row.get('release', {})
     if previous.get('state') == 'released' and previous.get('preview') == token:
-        # An exact replay is a no-op, never another destructive attempt.
+        # The inventory token is selection-independent; replay must match the executed selection.
+        need(sorted(set(selected)) == previous['plan']['remove_library'], 'CONFIRMATION',
+             'Esta prévia já foi executada com outra seleção; atualize o inventário.')
         return {'id': row['id'], 'state': 'released', 'already_released': True, 'mutations_repeated': False}
     issued = int(token.split('-', 1)[0])
     need(0 <= time.time() - issued <= 600, 'STALE_PREVIEW', 'Prévia expirada; consulte space novamente.')
     key = row['manifest']['infohash']
     with torrent.naming_lock(key), media_lock():
-        plan = storage_inventory(row, rpc, selected)
+        need(0 <= time.time() - issued <= 600, 'STALE_PREVIEW', 'Prévia expirada durante espera por locks.')
+        plan = selection_plan(storage_inventory(row, rpc), selected)
         need(plan['can_release'], 'BLOCKED', 'Liberação bloqueada; consulte space para os impedimentos.')
         need(preview_token(plan, issued) == token, 'STALE_PREVIEW', 'Estado/seleção mudou; consulte nova prévia.')
+        telemetry = SpaceProgress(common.progress)
+        verify_release_content(row, plan, telemetry)
+        telemetry.phase('remote_check')
+        remote_objects(row)
+        # Hashing/network may have taken time; metadata must still be identical.
+        telemetry.phase('local_inventory')
+        need(storage_inventory(row, rpc) == plan['inventory'], 'STATE_CHANGED',
+             'Inventário mudou durante verificação; dados preservados.')
         journal = {'state': 'pending', 'phase': 'validated', 'preview': token, 'at': common.now(),
                    'plan': plan, 'removed': []}
         row['release'] = journal
         common.save_catalog(data)  # Crash/timeout after this point forbids automatic retry.
         try:
             if plan['torrent'] is not None:
+                telemetry.phase('pausing')
                 journal['phase'] = 'pausing'; common.save_catalog(data)
                 rpc.call('torrent_stop', {'ids': [key]})
                 paused = wait_paused(rpc, key)
                 need(paused['download_dir'] == plan['torrent']['download_dir'] and complete(paused),
                      'STATE_CHANGED', 'Estado mudou durante a pausa; dados preservados.')
+                telemetry.phase('removing_entry')
                 journal['phase'] = 'removing_entry'; common.save_catalog(data)
                 rpc.call('torrent_remove', {'ids': [key], 'delete_local_data': False})
                 need(get_torrent(rpc, key, optional=True) is None, 'RPC', 'Remoção da entrada não confirmada; não excluir dados.')
-            # Revalidate every local inode, full content and remote after RPC,
-            # immediately before first unlink. Ignore only the expected RPC absence.
-            fresh = storage_inventory(row, rpc, selected)
+            # Metadata only after RPC; content was checked once per distinct inode.
+            telemetry.phase('local_inventory')
+            fresh = selection_plan(storage_inventory(row, rpc), selected)
             fresh['blockers'] = [b for b in fresh['blockers'] if b != 'RELEASE_UNCERTAIN']
             need(not fresh['blockers'] and fresh['torrent'] is None and
                  fresh['remove_paths'] == plan['remove_paths'] and fresh['directories'] == plan['directories']
                  and fresh['inodes'] == plan['inodes'] and fresh['media_fingerprint'] == plan['media_fingerprint'],
                  'STATE_CHANGED', 'Dados/vínculos mudaram após RPC; nenhuma exclusão autorizada.')
+            telemetry.phase('unlinking')
             journal['phase'] = 'unlinking'; common.save_catalog(data)
             removed_by_inode = Counter()
-            expected_hashes = {f['path']: f for f in row['manifest']['files']}
+            expected_ctime = {}
             for item in plan['remove_paths']:
                 need(get_torrent(rpc, key, optional=True) is None, 'STATE_CHANGED',
                      'Torrent reapareceu durante a liberação; pare e audite os dados remanescentes.')
                 path = Path(item['path'])
                 now = disk_record(path)
                 inode = (item['dev'], item['ino'])
-                need(all(now[f] == item[f] for f in ('dev', 'ino', 'size', 'mtime_ns'))
+                need(all(now[f] == item[f] for f in ('dev', 'ino', 'size', 'mtime_ns', 'mode', 'uid', 'blocks_bytes'))
+                     and now['ctime_ns'] == expected_ctime.get(inode, item['ctime_ns'])
                      and now['nlink'] == item['nlink'] - removed_by_inode[inode],
                      'SOURCE_CHANGED', 'Arquivo/vínculo alterado; pare e audite a liberação parcial.')
-                measured, _ = common.fingerprint(path)
-                need(measured == {k: expected_hashes[item['source']][k] for k in measured},
-                     'SOURCE_CHANGED', 'Conteúdo alterado antes da exclusão.')
                 # Descriptor-relative unlink; never follow a replaced parent symlink.
                 common.safe_path(path.parent)
                 fd = open_parent(path)
+                target_fd = None
                 try:
+                    target_fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+                    need(stat_record_matches(os.fstat(target_fd), now), 'SOURCE_CHANGED', 'Descritor do alvo mudou.')
                     s = os.stat(path.name, dir_fd=fd, follow_symlinks=False)
-                    need((s.st_dev, s.st_ino, s.st_nlink, s.st_size, s.st_mtime_ns) ==
-                         (now['dev'], now['ino'], now['nlink'], now['size'], now['mtime_ns']),
+                    need(stat_record_matches(s, now),
                          'SOURCE_CHANGED', 'Alvo alterado; exclusão recusada.')
                     os.unlink(path.name, dir_fd=fd)
+                    removed_by_inode[inode] += 1
+                    journal['removed'].append(str(path)); common.save_catalog(data)
+                    after = os.fstat(target_fd)
+                    need(after.st_nlink == now['nlink'] - 1 and all(
+                        getattr(after, field) == now[name] for name, field in STAT_FIELDS.items()
+                        if name not in ('nlink', 'ctime_ns')), 'SOURCE_CHANGED', 'Inode mudou durante exclusão.')
+                    expected_ctime[inode] = after.st_ctime_ns
                     os.fsync(fd)
                 finally:
+                    if target_fd is not None:
+                        os.close(target_fd)
                     os.close(fd)
-                removed_by_inode[inode] += 1
-                journal['removed'].append(str(path)); common.save_catalog(data)
             for item in sorted(plan['directories'], key=lambda x: len(Path(x['path']).parts), reverse=True):
                 path = Path(item['path'])
                 fd = open_parent(path)
@@ -1109,6 +1160,7 @@ def release(row, data, rpc, token, confirmation, selected=(), library_confirmati
                     os.fsync(fd)
                 finally:
                     os.close(fd)
+            telemetry.phase('finalizing')
             journal.update(state='released', phase='complete', at=common.now())
             common.save_catalog(data)
             return {'id': row['id'], 'state': 'released', 'removed_paths': journal['removed'],

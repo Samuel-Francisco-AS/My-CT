@@ -45,8 +45,7 @@ class CloudModelTest {
             val scope = scope(); var now = CLOUD_NOW
             val selected = if (case.startsWith("library")) listOf(CLOUD_LIB) else emptyList()
             val previewWork = CloudWork("torrent", listOf("space", CLOUD_ARCHIVE) + selected.flatMap { listOf("--remove-library", it) })
-            val initialPlan = cloudPlan(selected).put("library", org.json.JSONArray().put(JSONObject()
-                .put("path", CLOUD_LIB).put("present", true).put("linked_to_package", true)))
+            val initialPlan = cloudPlan(selected)
             var task = cloudTaskJson(previewWork, result = initialPlan)
             val starts = java.util.concurrent.CopyOnWriteArrayList<CloudQuery.Start>()
             val model = CloudModel(scope, { now }) { _, query -> when (query) {
@@ -67,6 +66,7 @@ class CloudModelTest {
                 task.put("state", "succeeded").put("result", initialPlan)
                 model.refresh(); await { !model.busy }
                 val plan = model.space!!
+                model.beginRelease(plan)
                 when (case) {
                     "expired" -> now += 600001
                     "replaced" -> model.invalidatePreview()

@@ -199,8 +199,8 @@ def with_progress(row):
     return {**row, **({'progress': progress} if progress is not None else {})}
 
 
-def live_library(row):
-    """Use the engine's own target resolver, including links added after upload."""
+def library_context():
+    """One module/index load per snapshot, never a persistent cache."""
     try:
         helper = HERE / 'myct-archive-torrent'
         need(helper.is_file() and not helper.is_symlink())
@@ -208,7 +208,16 @@ def live_library(row):
         spec = importlib.util.spec_from_loader(loader.name, loader)
         engine = importlib.util.module_from_spec(spec)
         loader.exec_module(engine)
-        targets = engine.library_targets(row, engine.media.load_state())
+        return engine, engine.media.load_state()
+    except Exception:
+        return None
+
+
+def live_library(row, context):
+    """Use one shared index snapshot, including links added after upload."""
+    try:
+        engine, state = context
+        targets = engine.library_targets(row, state)
         return [{'path': path, 'source': source} for path, source in targets.items()], True
     except Exception:
         return row['manifest']['library_links'], False
@@ -221,6 +230,7 @@ def snapshot():
     for kind in ('torrent', 'file'):
         reply = invoke(kind, ['list'])
         if reply.get('ok'):
+            context = library_context() if kind == 'torrent' else None
             entries = []
             for row in reply['entries']:
                 fields = ('id', 'name', 'size', 'state', 'created_at', 'verified_at', 'error_code',
@@ -228,7 +238,7 @@ def snapshot():
                 entry = {k: row[k] for k in fields if k in row}
                 if kind == 'torrent':
                     mf = row['manifest']
-                    links, checked = live_library(row)
+                    links, checked = live_library(row, context)
                     existing, linked = 0, 0
                     roots = [Path(mf['original_download_dir'])]
                     if row.get('restore', {}).get('path'):

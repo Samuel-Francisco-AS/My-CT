@@ -32,6 +32,19 @@ class CloudProgressTest {
         assertEquals("Em andamento", active.label); assertFalse(active.canCancel)
     }
 
+    @Test fun metadataInventoryAndReleasePhasesDoNotInventContentProgress() {
+        val raw = cloudProgressJson("local_inventory", 0, null, null, null, null)
+            .put("metric", "metadata").put("scope", "phase")
+        val metadata = parseCloudProgress(raw)!!
+        assertEquals("Consultando metadados locais", metadata.label)
+        assertNull(metadata.percent); assertFalse(metadata.transferring(CLOUD_NOW))
+        assertNull(parseCloudProgress(JSONObject(raw.toString()).put("bytes_done", 1)))
+        for (phase in listOf("pausing", "removing_entry", "unlinking")) {
+            val progress = parseCloudProgress(JSONObject(raw.toString()).put("phase", phase).put("metric", "read"))!!
+            assertNull(progress.percent); assertFalse(progress.transferring(CLOUD_NOW))
+        }
+    }
+
     @Test fun parsesBytesPercentRateAndNullsForBothDirections() {
         for (phase in listOf("uploading", "downloading")) {
             val p = parseCloudProgress(cloudProgressJson(phase))!!

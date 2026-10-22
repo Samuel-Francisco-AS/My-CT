@@ -624,3 +624,24 @@ obrigatórios. Exclusão parcial de torrent retira a transferência preservando 
 antes de remover somente os arquivos exibidos. O reconhecimento usa a identidade
 atual origem/destino e UUID/subvolume persistente, sem depender do número de device
 histórico. [Contrato, limites e validação](MYCT-MEDIA-LOCAL-RELATORIO.md).
+
+## 22/10/2026 — R1: inventário Cloud por metadados e seleção local
+
+A [investigação aprovada da rodada 1](MYCT-R1-RODADA-1-INVESTIGACAO-LENTIDAO.md)
+encerrou a escolha de arquitetura: inventário leve por pacote, em memória no
+Android por até 600 segundos, sem Drive ou leitura/hash de vídeos na prévia.
+Contrato `version:2` identifica o inventário; seleção e estimativa são projeções
+locais. O diálogo congela caminhos e consequências; histórico, respostas tardias
+e revogação de confirmação não autorizam exclusão. Sair/voltar preserva dados
+visuais válidos, sem exigir outra carga a cada checkbox.
+
+Na execução Cloud, metadados e seleção são revalidados sob os locks existentes;
+conteúdo é conferido uma vez por inode distinto e o pacote remoto uma vez antes
+de remover dados. Depois usam-se metadados/descritores, mantendo journal e
+tratamento de operação incerta. Media local continua independente de backup.
+Nenhum daemon, banco ou índice persistente novo. Snapshot compartilha uma carga
+do índice Media entre seus pacotes.
+
+[Implementação, evidências e limites da rodada 2](MYCT-R1-RODADA-2-IMPLEMENTACAO-LENTIDAO.md).
+Somente fontes/fixtures e PR draft; sem implantação pessoal, APK publicado, merge
+ou aceite de desempenho Moto. Issue #61 permanece aberta para a rodada 3/3.

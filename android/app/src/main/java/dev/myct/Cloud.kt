@@ -140,12 +140,14 @@ internal data class CloudProgress(val phase: String, val bytesDone: Long, val by
     val label get() = when (phase) {
         "uploading" -> "Enviando"; "downloading" -> "Baixando"; "hashing" -> "Calculando hashes"
         "remote_check" -> "Verificando Google Drive"
-        "local_inventory" -> "Inventariando arquivos locais"
+        "local_inventory" -> if (metric == "metadata") "Consultando metadados locais" else "Revalidando metadados locais"
         "local_read" -> "Verificando arquivos locais"
         "library_inventory" -> "Inventariando hardlinks"
         "library_read" -> "Verificando vínculo local"
         "transmission_check" -> "Consultando Transmission"
-        "finalizing" -> "Concluindo consulta"
+        "pausing" -> "Pausando torrent"; "removing_entry" -> "Retirando entrada do Transmission"
+        "unlinking" -> "Removendo caminhos confirmados"
+        "finalizing" -> "Concluindo operação"
         "verifying" -> "Conferindo integridade"; "done" -> "Concluído"; "failed" -> "Falhou"
         else -> "Preparando"
     }
@@ -171,17 +173,18 @@ internal fun parseCloudProgress(row: JSONObject): CloudProgress? = try {
     fun integer(key: String): Long? = value(key)?.also { require(it % 1 == 0.0) }?.toLong()
     val phase = row.getString("phase")
     require(phase in setOf("preparing", "hashing", "uploading", "downloading", "verifying", "done", "failed",
-        "remote_check", "local_inventory", "local_read", "library_inventory", "library_read", "transmission_check", "finalizing"))
+        "remote_check", "local_inventory", "local_read", "library_inventory", "library_read", "transmission_check", "finalizing", "pausing", "removing_entry", "unlinking"))
     val metric = if (row.isNull("metric")) null else row.getString("metric").also {
-        require(it == "read" && row.getString("scope") == "phase")
+        require(it in setOf("read", "metadata") && row.getString("scope") == "phase")
     }
-    if (metric == "read") require(phase !in setOf("uploading", "downloading", "hashing", "verifying"))
-    require(phase !in setOf("remote_check", "local_inventory", "local_read", "library_inventory", "library_read", "transmission_check", "finalizing") || metric == "read")
+    if (metric != null) require(phase !in setOf("uploading", "downloading", "hashing", "verifying"))
+    require(phase !in setOf("remote_check", "local_inventory", "local_read", "library_inventory", "library_read", "transmission_check", "finalizing", "pausing", "removing_entry", "unlinking") || metric in setOf("read", "metadata"))
     val done = requireNotNull(integer("bytes_done"))
     val total = integer("bytes_total")
     val percent = value("percent")
+    if (metric == "metadata") require(done == 0L && total == null && percent == null && value("speed_bps") == null && value("eta_seconds") == null)
     require(total == null || done <= total)
-    require(percent == null || (total != null && total > 0 && percent <= 100 && (percent < 100 || (phase == "done" && metric != "read"))))
+    require(percent == null || (total != null && total > 0 && percent <= 100 && (percent < 100 || (phase == "done" && metric == null))))
     CloudProgress(phase, done, total, percent, value("speed_bps"), value("eta_seconds"),
         requireNotNull(value("updated_at")), integer("current_file_index")?.also { require(it <= Int.MAX_VALUE) }?.toInt(),
         integer("total_files")?.also { require(it <= Int.MAX_VALUE) }?.toInt(), metric, integer("read_pass")?.also { require(it <= Int.MAX_VALUE) }?.toInt())
@@ -207,11 +210,37 @@ internal fun parseCloudTask(row: JSONObject): CloudTask {
         it.work.json()
     }
 }
+/** Numeric filesystem identity is carried as Long, never rounded through Double. */
+internal data class CloudInventoryPath(val path: String, val role: String, val relative: String?)
+internal data class CloudInode(val dev: Long, val ino: Long, val links: Long, val blocks: Long,
+    val names: List<String>, val unknown: Long)
+internal data class CloudInventory(val paths: List<CloudInventoryPath>, val inodes: List<CloudInode>,
+    val blockers: List<String>, val libraryComplete: Boolean)
+
 internal data class CloudSpace(val id: String, val token: String, val selected: List<String>,
     val canRelease: Boolean, val physical: Long, val estimate: Long, val retained: Long,
     val paths: List<String>, val trees: List<JSONObject>, val library: List<JSONObject>,
-    val blockers: List<String>, val expiresAt: Long, val libraryComplete: Boolean = true) {
-    fun valid(now: Long) = libraryComplete && canRelease && blockers.isEmpty() && now < expiresAt
+    val blockers: List<String>, val expiresAt: Long, val libraryComplete: Boolean = true,
+    val inventory: CloudInventory? = null) {
+    fun valid(now: Long) = inventory != null && libraryComplete && canRelease && blockers.isEmpty() && now < expiresAt
+    fun project(selection: List<String>): CloudSpace {
+        val source = requireNotNull(inventory)
+        require(selection.size <= 256 && selection.distinct().size == selection.size && selection.all(::validMediaPath))
+        val chosen = selection.sorted()
+        val chosenSet = chosen.toSet()
+        val allowed = library.filter { it.optBoolean("managed") }.map { it.getString("path") }.toSet()
+        val codes = source.blockers.toMutableList()
+        if (!allowed.containsAll(chosen)) codes += "LIBRARY_SELECTION"
+        val removed = source.paths.filter { it.role != "library" || it.relative in chosenSet }.map { it.path }
+        val removedSet = removed.toSet()
+        if (removed.isEmpty()) codes += "NO_LOCAL_DATA"
+        val physical = source.inodes.fold(0L) { total, inode -> Math.addExact(total, inode.blocks) }
+        val estimate = source.inodes.filter { inode -> inode.unknown == 0L && inode.names.count { it in removedSet }.toLong() == inode.links }
+            .fold(0L) { total, inode -> Math.addExact(total, inode.blocks) }
+        return copy(selected = chosen, canRelease = codes.isEmpty() && source.libraryComplete,
+            physical = physical, estimate = estimate, retained = physical - estimate, paths = removed,
+            blockers = cloudBlockers(codes), libraryComplete = source.libraryComplete)
+    }
     fun release(libraryConfirmed: Boolean, now: Long): CloudWork {
         require(valid(now) && (selected.isEmpty() || libraryConfirmed))
         return CloudWork("torrent", listOf("release", id, "--preview", token, "--confirm", token) +
@@ -220,19 +249,45 @@ internal data class CloudSpace(val id: String, val token: String, val selected: 
     }
 }
 internal fun parseCloudSpace(row: JSONObject, now: Long): CloudSpace {
-    val token = row.getString("preview")
+    val token = row.getString("preview").also { require(cloudToken.matches(it)) }
     val ttl = row.getLong("expires_in_seconds").also { require(it in 0..600) }
-    return CloudSpace(row.getString("id"), token, row.cloudStrings("remove_library"), row.getBoolean("can_release"),
+    val version = row.optInt("version", 1)
+    require(version in 1..2)
+    val raw = if (version == 2) row.getJSONObject("inventory") else row
+    require(version != 2 || (raw.getInt("version") == 2 && raw.getString("id") == row.getString("id")))
+    val library = raw.cloudObjects("library")
+    val links = library.map { it.getString("path") }
+    require(links.distinct().size == links.size && links.all(::validMediaPath))
+    val complete = raw.optBoolean("library_complete", false)
+    val inventory = if (version == 2) {
+        require(!raw.getBoolean("content_verified") && !raw.getJSONObject("remote").getBoolean("revalidated"))
+        val paths = raw.cloudObjects("paths").map { item ->
+            val role = item.getString("role").also { require(it in setOf("original", "restored", "library")) }
+            CloudInventoryPath(item.getString("path").also { require(cloudPath(it)) }, role,
+                if (role == "library") item.getString("relative").also { require(validMediaPath(it) && it in links) } else null)
+        }
+        val names = paths.map { it.path }
+        require(names.distinct().size == names.size)
+        val inodes = raw.cloudObjects("inodes").map { item ->
+            CloudInode(item.getLong("dev"), item.getLong("ino"), item.getLong("nlink"), item.getLong("physical_bytes"),
+                item.cloudStrings("known_paths"), item.getLong("unknown_links")).also {
+                require(it.dev >= 0 && it.ino >= 0 && it.links > 0 && it.blocks >= 0 && it.unknown >= 0)
+                require(it.names.isNotEmpty() && it.names.distinct().size == it.names.size && names.containsAll(it.names))
+            }
+        }
+        require(inodes.flatMap { it.names }.sorted() == names.sorted())
+        require(inodes.map { it.dev to it.ino }.distinct().size == inodes.size)
+        CloudInventory(paths, inodes, raw.cloudStrings("blockers"), complete)
+    } else null // Old results can be viewed; never authorize with the old contract.
+    val plan = CloudSpace(row.getString("id"), token, row.cloudStrings("remove_library"), row.getBoolean("can_release"),
         row.optLong("physical_bytes"), row.optLong("reclaim_estimate_bytes"), row.optLong("retained_known_bytes"),
-        row.cloudObjects("remove_paths").map { it.getString("path") }, row.cloudObjects("trees"), row.cloudObjects("library"),
-        cloudBlockers(row.cloudStrings("blockers")), minOf(now + ttl * 1000, token.substringBefore('-').toLong() * 1000 + 600000),
-        row.optBoolean("library_complete", row.getBoolean("can_release") && row.cloudStrings("blockers").isEmpty())).also {
-        require(cloudId.matches(it.id) && cloudToken.matches(token) && it.physical >= 0 && it.estimate >= 0 && it.retained >= 0)
-        require(it.selected.size <= 256 && it.selected.distinct().size == it.selected.size && it.selected.all(::validMediaPath) && it.paths.all(::cloudPath))
-        val links = it.library.map { link -> link.getString("path") }
-        require(links.distinct().size == links.size && links.all(::validMediaPath))
-        require(row.getString("confirmation") == token && (it.selected.isEmpty() || row.getString("library_confirmation") == token))
-    }
+        row.cloudObjects("remove_paths").map { it.getString("path") }, raw.cloudObjects("trees"), library,
+        cloudBlockers(raw.cloudStrings("blockers")), minOf(now + ttl * 1000, token.substringBefore('-').toLong() * 1000 + 600000),
+        complete, inventory)
+    require(cloudId.matches(plan.id) && plan.physical >= 0 && plan.estimate >= 0 && plan.retained >= 0)
+    require(plan.selected.size <= 256 && plan.selected.distinct().size == plan.selected.size && plan.selected.all(::validMediaPath) && plan.paths.all(::cloudPath))
+    require(row.getString("confirmation") == token && (plan.selected.isEmpty() || row.getString("library_confirmation") == token))
+    return if (inventory == null) plan else plan.project(plan.selected)
 }
 internal fun cloudState(entry: CloudEntry, torrent: ServerTorrent?, task: CloudTask?): String = when {
     task?.uncertain == true || entry.releaseState == "uncertain" -> "Erro · resultado incerto"

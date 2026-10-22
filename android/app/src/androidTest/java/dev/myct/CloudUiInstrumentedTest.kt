@@ -27,11 +27,25 @@ class CloudUiInstrumentedTest {
         val archive = "a".repeat(64); val hash = "c".repeat(40)
         val paths = (1..13).map { "Series/Fixture/E%02d.mkv".format(it) }
         val token = "${System.currentTimeMillis() / 1000}-" + "d".repeat(64)
-        fun plan(selected: List<String>) = JSONObject().put("ok", true).put("id", archive)
-            .put("preview", token).put("confirmation", token).put("library_confirmation", token)
-            .put("expires_in_seconds", 600).put("can_release", true).put("remove_library", JSONArray(selected))
-            .put("remove_paths", JSONArray()).put("trees", JSONArray()).put("blockers", JSONArray())
-            .put("library", JSONArray(paths.map { JSONObject().put("path", it).put("present", true).put("linked_to_package", true) }))
+        fun plan(selected: List<String>): JSONObject {
+            val aliases = JSONArray(); val inodes = JSONArray()
+            val library = JSONArray(paths.map { JSONObject().put("path", it).put("present", true)
+                .put("managed", true).put("linked_to_package", true) })
+            paths.forEachIndexed { index, relative ->
+                val original = "/fixture/tree/video$index.mkv"; val link = "/fixture/Media/$relative"
+                aliases.put(JSONObject().put("path", original).put("role", "original"))
+                aliases.put(JSONObject().put("path", link).put("role", "library").put("relative", relative))
+                inodes.put(JSONObject().put("dev", 1).put("ino", index + 1).put("nlink", 2)
+                    .put("physical_bytes", 4096).put("known_paths", JSONArray(listOf(original, link))).put("unknown_links", 0))
+            }
+            val inventory = JSONObject().put("version", 2).put("id", archive).put("paths", aliases).put("inodes", inodes)
+                .put("trees", JSONArray()).put("library", library).put("library_complete", true).put("blockers", JSONArray())
+                .put("content_verified", false).put("remote", JSONObject().put("revalidated", false))
+            return JSONObject().put("ok", true).put("version", 2).put("inventory", inventory).put("id", archive)
+                .put("preview", token).put("confirmation", token).put("library_confirmation", token)
+                .put("expires_in_seconds", 600).put("can_release", true).put("remove_library", JSONArray(selected))
+                .put("remove_paths", JSONArray()).put("trees", JSONArray()).put("blockers", JSONArray()).put("library", library)
+        }
         val base = CloudWork("torrent", listOf("space", archive))
         val row = AtomicReference(JSONObject().put("id", "b".repeat(32)).put("work", base.json())
             .put("state", "succeeded").put("result", plan(emptyList())).toString())
@@ -100,7 +114,17 @@ class CloudUiInstrumentedTest {
             instrumentation.runOnMainSync { model.refresh() }; idle()
             if (dispose) { instrumentation.runOnMainSync { mounted.value = true }; idle() }
             assertEquals(13, model.selectedLinks(archive).size)
-            assertEquals(!dispose, model.canRelease(model.space!!, paths)) // Only disposal revokes consent.
+            assertEquals(!dispose, model.canRelease(model.space!!, paths)) // Late result cannot authorize.
+            if (!dispose) {
+                val tokenBefore = model.space!!.token
+                instrumentation.runOnMainSync {
+                    model.beginRelease(model.space!!)
+                    model.toggleLink(archive, paths.first())
+                }; idle()
+                assertNull(model.confirmation); assertEquals(tokenBefore, model.space!!.token)
+                assertEquals(12, model.space!!.selected.size)
+                instrumentation.runOnMainSync { model.toggleLink(archive, paths.first()) }; idle()
+            }
             repeat(16) {
                 if (!find(instrumentation.uiAutomation.rootInActiveWindow, "13/256 links selecionados")) {
                     scroll(instrumentation.uiAutomation.rootInActiveWindow); instrumentation.waitForIdleSync()
