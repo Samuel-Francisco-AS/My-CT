@@ -193,3 +193,14 @@ A pre-release anterior code 49 e sua tag não foram alteradas.
 
 Instalação pessoal dos novos helpers e aceite físico permanecem pendentes,
 conforme o procedimento acima. Nenhuma reconciliação adicional é necessária.
+
+
+## Fechamento de entrega — 22/10/2026 (aceite Moto G06 e instalação Fedora)
+
+**Aceite funcional visual reportado pelo proprietário:** APK candidata 0.13.4/code 51 instalada no Moto G06 sobre a versão anterior; biblioteca consultada com 18 títulos, armazenamento listou 279 arquivos; seleção individual e diálogo único de **Excluir permanentemente** exibiram o caminho original do Transmission e o hardlink Jellyfin, com efeitos sobre seeding; a confirmação foi cancelada, **sem exclusão real**; seção Nuvem abriu, exibiu os itens arquivados e ofereceu restauração. Não há aceite de exclusão destrutiva real nem de comportamento após reboot.
+
+**Servidor pessoal:** os quatro helpers `myct-media`, `myct-media-cleanup`, `myct-archive-torrent` e `myct-torrent` foram instalados a partir de `267c5649bba582d9060bdb0a46bcc045ae39baa3` em `~/.local/bin/` (permissões 0700), com hashes iguais aos registrados na seção de identidade desta candidata. Manifesto `installation.json`: `succeeded`. Backup privado `~/.local/state/myct/helper-backups/media-local-20261022T022310Z-1708fd2e/`. Consultas não destrutivas: 279 arquivos selecionáveis, 278 gerenciados, 32 torrents reconhecidos; 16 tarefas Cloud encerradas. Nenhuma mídia pessoal foi excluída, nenhuma reconciliação repetida; dados, catálogos e serviços preservados. Os parágrafos históricos acima sobre instalação/aceite ainda pendentes descrevem o estado **antes** deste registro e estão superados neste ponto.
+
+**Entrega integrada nesta fase:** correção da identidade de hardlinks/Btrfs, reconciliação histórica 264/264, exclusão local opcional sem dependência de Google Drive, seleção e diálogo único Android, manutenção do arquivamento/restauração e observabilidade parcial de progresso em `space`. Suíte reportada na candidata: 673 PASS / 0 FAIL / 4 SKIP somando operacional, SETUP e JVM; teste de exclusão destrutiva no Fedora pessoal não foi executado.
+
+**Pendência explícita da MESMA R1 — NÃO RESOLVIDA:** o botão **Nuvem → Gerenciar → Consultar espaço / Prévia** continua com demora excessiva. Rastrear e corrigir em [issue #61](https://github.com/Samuel-Francisco-AS/My-CT/issues/61). A consolidação do trabalho funcional na `main` não equivale a aprovar a performance de `space`. Encerrada esta entrega funcional, **R1 ainda tem a pendência #61 antes do fechamento integral da fase**.
