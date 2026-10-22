@@ -930,7 +930,11 @@ def storage_inventory(row, rpc, selected=(), telemetry=None):
                         if source is None:
                             continue
                         relative(rel); media.safe_relative(rel)
-                        managed = media.record_matches(item, key + ':' + source, file)
+                        current_sources = [base / source for base in roots if (base / source).is_file() and
+                                           (base / source).stat().st_dev == s.st_dev and
+                                           (base / source).stat().st_ino == s.st_ino]
+                        managed = media.record_matches(item, key + ':' + source, file,
+                                                       current_sources[0] if current_sources else None)
                         paths.append({**disk_record(file), 'source': source, 'role': 'library',
                                       'relative': rel, 'managed': managed, 'remove': rel in selected})
                         targets.setdefault(rel, source)

@@ -150,17 +150,36 @@ def link_record(identity, path):
             'filesystem': filesystem_identity(path)}
 
 
-def record_matches(info, identity, path):
-    """Legacy equality stays strict; extra v2 evidence can only add restrictions."""
-    if not isinstance(info, dict):
+def record_matches(info, identity, path, source=None):
+    """Recognize a current hardlink; st_dev is not a persistent filesystem ID.
+
+    A supplied source must be the caller's trusted path for this exact torrent ID.
+    Without a current source use the saved filesystem identity when available;
+    unanchored legacy records retain the strict fallback for absent originals. Neither branch writes/adopts a record or reads video content.
+    """
+    if not isinstance(info, dict) or info.get('id') != identity:
         return False
-    s = path.stat()
-    if (info.get('id'), info.get('dev'), info.get('ino')) != (identity, s.st_dev, s.st_ino):
+    no_symlink_path(path, Path.home())
+    s = path.lstat()
+    if not stat.S_ISREG(s.st_mode) or info.get('ino') != s.st_ino:
+        return False
+    fs = None
+    if source is not None:
+        no_symlink_path(source, Path.home())
+        original = source.lstat()
+        if not stat.S_ISREG(original.st_mode) or (original.st_dev, original.st_ino) != (s.st_dev, s.st_ino):
+            return False
+        if info.get('dev') != s.st_dev or info.get('filesystem'):
+            fs = filesystem_identity(path)
+            if fs is None or fs != filesystem_identity(source):
+                return False
+    elif not info.get('filesystem') and info.get('dev') != s.st_dev:
+        # No source and no persistent identity: historical inode alone is insufficient.
         return False
     if 'metadata' in info and info['metadata'] != {
             'size': s.st_size, 'mtime_ns': s.st_mtime_ns, 'uid': s.st_uid}:
         return False
-    return not info.get('filesystem') or info['filesystem'] == filesystem_identity(path)
+    return not info.get('filesystem') or info['filesystem'] == (fs or filesystem_identity(path))
 
 
 def reconciliation_plan(rows=None, state=None):
@@ -254,7 +273,7 @@ def reconciliation_plan(rows=None, state=None):
                             'nlink': s.st_nlink, 'uid': s.st_uid},
                             'library_ctime_ns': d.st_ctime_ns, 'aliases': sorted(aliases),
                             'expected_length': expected[0]['length']})
-            if record_matches(info, identity, dest):
+            if info.get('dev') == d.st_dev and record_matches(info, identity, dest, source):
                 item['reason'] = 'CURRENT'
             else:
                 item['reason'] = 'LEGACY_REANCHOR' if not info.get('filesystem') else 'DEVICE_REANCHOR'
@@ -291,12 +310,12 @@ def reconciled_state(state, plan, fresh, confirmation, accept_legacy=False):
             result['links'][entry['path']] = copy.deepcopy(entry['after'])
     return result
 
-def media_files(rows, download_root=None):
+def media_files(rows, download_root=None, include_incomplete=False):
     root = download_root or Path.home() / 'Downloads/My-CT/Torrents'
     no_symlink_path(root, Path.home())
     count = 0
     for row in rows:
-        if row.get('left_until_done') != 0 or row.get('metadata_percent_complete') != 1 or row.get('error', 0):
+        if not include_incomplete and (row.get('left_until_done') != 0 or row.get('metadata_percent_complete') != 1 or row.get('error', 0)):
             continue
         key = row.get('hash_string', '')
         if not isinstance(key, str) or not re.fullmatch(r'[0-9a-f]{40}', key):
@@ -433,13 +452,13 @@ def inspect(rows, state, apply=False, override=None, acl=ensure_access):
                     target = root / safe_relative(rel)
                     no_symlink_path(target, Path.home())
                     a, b = candidate['source'].stat(), target.stat()
-                    valid = valid and (a.st_dev, a.st_ino) == (b.st_dev, b.st_ino) and record_matches(info, key, target)
+                    valid = valid and (a.st_dev, a.st_ino) == (b.st_dev, b.st_ino) and record_matches(info, key, target, candidate['source'])
             except (MediaError, OSError, ValueError, KeyError, TypeError):
                 valid = False
             if valid:
                 result['existing'].append({'id': key, 'managed': True})
             else:
-                result['pending'].append({'id': key, 'reason': 'Registro Media divergente; requer reconciliação supervisionada.', 'name': candidate['name']})
+                result['pending'].append({'id': key, 'reason': 'Origem ou registro Media divergente; revise a procedência. Exclusão local continua disponível em Armazenamento.', 'name': candidate['name']})
             continue
         try:
             spec = override[key] if override and key in override else classify(candidate['name'])
@@ -474,8 +493,8 @@ def remove_one(relative, state):
     dest = media_root() / relative
     no_symlink_path(dest, media_root())
     st = dest.stat()
-    if not record_matches(info, info['id'], dest):
-        raise MediaError('Arquivo mudou desde a importação; remoção recusada.')
+    if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid():
+        raise MediaError('O alvo não é arquivo regular do proprietário.')
     dest.unlink()  # original torrent remains untouched
     state['links'].pop(str(relative))
     if info['id'] not in state['ignored']:

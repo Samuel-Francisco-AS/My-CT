@@ -151,9 +151,9 @@ class SpaceEngineTests(unittest.TestCase):
         identity, paths, _ = self.thirteen(); f = self.fixture
         failed = f.home / 'Media' / paths[0]
         original = self.tool.media.record_matches
-        def check(info, key, path):
+        def check(info, key, path, source=None):
             if path == failed: raise OSError('fixture one file unavailable')
-            return original(info, key, path)
+            return original(info, key, path, source)
         with patch.object(self.tool.media, 'record_matches', side_effect=check):
             plan = f.preview(identity)
         self.assertEqual(13, len(plan['library']))

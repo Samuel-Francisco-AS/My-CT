@@ -55,7 +55,7 @@ class ReconcileTests(unittest.TestCase):
         with self.assertRaises(self.m.MediaError):
             self.m.reconciled_state(self.f.state, plan, self.plan(), plan['fingerprint'])
         proposed = self.m.reconciled_state(self.f.state, plan, self.plan(), plan['fingerprint'], accept_legacy=True)
-        self.assertEqual(0, sum(f['eligible'] for f in fixtures.cleanup.snapshot(self.f.rows, self.f.state)['files']))
+        self.assertEqual(13, sum(f['managed'] for f in fixtures.cleanup.snapshot(self.f.rows, self.f.state)['files']))
         self.assertEqual(13, sum(f['eligible'] for f in fixtures.cleanup.snapshot(self.f.rows, proposed)['files']))
         self.assertTrue(all(e['dev'] == 51 and e['filesystem'] == self.fs for e in proposed['links'].values()))
         self.assertTrue(all(e['dev'] == 50 for e in self.f.state['links'].values()))
@@ -124,13 +124,14 @@ class ReconcileTests(unittest.TestCase):
         info['metadata']['mtime_ns'] += 1
         self.assertEqual('RECORDED_METADATA_MISMATCH', self.plan()['entries'][0]['reason'])
 
-    def test_enriched_identity_does_not_silently_accept_future_device_change(self):
-        rel, _, dest = self.add()
+    def test_enriched_identity_survives_future_device_change_without_catalog_write(self):
+        rel, src, dest = self.add()
         info = self.m.link_record(self.f.state['links'][rel]['id'], dest)
         info['dev'] = 50  # Current stat is 51; UUID/subvolume/other metadata match.
         self.f.state['links'][rel] = copy.deepcopy(info)
-        self.assertFalse(self.m.record_matches(info, info['id'], dest))
-        self.assertFalse(fixtures.cleanup.snapshot(self.f.rows, self.f.state)['files'][0]['eligible'])
+        self.assertTrue(self.m.record_matches(info, info['id'], dest))
+        self.assertTrue(self.m.record_matches(info, info['id'], dest, src))
+        self.assertTrue(fixtures.cleanup.snapshot(self.f.rows, self.f.state)['files'][0]['managed'])
         plan = self.plan()
         self.assertEqual('DEVICE_REANCHOR', plan['entries'][0]['reason'])
         self.assertFalse(plan['legacy_requires_explicit_reanchor'])
@@ -190,19 +191,43 @@ class ReconcileTests(unittest.TestCase):
         with patch.object(self.m, 'filesystem_identity', side_effect=filesystem):
             self.assertEqual('CHANGED_DURING_PLAN', self.plan()['entries'][0]['reason'])
 
-    def test_metadata_record_cannot_grant_cleanup_after_content_change(self):
+    def test_metadata_change_revokes_managed_label_but_not_owner_local_deletion(self):
         rel, src, dest = self.add(old=False)
         self.f.state['links'][rel] = self.m.link_record(self.f.state['links'][rel]['id'], dest)
         src.write_bytes(b'changed on same inode')
-        self.assertFalse(fixtures.cleanup.snapshot(self.f.rows, self.f.state)['files'][0]['eligible'])
+        self.assertFalse(fixtures.cleanup.snapshot(self.f.rows, self.f.state)['files'][0]['managed'])
+        self.assertTrue(fixtures.cleanup.snapshot(self.f.rows, self.f.state)['files'][0]['eligible'])
 
-    def test_scan_does_not_claim_stale_record_as_managed_or_repair_it(self):
+    def test_scan_recognizes_current_source_after_device_renumbering_without_writes(self):
         self.add()
         before = json.dumps(self.f.state, sort_keys=True)
         result = self.m.inspect(self.f.rows, self.f.state)
-        self.assertEqual([], result['existing'])
-        self.assertIn('reconciliação', result['pending'][0]['reason'])
+        self.assertEqual(1, len(result['existing']))
+        self.assertEqual([], result['pending'])
         self.assertEqual(before, json.dumps(self.f.state, sort_keys=True))
+
+    def test_264_current_hardlinks_survive_renumbering_without_content_reads_or_reanchoring(self):
+        for n in range(1, 265): self.add(n)
+        before = copy.deepcopy(self.f.state)
+        with patch('os.read', side_effect=AssertionError('No video read permitted')), \
+             patch.object(Path, 'read_bytes', side_effect=AssertionError('No content hash permitted')):
+            result = self.m.inspect(self.f.rows, self.f.state)
+            self.assertEqual(264, len(result['existing']))
+            self.assertEqual([], result['pending'])
+            self.assertEqual(264, sum(f['managed'] for f in fixtures.cleanup.snapshot(self.f.rows, self.f.state)['files']))
+        self.assertEqual(before, self.f.state)
+
+    def test_current_identity_rejects_wrong_source_uuid_subvolume_and_inode(self):
+        rel, src, dest = self.add()
+        info = self.m.link_record(self.f.state['links'][rel]['id'], dest)
+        info['dev'] = 50
+        self.assertTrue(self.m.record_matches(info, info['id'], dest, src))
+        for field, value in [('uuid', 'b' * 32), ('subvolume', 258)]:
+            wrong = copy.deepcopy(info); wrong['filesystem'][field] = value
+            self.assertFalse(self.m.record_matches(wrong, info['id'], dest, src))
+        _, other, _ = self.add(2)
+        self.assertFalse(self.m.record_matches(info, info['id'], dest, other))
+        self.assertFalse(self.m.record_matches(info, 'wrong-id', dest, src))
 
     def test_btrfs_identity_uses_uuid_and_subvolume_not_device_number(self):
         _, src, _ = self.add()
