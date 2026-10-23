@@ -25,7 +25,8 @@ class IdeFedoraSftpTest {
                 val replacement = "\uFEFFprint('alterado 😀')\r\n".toByteArray()
                 val saved = RemoteEditor.save(store, snapshot, replacement, token)
                 assertArrayEquals(replacement, Files.readAllBytes(path))
-                assertArrayEquals(initial, Files.readAllBytes(java.nio.file.Paths.get(saved.backupPath)))
+                assertNull(saved.cleanupPath)
+                assertEquals(1, store.list(directory.toString()).entries.size) // no .myct-edit-* left
                 assertEquals(PosixFilePermissions.fromString("rw-r-----"), Files.getPosixFilePermissions(path))
                 Files.write(path, "# editado externamente\n".toByteArray())
                 assertThrows(EditConflict::class.java) { RemoteEditor.save(store, saved.snapshot, replacement, token) }

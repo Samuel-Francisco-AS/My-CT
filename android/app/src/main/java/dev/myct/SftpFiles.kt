@@ -92,7 +92,11 @@ internal class JschRemoteStore(private val channel: ChannelSftp, private val rel
     }
     override fun privateDirectory(path: String) {
         channel.mkdir(path)
-        channel.chmod(0x1C0, RemotePath.literal(path)) // 0700: backups stay private.
+        try { channel.chmod(0x1C0, RemotePath.literal(path)) } // 0700 while in use.
+        catch (error: Exception) {
+            runCatching { channel.rmdir(path) }
+            throw error
+        }
     }
     override fun editMetadata(path: String): EditMetadata {
         val attrs = channel.lstat(RemotePath.literal(path))

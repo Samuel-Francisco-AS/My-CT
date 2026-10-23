@@ -95,7 +95,7 @@ internal class SharedIdeModel(private val workspace: SharedWorkspace,
             noticeIsError = true; message = (e as? EditRejected)?.explanation ?: "Texto inválido; buffer preservado."; return
         }
         operation({ workspace.save(doc.snapshot, bytes) }) {
-            doc.confirmSaved(EditSaved(it, ""), version); doc.backupPath = null
+            doc.confirmSaved(EditSaved(it), version)
             message = if (doc.dirty) "Versão salva no documento original; há novas alterações no buffer."
                 else "Salvo no documento original e relido. Confira o mesmo arquivo no Termux."
         }

@@ -92,7 +92,7 @@ internal class LocalIdeModel(private val workspace: LocalWorkspace,
         val text = doc.content.toString() // one snapshot per explicit save, never per keystroke
         operation({ workspace.save(doc.snapshot, encodeCode(text)) }) {
             if (document === doc) {
-                doc.confirmSaved(EditSaved(it, ""), version); doc.backupPath = null
+                doc.confirmSaved(EditSaved(it), version)
                 message = if (doc.dirty) "Versão salva localmente; há novas alterações no buffer." else "Salvo na workspace e relido com sucesso."
             }
         }

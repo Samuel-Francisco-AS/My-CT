@@ -18,7 +18,7 @@ internal class IdeDocument(val identity: String, var snapshot: EditSnapshot) {
         // A queued IME event may arrive before AndroidView becomes read-only. Never mark
         // newer local edits clean when an older save acknowledgement arrives.
         dirty = content.documentVersion != sentVersion
-        backupPath = saved.backupPath
+        backupPath = saved.cleanupPath
     }
     init {
         content.addContentListener(object : ContentListener {
@@ -93,6 +93,7 @@ internal class RemoteIdeModel(
                             document?.apply { uncertain = true; backupPath = error.backupPath }
                             "Gravação sem confirmação. Buffer mantido; confira o destino e o backup antes de reabrir."
                         }
+                        is EditCleanupFailed -> "Original preservado, mas a limpeza SFTP falhou em ${error.directory}. Confira antes de remover."
                         is java.util.concurrent.CancellationException -> "Operação cancelada; buffer mantido."
                         else -> "Falha SFTP ou permissão negada. Buffer mantido; confira a conexão e as permissões."
                     }
@@ -131,8 +132,11 @@ internal class RemoteIdeModel(
         operation({ store, token -> RemoteEditor.save(store, doc.snapshot, encodeCode(text), token, directory) }) { result ->
             if (document === doc) {
                 doc.confirmSaved(result, version)
-                message = if (doc.dirty) "Versão enviada salva. Ainda há alterações locais não salvas."
-                    else "Salvo e relido com sucesso. Backup do original disponível em Detalhes."
+                message = when {
+                    result.cleanupPath != null -> "Arquivo salvo e verificado, mas a limpeza do diretório temporário falhou. Consulte Detalhes."
+                    doc.dirty -> "Versão enviada salva. Ainda há alterações locais não salvas."
+                    else -> "Salvo e relido. Backup e temporários removidos."
+                }
             }
         }
     }

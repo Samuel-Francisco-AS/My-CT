@@ -12,6 +12,8 @@ class RemoteEditorTest {
         var failWrite = false
         var failVerify = false
         var closed = false
+        var failCleanup = false
+        val directories = mutableSetOf<String>()
         var beforeReplace: (() -> Unit)? = null
         var afterBackup: (() -> Unit)? = null
         override fun close() { closed = true }
@@ -34,7 +36,7 @@ class RemoteEditorTest {
         override fun supportsSafePublish() = true
         override fun supportsAtomicEdit() = true
         override fun mkdir(path: String) = Unit
-        override fun privateDirectory(path: String) = Unit
+        override fun privateDirectory(path: String) { directories.add(path) }
         override fun backup(source: String, backup: String) {
             bytes[backup] = bytes.getValue(source); metadata[backup] = metadata.getValue(source)
             afterBackup?.invoke()
@@ -46,7 +48,10 @@ class RemoteEditorTest {
         }
         override fun publishNoReplace(temporary: String, target: String) = error("unused")
         override fun removeTemporary(path: String) { if (closed) throw IOException(); bytes.remove(path); metadata.remove(path) }
-        override fun removeTemporaryDirectory(path: String) = Unit
+        override fun removeTemporaryDirectory(path: String) {
+            if (closed || failCleanup || bytes.keys.any { it.startsWith("$path/") }) throw IOException("cleanup")
+            directories.remove(path)
+        }
     }
     private val path = "/work/code.py"
     @Test fun utf8BomAndMixedLineEndingsRoundTripExactly() {
@@ -58,13 +63,15 @@ class RemoteEditorTest {
             assertThrows(EditRejected::class.java) { decodeCode(bytes) }
         }
     }
-    @Test fun explicitSaveVerifiesContentPreservesModeAndRetainsOriginalBackup() {
+    @Test fun explicitSaveVerifiesContentPreservesModeAndLeavesNoResidue() {
         val store = Store(); val control = TransferControl()
         val initial = RemoteEditor.load(store, path, control)
         val replacement = "print('novo 😀')\r\n".toByteArray()
         val saved = RemoteEditor.save(store, initial, replacement, control)
         assertArrayEquals(replacement, store.bytes[path])
-        assertArrayEquals(initial.bytes, store.bytes[saved.backupPath])
+        assertNull(saved.cleanupPath)
+        assertTrue(store.directories.isEmpty())
+        assertEquals(setOf(path), store.bytes.keys)
         assertEquals(initial.metadata.mode, saved.snapshot.metadata.mode)
         assertEquals(initial.metadata.uid, saved.snapshot.metadata.uid)
         assertEquals(initial.metadata.gid, saved.snapshot.metadata.gid)
@@ -80,12 +87,14 @@ class RemoteEditorTest {
         store.afterBackup = { store.bytes[path] = "external".toByteArray() }
         assertThrows(EditConflict::class.java) { RemoteEditor.save(store, initial, "new".toByteArray(), token) }
         assertFalse(store.replaced); assertEquals("external", store.bytes.getValue(path).toString(Charsets.UTF_8))
+        assertEquals(setOf(path), store.bytes.keys); assertTrue(store.directories.isEmpty())
     }
     @Test fun deniedWriteKeepsOriginal() {
         val store = Store(); val token = TransferControl(); val initial = RemoteEditor.load(store, path, token)
         store.failWrite = true
         assertThrows(IOException::class.java) { RemoteEditor.save(store, initial, "new".toByteArray(), token) }
         assertArrayEquals(initial.bytes, store.bytes[path]); assertFalse(store.replaced)
+        assertEquals(setOf(path), store.bytes.keys); assertTrue(store.directories.isEmpty())
     }
     @Test fun readOnlyModeRefusesEvenIfDirectoryWritable() {
         val store = Store(); store.metadata[path] = store.metadata.getValue(path).copy(mode = 0x124)
@@ -98,6 +107,7 @@ class RemoteEditorTest {
         store.afterBackup = { token.cancel() }
         assertThrows(java.util.concurrent.CancellationException::class.java) { RemoteEditor.save(store, initial, "new".toByteArray(), token) }
         assertFalse(store.replaced); assertArrayEquals(initial.bytes, store.bytes[path])
+        assertEquals(setOf(path), store.bytes.keys); assertTrue(store.directories.isEmpty())
     }
     @Test fun disconnectAtCommitReportsUncertainAndKeepsBackup() {
         val store = Store(); val token = TransferControl(); token.trackTransport(store)
@@ -105,12 +115,32 @@ class RemoteEditorTest {
         store.beforeReplace = { token.cancel() }
         val error = assertThrows(EditUncertain::class.java) { RemoteEditor.save(store, initial, "new".toByteArray(), token) }
         assertArrayEquals(initial.bytes, store.bytes[path]); assertArrayEquals(initial.bytes, store.bytes[error.backupPath])
+        assertTrue(store.directories.isNotEmpty())
     }
     @Test fun failedFinalVerificationNeverReportsSuccessAndKeepsBackup() {
         val store = Store(); val token = TransferControl(); val initial = RemoteEditor.load(store, path, token)
         store.failVerify = true
         val error = assertThrows(EditUncertain::class.java) { RemoteEditor.save(store, initial, "new".toByteArray(), token) }
         assertArrayEquals(initial.bytes, store.bytes[error.backupPath]); assertTrue(store.replaced)
+        assertTrue(store.directories.isNotEmpty())
+    }
+    @Test fun verifiedSaveReportsCleanupFailureWithoutLosingSavedSnapshot() {
+        val store = Store(); val token = TransferControl(); val initial = RemoteEditor.load(store, path, token)
+        store.failCleanup = true
+        val saved = RemoteEditor.save(store, initial, "updated".toByteArray(), token)
+        assertArrayEquals("updated".toByteArray(), store.bytes[path])
+        assertNotNull(saved.cleanupPath)
+        assertTrue(store.directories.contains(saved.cleanupPath))
+        assertTrue(store.bytes.keys.none { it.endsWith("/original") || it.endsWith("/new") })
+    }
+    @Test fun failedPreCommitCleanupReportsResidue() {
+        val store = Store(); val token = TransferControl(); val initial = RemoteEditor.load(store, path, token)
+        store.failWrite = true; store.failCleanup = true
+        val error = assertThrows(EditCleanupFailed::class.java) {
+            RemoteEditor.save(store, initial, "updated".toByteArray(), token)
+        }
+        assertTrue(store.directories.contains(error.directory))
+        assertArrayEquals(initial.bytes, store.bytes[path])
     }
     @Test fun commonLanguagesHaveExplicitGrammarScopes() {
         for (name in listOf("a.c", "a.cpp", "a.rs", "a.py", "a.kt", "a.sh", "a.js")) assertNotNull(codeScope(name))
