@@ -11,14 +11,15 @@ android {
         applicationId = "dev.myct"
         minSdk = 26
         targetSdk = 36
-        versionCode = 52
-        versionName = "0.13.5-cloud-space-rc1"
+        versionCode = 55
+        versionName = "0.14.2-desktop-fix2"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
     buildFeatures { compose = true }
+    testOptions { unitTests.isIncludeAndroidResources = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -39,6 +40,7 @@ dependencies {
     implementation("org.bouncycastle:bcprov-jdk18on:1.86")
     testImplementation("org.json:json:20250517")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.13")
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("junit:junit:4.13.2")
 }

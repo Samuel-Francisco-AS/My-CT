@@ -456,3 +456,32 @@ caches. [Relatório, pré-release, checksum e checklist A–F](../docs/MYCT-L1B-
 **Aceite L1B no Moto pendente**. O proprietário confirmou criação/edição/salvamento/
 persistência/renomeação da L1A; SAF, isolamento completo e regressão remota
 L1A continuam pendentes individualmente.
+
+
+## MYCT-DESKTOP-1 — candidata 24/10/2026
+
+Drawer → Desktop, cliente RFB original (Kotlin, Canvas/InputConnection) pelo SSH
+pinado e forwarding exclusivo/dinâmico para 127.0.0.1:5901. Senha VNC temporária,
+sem app externo. Sair/background/rotação libera a visualização preservando apps
+Fedora; reconectar manualmente. APK 0.14.0-desktop-rc1/code53, dev.myct, assinatura
+debug habitual. Aceite Moto pendente. Instalação privilegiada opcional do helper
+start/stop é manual e não foi executada. [Relatório](../docs/MYCT-DESKTOP-1-RELATORIO.md).
+
+
+## MYCT-DESKTOP-F1 — 25/10/2026
+
+**Desktop code53 reprovado no Moto G06.** Candidata corretiva code54,
+0.14.1-desktop-fix1: clipping nativo/Compose, controles permanentes, Back para
+IME/imersão/seção anterior e diagnóstico real das etapas RFB/desenho.
+Conectar independe do helper de gerenciamento. [Relatório F1, evidências e APK](../docs/MYCT-DESKTOP-F1-RELATORIO.md).
+Aceite físico F1 pendente; resultados de testes locais não substituem essa prova.
+
+
+## MYCT-DESKTOP-F2 — 26/10/2026
+
+F1 aceita parcialmente no Moto para SSH/VNC, imagem, ponteiro/menus e aplicação
+real. F2 preserva esse motor e corrige a administração: falha não desconecta,
+serviço é reconsultado, ausência do helper é específica e comandos indisponíveis
+ficam desabilitados sem bloquear Conectar. Candidata 0.14.2-desktop-fix2/code55,
+mesma assinatura. [Relatório e APK](../docs/MYCT-DESKTOP-F2-RELATORIO.md). Instalação
+manual do helper/autorização e novo aceite físico de gerenciamento pendentes.

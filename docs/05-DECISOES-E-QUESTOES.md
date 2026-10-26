@@ -645,3 +645,51 @@ do índice Media entre seus pacotes.
 [Implementação, evidências e limites da rodada 2](MYCT-R1-RODADA-2-IMPLEMENTACAO-LENTIDAO.md).
 Somente fontes/fixtures e PR draft; sem implantação pessoal, APK publicado, merge
 ou aceite de desempenho Moto. Issue #61 permanece aberta para a rodada 3/3.
+
+## 24/10/2026 — MYCT-DESKTOP-1: RFB interno sobre SSH, ambiente sob demanda
+
+Pedido expresso do proprietário autoriza implementar Desktop gráfico, exceção
+pontual à diretriz de evitar desktops permanentes: TigerVNC/Openbox já instalados,
+sem reintegrar GNOME Remote Desktop ou mudar multi-user.target/SELinux. Desktop
+não inicia no boot. Primeira prova de imagem/mouse/teclado será no My-CT.
+
+Escolha candidata: perfil RFB original em Kotlin, renderer Android Canvas e
+InputConnection, negociando VncAuth e Raw/CopyRect/Hextile/Zlib/DesktopSize sobre
+porta local dinâmica da Session SSH pinada. noVNC é mantido/MPL, mas exigiria
+WebView/ponte WebSocket; LibVNCClient é mantido/GPL e exigiria NDK e revisão das
+obrigações de distribuição; Guacamole acrescentaria gateway. Não incorporar
+código deles nem licenças novas; desafio VncAuth usa DES da plataforma, transporte
+continua JSch. Manter o decoder pequeno e limitado significa assumir sua manutenção,
+com interoperabilidade real e Gboard ainda pendentes do Moto G06.
+
+Sessão gráfica e visualização são independentes: sair/minimizar/rotacionar fecha
+cliente/socket/túnel/bitmap, sem encerrar aplicativos. Iniciar/Encerrar a unidade
+fixa requer helper C++20 root-owned e regra exata instalada manualmente pelo dono;
+nenhum sudo irrestrito, Polkit, deploy ou mudança de serviços nesta entrega.
+**Candidata não equivale a aceite físico ou gerenciamento completo aprovado.**
+[Relatório, testes e retomada](MYCT-DESKTOP-1-RELATORIO.md).
+
+
+## 25/10/2026 — DESKTOP-F1: viewport recortado e saída independente do VNC
+
+Code 53 reprovado no Moto por pintura preta sem controles. Reprodução pré-fix
+com Canvas/Skia nativo confirmou drawColor fora da View: recortar no renderer e
+no AndroidView, sem atribuir a falha ao Fedora. Título, estado, Menu e Voltar
+permanecem fora do framebuffer; Back prioriza IME, imersão e destino anterior.
+Helper não é dependência da conexão. Etapas tipadas separam receber/decodificar
+de desenhar e não incluem segredos nem mensagens brutas do servidor. Aceite
+F1 real continua do proprietário; testes executados de runtime e eventual
+instrumentação são distinguidos no [relatório F1](MYCT-DESKTOP-F1-RELATORIO.md).
+
+
+## 26/10/2026 — DESKTOP-F2: administração independente da imagem validada
+
+Aceite parcial F1 informado: SSH/VNC, framebuffer 1280×720, ponteiro/clique direito,
+menus Openbox e aplicação Fedora real; não reabrir o renderer/protocolo/gestos.
+Stop desconectava o cliente antes da recusa administrativa; passar a consultar,
+autorizar, solicitar e confirmar unidade antes de fechar o cliente. Erros mantêm
+VNC e estado real, com mensagem administrativa que quadros não apagam. Prévia
+readonly determina botões disponíveis sem bloquear Conectar. Helper C++ permite
+só status/start/stop da unidade fixa; instalação/reversão manual root-owned,
+regra exata sem SETENV, sem execução administrativa nesta entrega. Novo aceite
+físico dos botões continua pendente. [Relatório F2](MYCT-DESKTOP-F2-RELATORIO.md).

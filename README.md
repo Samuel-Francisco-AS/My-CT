@@ -1,5 +1,14 @@
 # My-CT
 
+**MYCT-DESKTOP-F2 candidata (26/10/2026):** gerenciamento separado da visualização;
+falha administrativa preserva o cliente, verifica estado real e distingue helper
+ausente de autorização. F1 recebeu **aceite físico parcial**: SSH/VNC, 1280×720,
+ponteiro, clique direito, menus Openbox e aplicação Fedora; tela preta corrigida.
+APK **0.14.2-desktop-fix2 / code 55**. Gerenciamento físico ainda pendente da
+instalação manual autorizada do helper; nada foi instalado no Fedora nesta F2.
+[Relatório e candidata](docs/MYCT-DESKTOP-F2-RELATORIO.md) ·
+[Instalação manual/reversão](ops/desktop/README.md).
+
 **Armazenamento local — candidata code 51:** identidade de hardlinks resistente à
 renumeração de device Btrfs, retirada da biblioteca e exclusão permanente por alvos
 exatos, com uma confirmação e sem backup Cloud obrigatório.

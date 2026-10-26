@@ -200,6 +200,7 @@ private fun TerminalApp(model: TerminalModel) {
                 confirmStop = { stopPersistenceFor = model.terminal })
         },
         onDisconnect = { model.disconnect() },
+        desktopOwnsGestures = navigation.displayed == AppSection.Desktop || navigation.requested == AppSection.Desktop,
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).windowInsetsPadding(insets)
     ) { openMenu ->
         AnimatedAppSection(navigation, navigationReady) {
@@ -240,6 +241,8 @@ private fun TerminalApp(model: TerminalModel) {
                     if (!model.files.busy && connected) { model.files.load(path); navigateTo(AppSection.Files) }
                 }, Modifier.weight(1f))
                 else if (selectedTab == AppSection.Vault) VaultScreen(model.vault, Modifier.weight(1f))
+                else if (selectedTab == AppSection.Desktop) DesktopScreen(model.desktop, openMenu, Modifier.weight(1f),
+                    onExit = { navigateTo(navigation.desktopExit()) }, backEnabled = drawer.isClosed && !settings)
                 else if (selectedTab == AppSection.Health) HealthScreen(model.health, Modifier.weight(1f))
                 else if (selectedTab == AppSection.Files && active && !connected) {
                     Text(model.message, Modifier.padding(12.dp))

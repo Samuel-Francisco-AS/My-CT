@@ -272,3 +272,34 @@ em cópia local temporária, sem novo upload Drive. O upload de ~24,4 GiB não
 foi interrompido e nenhum helper instalado foi substituído. Candidata code 42
 na mesma PR draft, sem merge. Instalação e aceite Moto após conclusão e
 conferência do upload grande; [evidências e roteiro curto](MYCT-C1C-RELATORIO.md).
+
+## 24/10/2026 — MYCT-DESKTOP-1 candidata
+
+Branch feat/myct-desktop-vnc a partir da main local 706ef2d, limpa no início.
+Cliente RFB/Canvas/IME interno ao APK e túnel SSH exclusivo, navegação industrial
+preservada. Helper C++20 restrito preparado sem instalação/administração do Fedora.
+Fixture RFB loopback e testes de ownership/input; nenhuma validação com viewer
+externo, conexão ao desktop real ou instalação no Moto nesta implementação.
+[Relatório e roteiro físico](MYCT-DESKTOP-1-RELATORIO.md) são a fonte dos resultados,
+artefatos, medições e limitações; aceite do proprietário permanece pendente.
+
+
+## 25/10/2026 — MYCT-DESKTOP-F1
+
+Proprietário reprovou code53 após três telas pretas no Moto, apesar da instalação
+e serviço VNC ativo. Teste pré-fix Android/Skia nativo confirmou que drawColor
+pintava pixels acima do viewport. Corrigidos clipping, saída Back e controles,
+com rastreamento sem segredos da conexão e primeiro desenho. Candidata code54,
+sem alteração dos serviços Fedora. [Resultados e limites](MYCT-DESKTOP-F1-RELATORIO.md);
+aceite físico pelo proprietário permanece pendente.
+
+
+## 26/10/2026 — MYCT-DESKTOP-F2
+
+Aceite parcial F1 pelo dono: conexão, 1280×720, ponteiro/clique direito, menus e
+aplicação Fedora. Unidade :1 active/running, PID6963, helper ausente. Reprodução
+JVM confirmou Stop fechando cliente antes da recusa. F2 preserva a conexão após
+falha, reconsulta unidade, separa resultado administrativo e bloqueia comandos
+indisponíveis. Helper de três operações revisado e procedimento manual com
+backup/verificação/reversão; nenhuma instalação ou start/stop real. [Resultados
+e pendências](MYCT-DESKTOP-F2-RELATORIO.md). Aceite do gerenciamento pelo dono pendente.

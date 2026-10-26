@@ -143,3 +143,35 @@ Para parar **somente** esse cluster, se ele tiver sido iniciado manualmente: `pg
 - [README](../README.md) e [AGENTS.md](../AGENTS.md).
 
 O trabalho das branches `myct-4-boot-and-vault` e `myct-4b-android-vault` está integrado à `main`. A exclusão das branches Git não remove o serviço Fedora instalado, o APK, o banco ou o cofre.
+
+## Candidata MYCT-DESKTOP-1 — 24/10/2026
+
+Trabalho na branch `feat/myct-desktop-vnc`, base main local `706ef2d`.
+Implementação Desktop nativa para o TigerVNC :1 existente; **Moto G06 não validado**.
+Não repetir instalação/reconfiguração de TigerVNC/Openbox, não retomar GNOME Remote
+Desktop, não ativar boot nem instalar helper administrativo automaticamente.
+A primeira conexão real deve ser dentro do APK My-CT; não usar viewer externo.
+Atualização preserva `dev.myct` e assinatura habitual. Conferir artefato/hash e
+roteiro no [relatório](MYCT-DESKTOP-1-RELATORIO.md). Helper start/stop continua
+separado e pendente de autorização/instalação manual; desconectar não encerra apps.
+
+
+## Correção bloqueante MYCT-DESKTOP-F1 — 25/10/2026
+
+**Code53 reprovado no Moto G06**, tela preta sem controles/saída. Não repetir a
+instalação antiga como candidata válida. F1 na mesma branch feat/myct-desktop-vnc,
+code54/0.14.1-desktop-fix1, corrige sobrepintura Canvas e Back, com diagnóstico
+por etapa. [Relatório F1 e novo APK](MYCT-DESKTOP-F1-RELATORIO.md). Aceite físico
+continua pendente. Nenhuma mudança no Fedora/helper é necessária para conectar
+à sessão já ativa; primeira imagem real continua exclusivamente no My-CT.
+
+
+## MYCT-DESKTOP-F2 — 26/10/2026
+
+F1 recebeu aceite físico parcial no Moto: framebuffer/SSH/VNC, ponteiro, clique
+direito, menus e aplicação gráfica real. Preservar o caminho gráfico. F2 corrige
+Stop desconectando antes da falha administrativa, separa estado real/cliente/
+autorização e prepara helper de status/start/stop restritos. **Não instalado**:
+botões administrativos exigem procedimento manual autorizado; Conectar não.
+Code55/0.14.2-desktop-fix2 na mesma branch, sem merge/release. [Relatório F2 e
+novo aceite de gerenciamento](MYCT-DESKTOP-F2-RELATORIO.md).

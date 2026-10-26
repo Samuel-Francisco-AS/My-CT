@@ -1,0 +1,3 @@
+# EXAMPLE ONLY: owner reviews/installs via visudo. No wildcard, shell or SETENV permission.
+# Exact username of the SSH owner; sam is the existing My-CT owner, not a new account.
+sam ALL=(root) NOPASSWD: NOSETENV: /usr/local/libexec/myct-desktop-control status, /usr/local/libexec/myct-desktop-control start, /usr/local/libexec/myct-desktop-control stop
