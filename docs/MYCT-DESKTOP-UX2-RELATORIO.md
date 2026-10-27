@@ -1,10 +1,24 @@
-# MYCT-DESKTOP-UX2 — candidata, aceite físico pendente
+# MYCT-DESKTOP-UX2 — aceite físico UX2 concluído (escopo informado)
 
 Branch `feat/myct-desktop-vnc`, base `0d1a39b9e38c2e123899688066405a419b352287`.
 UX1 aceita visualmente no Moto G06 no escopo registrado. UX2 não é considerada
 fisicamente aprovada por build, testes de fixtures ou composição. Após a entrega
 da candidata, o proprietário autorizou commit e push das fontes na mesma branch,
 antes do aceite físico. Sem merge, release ou instalação Android automática.
+
+## Aceite posterior e fechamento — 27/10/2026
+
+Após instalar e utilizar o APK `0.14.4-desktop-ux2` (code 57) no Moto G06, o proprietário informou que:
+- **A mesma sessão VNC permanece conectada durante rotações** entre retrato e paisagem, corrigindo o defeito observado na UX1.
+- **O modo trackpad funciona** na interação real.
+- **O teclado funciona corretamente** no uso físico relatado.
+- **A funcionalidade geral está estável** nas condições testadas.
+
+**Decisão:** UX2 aceita funcionalmente no escopo acima e autorizada a integrar `main` com Desktop-1/F1/F2/UX1, via [PR #64](https://github.com/Samuel-Francisco-AS/My-CT/pull/64).
+
+Esse aceite não implica que todos os casos enumerados no roteiro abaixo foram executados individualmente: não foram fornecidas medições físicas de FPS, PSS em uso prolongado, aquecimento ou evidências detalhadas de cada acento/atalho, nem testes Android instrumentados executados. Continuam como limites: janela de reanexação de 3 s, editor IME limitado ao sufixo conhecido, desconexão segura ao sair/ficar em segundo plano ou perder SSH. Nenhuma alteração Fedora/SELinux/SSH/helper é requerida para este fechamento. Os resultados automatizados a seguir são os registrados pelo Codex na entrega, sem reexecução nesta atualização documental.
+
+Ver também [fechamento consolidado da fase Desktop](MYCT-DESKTOP-FECHAMENTO.md).
 
 ## UX2-A — continuidade e propriedade
 
@@ -142,7 +156,7 @@ git diff --check
 | `lintDebug` | **PASS**, 0 erros, 5 avisos e 2 hints preexistentes |
 | Assinatura, pacote, versão, zipalign | **PASS**, mesmo certificado UX1; `dev.myct`; code57; `-c -P 16 4` |
 | Escopo | Protocolo/encodings/VncAuth/SSH, administração F2, helper/sudoers, manifesto fonte e demais telas preservados por hashes |
-| Aceite Moto G06 UX2 | **PENDENTE**, nenhuma instalação ou execução física pelo agente |
+| Aceite Moto G06 UX2 | **APROVADO pelo proprietário em 27/10/2026** no escopo de rotação sem queda da sessão, trackpad, teclado e estabilidade geral; demais testes físicos detalhados não comprovados |
 
 Os SKIP são integrações preexistentes `FedoraHandshakeTest` e
 `IdeFedoraSftpTest`, não habilitadas contra Fedora real. RFB/SSH/serviços são
@@ -252,7 +266,7 @@ letras normalizadas/Latin-1 pode variar entre apps X11. Gestos classificam uma
 intenção por contato: levantar os dedos para passar de rolagem para pinça.
 Trackpad/sensibilidade, Gboard real e recuperação repetida requerem aceite físico.
 
-## Aceite físico no Moto G06
+## Roteiro original de aceite físico no Moto G06 (referência histórica)
 
 Instalar manualmente a candidata por atualização, mantendo `dev.myct`, certificado
 e dados. Não desinstalar nem reinstalar o helper. Encerrar serviços não é necessário
