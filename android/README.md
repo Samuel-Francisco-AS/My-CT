@@ -456,3 +456,62 @@ caches. [Relatório, pré-release, checksum e checklist A–F](../docs/MYCT-L1B-
 **Aceite L1B no Moto pendente**. O proprietário confirmou criação/edição/salvamento/
 persistência/renomeação da L1A; SAF, isolamento completo e regressão remota
 L1A continuam pendentes individualmente.
+
+
+## MYCT-DESKTOP-1 — candidata 24/10/2026
+
+Drawer → Desktop, cliente RFB original (Kotlin, Canvas/InputConnection) pelo SSH
+pinado e forwarding exclusivo/dinâmico para 127.0.0.1:5901. Senha VNC temporária,
+sem app externo. Sair/background/rotação libera a visualização preservando apps
+Fedora; reconectar manualmente. APK 0.14.0-desktop-rc1/code53, dev.myct, assinatura
+debug habitual. Aceite Moto pendente. Instalação privilegiada opcional do helper
+start/stop é manual e não foi executada. [Relatório](../docs/MYCT-DESKTOP-1-RELATORIO.md).
+
+
+## MYCT-DESKTOP-F1 — 25/10/2026
+
+**Desktop code53 reprovado no Moto G06.** Candidata corretiva code54,
+0.14.1-desktop-fix1: clipping nativo/Compose, controles permanentes, Back para
+IME/imersão/seção anterior e diagnóstico real das etapas RFB/desenho.
+Conectar independe do helper de gerenciamento. [Relatório F1, evidências e APK](../docs/MYCT-DESKTOP-F1-RELATORIO.md).
+Aceite físico F1 pendente; resultados de testes locais não substituem essa prova.
+
+
+## MYCT-DESKTOP-F2 — 26/10/2026
+
+F1 aceita parcialmente no Moto para SSH/VNC, imagem, ponteiro/menus e aplicação
+real. F2 preserva esse motor e corrige a administração: falha não desconecta,
+serviço é reconsultado, ausência do helper é específica e comandos indisponíveis
+ficam desabilitados sem bloquear Conectar. Candidata 0.14.2-desktop-fix2/code55,
+mesma assinatura. [Relatório e APK](../docs/MYCT-DESKTOP-F2-RELATORIO.md). Instalação
+manual do helper/autorização e novo aceite físico de gerenciamento pendentes.
+
+
+## Desktop UX1 — code 56 com aceite visual no Moto G06
+
+Barra de ícones compacta, resumo e framebuffer na área restante. Opções do Desktop
+agrupa Controles, Sessão e Diagnóstico. Teclas extras e zoom/pan em faixas opcionais.
+Tela cheia esconde a barra; Mostrar controles a recupera; Voltar fecha teclado,
+sai do imersivo e depois retorna à navegação. Administração F2 e túnel/RFB
+preservados. Infraestrutura e helper/start/stop aceitos pelo proprietário;
+**UX1 visual aprovada pelo proprietário**: barra, painéis, Iniciar/conexão VNC,
+imagem real/Firefox, paisagem e tela cheia. Rotação recria a Activity, desconecta
+VNC e solicita a senha novamente, sem encerrar programas Fedora. UX2 deverá
+avaliar preservar a conexão durante rotação sem persistir credenciais; nenhuma
+implementação dessa pendência neste fechamento. Não ampliar o aceite para todos
+os gestos avançados, Gboard com acentos ou desempenho prolongado. [Relatório UX1](../docs/MYCT-DESKTOP-UX1-RELATORIO.md).
+
+
+## Desktop UX2 — candidata code 57, aceite físico pendente
+
+DesktopModel continua no proprietário de processo existente. Superfície/Activity
+podem ser descartadas e reanexadas sem reautenticar VNC, com prazo de 3 s para
+configuração; saída/background reais fecham cliente e túnel. Sem configChanges,
+serviço novo, senha salvável ou reconexão automática. Cache do framebuffer
+reapresenta imagem ociosa; bitmaps antigos são reciclados no detach.
+
+Controles UX1 acrescentam Toque direto/Trackpad e escolha de rolar/pan com dois
+dedos. Faixa de teclas e imersivo permanecem. Editor Android local suporta
+composição/correção do sufixo conhecido, NFC, batches e exclusão UTF-16/codepoints;
+sem clipboard/texto remoto. Diagnóstico mede recuperação e PSS sob demanda;
+atualizações RFB não são FPS. [Relatório, testes e roteiro](../docs/MYCT-DESKTOP-UX2-RELATORIO.md).

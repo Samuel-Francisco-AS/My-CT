@@ -1,5 +1,32 @@
 # My-CT
 
+**MYCT-DESKTOP — fase aceita no Moto G06 e integração à main autorizada (27/10/2026):** Desktop-1/F1/F2 + UX1/UX2, `0.14.4-desktop-ux2` / code 57.
+Proprietário confirmou renderização e uso real do Fedora, gerenciamento restrito
+Iniciar/Encerrar, melhoria visual, rotação com conexão preservada, trackpad e
+teclado funcionais e estabilidade geral aceitável. Testes informados pelo Codex:
+407 JVM PASS/2 SKIP, 4 helper PASS; build/lint sem erros; instrumentação compilada,
+não executada. Limites de aceite e documentação consolidados em
+[fechamento Desktop](docs/MYCT-DESKTOP-FECHAMENTO.md) e
+[relatório UX2](docs/MYCT-DESKTOP-UX2-RELATORIO.md).
+Integração via [PR #64](https://github.com/Samuel-Francisco-AS/My-CT/pull/64);
+sem release nem implantação automática no Fedora.
+
+**MYCT-DESKTOP-UX1 — aceite visual no Moto G06:** APK
+**0.14.3-desktop-ux1 / code 56** instalado e testado pelo proprietário. Barra
+compacta, painéis sob demanda, Iniciar, conexão VNC, imagem real/Firefox,
+paisagem e melhor uso da tela cheia confirmados. Rotação recria a Activity,
+desconecta a visualização e pede a senha novamente, preservando a sessão Fedora;
+continuidade sem persistir credenciais fica para UX2. Gestos avançados, Gboard
+com acentos e desempenho prolongado não têm aceite físico integral nesta etapa.
+[Relatório e limites do aceite](docs/MYCT-DESKTOP-UX1-RELATORIO.md).
+
+**MYCT-DESKTOP-F2 — aceite funcional informado pelo proprietário:** visualização
+VNC e gerenciamento restrito aprovados no escopo testado no Moto G06. Helper
+instalado manualmente; Iniciar e Encerrar confirmaram o estado real da unidade.
+APK anterior **0.14.2-desktop-fix2 / code 55**. O aceite visual UX1 está descrito acima.
+[Relatório histórico F2](docs/MYCT-DESKTOP-F2-RELATORIO.md) ·
+[Instalação manual/reversão](ops/desktop/README.md).
+
 **Armazenamento local — candidata code 51:** identidade de hardlinks resistente à
 renumeração de device Btrfs, retirada da biblioteca e exclusão permanente por alvos
 exatos, com uma confirmação e sem backup Cloud obrigatório.

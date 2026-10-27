@@ -1568,3 +1568,9 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+MYCT-DESKTOP-1: the RFB subset, renderer, gestures and IME adapter are original
+My-CT source. No noVNC, TigerVNC viewer, LibVNCClient or Guacamole code is bundled.
+RFB protocol reference: https://github.com/rfbproto/rfbproto
+DES (VncAuth) and Zlib use the Android/JVM platform implementations, with SSH
+provided by the existing JSch integration. No new third-party RFB license.

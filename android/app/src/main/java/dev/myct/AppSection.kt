@@ -15,7 +15,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 
 internal enum class AppSection(val label: String) {
-    Home("Início"), Terminal("Terminal"), Files("Arquivos"), Ide("IDE"), Health("Saúde"), Vault("Cofre"), Search("Busca"), Downloads("Downloads")
+    Home("Início"), Terminal("Terminal"), Files("Arquivos"), Ide("IDE"), Health("Saúde"), Vault("Cofre"), Search("Busca"), Downloads("Downloads"), Desktop("Desktop")
 }
 
 /** Opening navigation or options must never override the vault's unconditional protection. */
@@ -35,8 +35,12 @@ internal class SectionNavigation(initial: AppSection) {
     var protectCapture by mutableStateOf(initial == AppSection.Vault)
         private set
 
+    private var desktopPrevious = AppSection.Home
+    fun desktopExit(): AppSection = desktopPrevious.takeUnless { it == AppSection.Desktop } ?: AppSection.Home
+
     fun request(destination: AppSection): Boolean {
         if (destination == requested) return false
+        if (destination == AppSection.Desktop && displayed != AppSection.Desktop) desktopPrevious = displayed
         if (destination == AppSection.Vault) protectCapture = true
         requested = destination
         return true

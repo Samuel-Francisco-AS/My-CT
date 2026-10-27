@@ -22,6 +22,16 @@ class SshConnection {
         check(!closed && current.isConnected)
         current.setPortForwardingL("127.0.0.1", 0, "127.0.0.1", 8765)
     }, remove = { port -> session?.delPortForwardingL("127.0.0.1", port) })
+    private val desktopForwarding = DesktopForwarding(open = {
+        val current = checkNotNull(session)
+        check(!closed && current.isConnected)
+        current.setPortForwardingL("127.0.0.1", 0, "127.0.0.1", 5901)
+    }, remove = { port -> session?.delPortForwardingL("127.0.0.1", port) })
+    internal fun openDesktopTunnel(): DesktopTunnel = desktopForwarding.acquire()
+    internal fun desktopService(operation: DesktopOperation): SshExecResult =
+        executeSshResult(desktopCommand(operation), { openDownloadExec() })
+    internal fun desktopAdministration(): DesktopAdministration = parseDesktopAdministration(
+        executeSshResult(desktopAdministrationCommand(), { openDownloadExec() }, 15_000, 4096))
     fun health(): HealthSample {
         check(!closed && session?.isConnected == true)
         return fetchHealth(healthForwarding.port())
@@ -256,6 +266,7 @@ class SshConnection {
     fun close() {
         val channels = synchronized(fileChannels) { closed = true; fileChannels.toList().also { fileChannels.clear() } }
         synchronized(downloadChannels) { downloadChannels.toList().also { downloadChannels.clear() } }.forEach { it.disconnect() }
+        desktopForwarding.close()
         healthForwarding.close()
         synchronized(vaultChannels) { vaultChannels.toList().also { vaultChannels.clear() } }.forEach { it.disconnect() }
         channels.forEach { it.disconnect() }

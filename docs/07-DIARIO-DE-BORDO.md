@@ -272,3 +272,75 @@ em cópia local temporária, sem novo upload Drive. O upload de ~24,4 GiB não
 foi interrompido e nenhum helper instalado foi substituído. Candidata code 42
 na mesma PR draft, sem merge. Instalação e aceite Moto após conclusão e
 conferência do upload grande; [evidências e roteiro curto](MYCT-C1C-RELATORIO.md).
+
+## 24/10/2026 — MYCT-DESKTOP-1 candidata
+
+Branch feat/myct-desktop-vnc a partir da main local 706ef2d, limpa no início.
+Cliente RFB/Canvas/IME interno ao APK e túnel SSH exclusivo, navegação industrial
+preservada. Helper C++20 restrito preparado sem instalação/administração do Fedora.
+Fixture RFB loopback e testes de ownership/input; nenhuma validação com viewer
+externo, conexão ao desktop real ou instalação no Moto nesta implementação.
+[Relatório e roteiro físico](MYCT-DESKTOP-1-RELATORIO.md) são a fonte dos resultados,
+artefatos, medições e limitações; aceite do proprietário permanece pendente.
+
+
+## 25/10/2026 — MYCT-DESKTOP-F1
+
+Proprietário reprovou code53 após três telas pretas no Moto, apesar da instalação
+e serviço VNC ativo. Teste pré-fix Android/Skia nativo confirmou que drawColor
+pintava pixels acima do viewport. Corrigidos clipping, saída Back e controles,
+com rastreamento sem segredos da conexão e primeiro desenho. Candidata code54,
+sem alteração dos serviços Fedora. [Resultados e limites](MYCT-DESKTOP-F1-RELATORIO.md);
+aceite físico pelo proprietário permanece pendente.
+
+
+## 26/10/2026 — MYCT-DESKTOP-F2
+
+Aceite parcial F1 pelo dono: conexão, 1280×720, ponteiro/clique direito, menus e
+aplicação Fedora. Unidade :1 active/running, PID6963, helper ausente. Reprodução
+JVM confirmou Stop fechando cliente antes da recusa. F2 preserva a conexão após
+falha, reconsulta unidade, separa resultado administrativo e bloqueia comandos
+indisponíveis. Helper de três operações revisado e procedimento manual com
+backup/verificação/reversão; nenhuma instalação ou start/stop real. [Resultados
+e pendências](MYCT-DESKTOP-F2-RELATORIO.md). Aceite do gerenciamento pelo dono pendente.
+
+
+## MYCT-DESKTOP-UX1 — candidata visual Android
+
+Partida d0b6d18, branch Desktop limpa. Proprietário confirmou helper e administração
+F2 físicos; preservar backend e sessão. Nova hierarquia com framebuffer prioritário,
+barra compacta, diagnóstico/painéis sob demanda, controles recuperáveis no imersivo
+e teclas/zoom/pan em faixas opcionais. Testes usam pares e administração simulados;
+nenhum stop/start real, deploy Fedora ou instalação Android pelo agente na
+implementação. Posteriormente o proprietário instalou code56 no Moto G06 e
+aprovou o resultado visual: barra compacta, painéis, Iniciar, conexão VNC,
+Fedora/Firefox real, paisagem e tela cheia. Rotação recria Activity, desconecta
+VNC e pede a senha novamente; sessão Fedora fica ativa. Pendência UX2: preservar
+conexão durante rotação sem persistir credenciais, sem implementar agora.
+Fechamento Git somente de fontes/testes/docs UX1 e registros do aceite; sem
+nova execução de testes, merge ou release. Gestos avançados, Gboard com acentos
+e desempenho prolongado não foram integralmente confirmados fisicamente.
+[Relatório e roteiro complementar](MYCT-DESKTOP-UX1-RELATORIO.md).
+
+
+## MYCT-DESKTOP-UX2 — candidata para aceite, 27/10/2026
+
+Partida 0d1a39b, branch Desktop limpa. Causa da rotação isolada no hide do
+lifecycle e renderer capturado; proprietário de processo já existia. Separados
+vínculos, cache/ACK e conexão; introduzidos trackpad, escolha pan/scroll, FIFO de
+movimentos e editor Android local. Code57/0.14.4-desktop-ux2, certificado UX1.
+409 casos JVM:407 PASS/2 SKIP; helper4 PASS; build e lint sem erros (5 avisos e
+2 hints preexistentes). Instrumentação somente compilada. Nenhuma operação
+Fedora nem instalação no Moto; sem commit/push/merge/release. Valores físicos de
+recuperação/memória/Gboard/gestos pendentes do proprietário. Evidências, falhas de
+fixtures e limitações no [relatório UX2](MYCT-DESKTOP-UX2-RELATORIO.md).
+
+
+### UX2 — publicação de fontes autorizada posteriormente
+
+Proprietário solicitou commit e push da etapa UX2 na branch feat/myct-desktop-vnc,
+sem merge/release. Auditoria confirmou os 20 arquivos da entrega, code57 e APK
+íntegro; nenhum pendente não relacionado. Código/testes preservados; apenas
+registros da autorização atualizados. Resultados anteriores mantidos sem novas
+execuções. APK, logs, evidências e keystores fora do Git. **Aceite físico UX2
+continua pendente no Moto G06.**

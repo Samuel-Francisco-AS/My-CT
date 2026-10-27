@@ -83,3 +83,29 @@ Essa ordem pode mudar se uma dependência prática exigir.
 O diagrama inaugural Android → Fedora descreve o **modo remoto existente**, não o limite definitivo do produto. Nova direção aprovada: o **Android também executará um modo local independente**, com IDE Sora e arquivos locais (privado/SAF), um terminal PTY/shell Android e, após prova técnica, compilação C offline no Moto G06. A mesma interface deve distinguir fontes de arquivo e sessão de execução `Local` versus `Fedora`, preservando os modelos remotos e seus privilégios. Componentes do emulador Termux incorporados podem continuar em uso; o **aplicativo Termux** não será uma dependência de execução ou instalação.
 
 Restrições ainda sem implementação: targetSdk 36 e sandbox Android impedem presumir execução de binários baixados/gerados em diretórios graváveis; investigar WAMR/WASI e alternativa nativa segura com protótipo no aparelho. Sem root, sem servidor Fedora para executar programas locais, sem serviço local universal de comandos remotos. Ver [MYCT-L1](MYCT-L1-AMBIENTE-LOCAL.md). **MYCT-6 automações no Fedora permanece planejada, porém posterior à L1.**
+
+## MYCT-DESKTOP-1 — 24/10/2026, candidata
+
+Novo destino Desktop no Android, com cliente RFB Kotlin original e renderer
+Canvas/InputConnection. Transporte exclusivo por forwarding loopback dinâmico
+da Session SSH já autenticada/pinada para 127.0.0.1:5901 no Fedora. Sem API nova,
+WebView/gateway, banco, firewall, GNOME Remote Desktop ou mudança do target de
+boot. TigerVNC/Openbox existentes são pré-requisitos fornecidos pelo dono.
+Cliente e túnel têm propriedade própria; sair/background interrompe somente
+visualização, preservando os programas remotos. Controle da unidade de sistema
+:1 usa helper C++20 de duas operações, com instalação/autorização manual
+separada e ainda pendente. [Contrato e evidências](MYCT-DESKTOP-1-RELATORIO.md).
+
+
+## MYCT-DESKTOP-UX2 — candidata, continuidade da superfície
+
+Mantido DesktopModel no TerminalModel/MyCtApplication de processo. Cliente RFB,
+túnel e fila pertencem ao modelo; Activity/View/IME/bitmap pertencem à superfície.
+Associação por identidade e lock, cache do framebuffer existente e reattach em
+IO permitem rotação sem reautenticação quando a nova superfície chega em 3 s.
+Detach de configuração retém temporariamente cliente; saída/background/SSH
+perdido encerram recursos. Sem configChanges, serviço ou credenciais persistidas.
+Entrada permanece RFB/SSH; fila limitada junta só movimentos adjacentes e o editor
+local conhece somente o sufixo digitado, sem clipboard/documento remoto. Fedora,
+helper/autorização F2 e demais funcionalidades não mudam. **Moto UX2 pendente**.
+[Contrato e evidências](MYCT-DESKTOP-UX2-RELATORIO.md).

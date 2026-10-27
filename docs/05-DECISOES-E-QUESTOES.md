@@ -645,3 +645,109 @@ do índice Media entre seus pacotes.
 [Implementação, evidências e limites da rodada 2](MYCT-R1-RODADA-2-IMPLEMENTACAO-LENTIDAO.md).
 Somente fontes/fixtures e PR draft; sem implantação pessoal, APK publicado, merge
 ou aceite de desempenho Moto. Issue #61 permanece aberta para a rodada 3/3.
+
+## 24/10/2026 — MYCT-DESKTOP-1: RFB interno sobre SSH, ambiente sob demanda
+
+Pedido expresso do proprietário autoriza implementar Desktop gráfico, exceção
+pontual à diretriz de evitar desktops permanentes: TigerVNC/Openbox já instalados,
+sem reintegrar GNOME Remote Desktop ou mudar multi-user.target/SELinux. Desktop
+não inicia no boot. Primeira prova de imagem/mouse/teclado será no My-CT.
+
+Escolha candidata: perfil RFB original em Kotlin, renderer Android Canvas e
+InputConnection, negociando VncAuth e Raw/CopyRect/Hextile/Zlib/DesktopSize sobre
+porta local dinâmica da Session SSH pinada. noVNC é mantido/MPL, mas exigiria
+WebView/ponte WebSocket; LibVNCClient é mantido/GPL e exigiria NDK e revisão das
+obrigações de distribuição; Guacamole acrescentaria gateway. Não incorporar
+código deles nem licenças novas; desafio VncAuth usa DES da plataforma, transporte
+continua JSch. Manter o decoder pequeno e limitado significa assumir sua manutenção,
+com interoperabilidade real e Gboard ainda pendentes do Moto G06.
+
+Sessão gráfica e visualização são independentes: sair/minimizar/rotacionar fecha
+cliente/socket/túnel/bitmap, sem encerrar aplicativos. Iniciar/Encerrar a unidade
+fixa requer helper C++20 root-owned e regra exata instalada manualmente pelo dono;
+nenhum sudo irrestrito, Polkit, deploy ou mudança de serviços nesta entrega.
+**Candidata não equivale a aceite físico ou gerenciamento completo aprovado.**
+[Relatório, testes e retomada](MYCT-DESKTOP-1-RELATORIO.md).
+
+
+## 25/10/2026 — DESKTOP-F1: viewport recortado e saída independente do VNC
+
+Code 53 reprovado no Moto por pintura preta sem controles. Reprodução pré-fix
+com Canvas/Skia nativo confirmou drawColor fora da View: recortar no renderer e
+no AndroidView, sem atribuir a falha ao Fedora. Título, estado, Menu e Voltar
+permanecem fora do framebuffer; Back prioriza IME, imersão e destino anterior.
+Helper não é dependência da conexão. Etapas tipadas separam receber/decodificar
+de desenhar e não incluem segredos nem mensagens brutas do servidor. Aceite
+F1 real continua do proprietário; testes executados de runtime e eventual
+instrumentação são distinguidos no [relatório F1](MYCT-DESKTOP-F1-RELATORIO.md).
+
+
+## 26/10/2026 — DESKTOP-F2: administração independente da imagem validada
+
+Aceite parcial F1 informado: SSH/VNC, framebuffer 1280×720, ponteiro/clique direito,
+menus Openbox e aplicação Fedora real; não reabrir o renderer/protocolo/gestos.
+Stop desconectava o cliente antes da recusa administrativa; passar a consultar,
+autorizar, solicitar e confirmar unidade antes de fechar o cliente. Erros mantêm
+VNC e estado real, com mensagem administrativa que quadros não apagam. Prévia
+readonly determina botões disponíveis sem bloquear Conectar. Helper C++ permite
+só status/start/stop da unidade fixa; instalação/reversão manual root-owned,
+regra exata sem SETENV, sem execução administrativa nesta entrega. Novo aceite
+físico dos botões continua pendente. [Relatório F2](MYCT-DESKTOP-F2-RELATORIO.md).
+
+
+## MYCT-DESKTOP-UX1 — conteúdo gráfico e controles sob demanda
+
+Infraestrutura e administração F2 aceitas pelo proprietário, inclusive helper
+instalado manualmente e start/stop pelo app. UX1 concentra-se no Android: toolbar
+48 dp com FlowRow, resumo estável, viewport com peso restante, painéis de opções
+e faixas opcionais. Imersivo intencional, acionador visível para recuperar barra,
+saída por Back e comando explícito. Manter transporte, gestos, autorização e
+confirmação F2 intactos; botões zoom/pan usam a transformação existente.
+Mensagens por quadro são lidas só no diagnóstico para evitar invalidar a tela
+inteira. Nenhuma dependência ou mudança de política global de rotação; recriação
+continua desconectando somente a visualização, com reconexão humana.
+Aceite visual físico UX1 informado pelo proprietário: barra/painéis, Iniciar,
+conexão, imagem real/Firefox, paisagem e tela cheia. Rotação confirma desconexão
+da visualização e nova solicitação da senha, preservando a sessão Fedora. UX2:
+avaliar retenção do cliente/túnel durante mudança de configuração e reanexar
+View/entrada, sem persistir credenciais. Não implementar essa proposta no
+fechamento Git UX1. Gestos avançados, Gboard com acentos e desempenho prolongado
+não receberam aceite físico integral nesta etapa.
+[Relatório e limites do aceite UX1](MYCT-DESKTOP-UX1-RELATORIO.md).
+
+## MYCT-DESKTOP-UX2 — implementação candidata, aceite físico pendente
+
+UX2-A: TerminalModel/MyCtApplication já possuem DesktopModel estável no processo.
+Manter esse proprietário, sem serviço novo ou configChanges. Separar vínculo de
+superfície, protegido por identidade/lock, da conexão/túnel. Desvinculação de
+configuração preserva cliente autenticado por prazo limitado de 3 s; reattach
+cancela o prazo e copia o último framebuffer no worker. Nenhuma referência de
+Activity/View permanece no modelo após detach. Segundo plano/saída/SSH perdido
+fecham cliente; não preservar senha nem reconectar automaticamente. Riscos:
+callbacks tardios, corrida com resize/cópia, dupla superfície e espera de attach.
+Testar identidade e limpeza, inclusive ausência de reattach e SSH perdido.
+
+UX2-B/C/D: manter aparência UX1, administração F2 e RFB/encodings/autenticação.
+Trackpad será explícito e relativo; pan local será opção explícita de dois dedos
+para não disputar rolagem. Gestos cancelados liberam botões. IME mantém composição
+local e contexto limitado ao que este cliente digitou; não consulta texto remoto
+nem cria clipboard/injeção via shell. Medidas de fixtures não são FPS/PSS físicos.
+Candidata só será concluída após build/lint/regressões e entregue sem commit/push.
+
+
+UX2 candidata code57: implementados os quatro blocos. 409 casos JVM (407 PASS,
+2 SKIP), build/lint sem erros; AndroidTest compilado, não executado. Fixtures
+cobrem 20 vínculos e seis ciclos Activity, mesmos cliente/túnel, filas limitadas,
+gestos, editor local e acordes. Pressão de toque adiada até intenção reconhecida;
+dois dedos escolhem rolar ou pan explicitamente. Modelos de teste Android usam
+Handler UI como a produção. Nenhuma senha persistida, sem reautenticação para
+reattach e sem mudança administrativa/Fedora. Limites: grace3s, contexto IME de
+sufixo conhecido e interoperabilidade X11. Aceite físico pendente, sem commit/push.
+[Relatório UX2](MYCT-DESKTOP-UX2-RELATORIO.md).
+
+
+UX2 — autorização posterior de publicação: após receber a candidata, o
+proprietário solicitou commit e push de fontes/testes/docs na branch Desktop,
+sem merge/release. Essa autorização substitui a espera inicial pelo aceite
+apenas para versionamento das fontes. Aceite físico continua pendente; nenhuma
+nova implementação ou execução de testes neste fechamento.

@@ -39,6 +39,7 @@ private fun shellIcon(name: String, path: String) = ImageVector.Builder(name, 24
         strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round).build()
 
 internal val sectionIcons = mapOf(
+    AppSection.Desktop to shellIcon("Desktop", "M3,4 L21,4 L21,17 L3,17 Z M12,17 L12,21 M7,21 L17,21"),
     AppSection.Home to shellIcon("Início", "M3,11 L12,3 L21,11 M5,10 L5,21 L10,21 L10,15 L14,15 L14,21 L19,21 L19,10"),
     AppSection.Terminal to shellIcon("Terminal", "M4,5 L20,5 L20,19 L4,19 Z M7,9 L10,12 L7,15 M13,15 L17,15"),
     AppSection.Files to shellIcon("Files", "M3,7 L3,19 L21,19 L21,7 L12,7 L10,4 L3,4 Z"),
@@ -67,6 +68,7 @@ internal fun AppShell(
     onCaptureChange: (Boolean) -> Unit,
     onPersistenceChange: (Boolean) -> Unit,
     onDisconnect: () -> Unit,
+    desktopOwnsGestures: Boolean = section == AppSection.Desktop,
     modifier: Modifier = Modifier,
     content: @Composable (openMenu: () -> Unit) -> Unit
 ) {
@@ -190,7 +192,7 @@ internal fun AppShell(
             translationX = reveal * 18.dp.toPx()
             scaleX = 1f - reveal * 0.015f
             scaleY = scaleX
-        }.drawerEdgeOpening(drawer, scope).semantics {
+        }.then(if (desktopOwnsGestures) Modifier else Modifier.drawerEdgeOpening(drawer, scope)).semantics {
             customActions = listOf(CustomAccessibilityAction("Abrir menu de navegação") { openMenu(); true })
         }) {
             content(openMenu)

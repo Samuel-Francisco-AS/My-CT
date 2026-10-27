@@ -143,3 +143,78 @@ Para parar **somente** esse cluster, se ele tiver sido iniciado manualmente: `pg
 - [README](../README.md) e [AGENTS.md](../AGENTS.md).
 
 O trabalho das branches `myct-4-boot-and-vault` e `myct-4b-android-vault` está integrado à `main`. A exclusão das branches Git não remove o serviço Fedora instalado, o APK, o banco ou o cofre.
+
+## Candidata MYCT-DESKTOP-1 — 24/10/2026
+
+Trabalho na branch `feat/myct-desktop-vnc`, base main local `706ef2d`.
+Implementação Desktop nativa para o TigerVNC :1 existente; **Moto G06 não validado**.
+Não repetir instalação/reconfiguração de TigerVNC/Openbox, não retomar GNOME Remote
+Desktop, não ativar boot nem instalar helper administrativo automaticamente.
+A primeira conexão real deve ser dentro do APK My-CT; não usar viewer externo.
+Atualização preserva `dev.myct` e assinatura habitual. Conferir artefato/hash e
+roteiro no [relatório](MYCT-DESKTOP-1-RELATORIO.md). Helper start/stop continua
+separado e pendente de autorização/instalação manual; desconectar não encerra apps.
+
+
+## Correção bloqueante MYCT-DESKTOP-F1 — 25/10/2026
+
+**Code53 reprovado no Moto G06**, tela preta sem controles/saída. Não repetir a
+instalação antiga como candidata válida. F1 na mesma branch feat/myct-desktop-vnc,
+code54/0.14.1-desktop-fix1, corrige sobrepintura Canvas e Back, com diagnóstico
+por etapa. [Relatório F1 e novo APK](MYCT-DESKTOP-F1-RELATORIO.md). Aceite físico
+continua pendente. Nenhuma mudança no Fedora/helper é necessária para conectar
+à sessão já ativa; primeira imagem real continua exclusivamente no My-CT.
+
+
+## MYCT-DESKTOP-F2 — 26/10/2026
+
+F1 recebeu aceite físico parcial no Moto: framebuffer/SSH/VNC, ponteiro, clique
+direito, menus e aplicação gráfica real. Preservar o caminho gráfico. F2 corrige
+Stop desconectando antes da falha administrativa, separa estado real/cliente/
+autorização e prepara helper de status/start/stop restritos. **Não instalado**:
+botões administrativos exigem procedimento manual autorizado; Conectar não.
+Code55/0.14.2-desktop-fix2 na mesma branch, sem merge/release. [Relatório F2 e
+novo aceite de gerenciamento](MYCT-DESKTOP-F2-RELATORIO.md).
+
+
+## MYCT-DESKTOP-UX1 — estado atual da branch Desktop
+
+Após d0b6d18 o proprietário confirmou infraestrutura VNC e administração F2,
+com helper instalado manualmente e Iniciar/Encerrar pelo My-CT. As pendências
+nos cortes históricos acima não representam esse novo aceite informado.
+UX1 entrega code56/0.14.3-desktop-ux1: imagem prioritária, barra compacta,
+Opções → Controles/Sessão/Diagnóstico e imersivo com recuperação visível.
+**Aceite visual UX1 confirmado pelo proprietário no Moto G06**: barra compacta,
+painéis, Iniciar, conexão VNC, imagem Fedora/Firefox, paisagem e tela cheia.
+O proprietário instalou code56; o agente não implantou Fedora nem instalou APK.
+Sem merge ou release. Rotação/recriação desconecta somente a visualização e
+solicita novamente a senha; sessão Fedora permanece ativa. Pendência UX2:
+avaliar sobrevivência da conexão à rotação e reanexar a View, sem persistir
+credenciais sensíveis. Não iniciar UX2 neste fechamento. Não ampliar o aceite
+para todos os gestos avançados, Gboard com acentos ou desempenho prolongado.
+Resultados anteriores de testes/build/lint preservados, sem novas execuções.
+[Relatório e roteiro complementar Moto](MYCT-DESKTOP-UX1-RELATORIO.md).
+
+
+## MYCT-DESKTOP — fechamento de Desktop-1/F1/F2/UX1/UX2 (27/10/2026)
+
+O proprietário aceitou o conjunto Desktop no Moto G06, na extensão realmente
+comprovada: imagem e aplicações Fedora via VNC/SSH, clique/menus Openbox;
+gerenciamento Iniciar/Encerrar por helper instalado manualmente e status
+confirmado; UX1 compacta e imersiva; UX2 com rotação sem perda da sessão,
+trackpad e teclado funcionando e estabilidade geral satisfatória.
+
+Versão final candidata: `0.14.4-desktop-ux2` / code57 / `dev.myct`.
+Codex informou 407 JVM PASS/2 SKIP, 4 helper PASS, build e lint sem erros.
+Instrumentação Android compilada, não executada. Sem alegar benchmark físico
+ou regressão total das outras abas. Janela de rotação de 3 s e edição IME
+limitada ao sufixo conhecido permanecem como restrições documentadas.
+Não reinstalar helper nem alterar servidor por conta do merge.
+
+A integração da branch `feat/myct-desktop-vnc` na `main` foi autorizada e
+conduzida via [PR #64](https://github.com/Samuel-Francisco-AS/My-CT/pull/64).
+Consultá-la para o resultado final da integração; sem release/instalação APK
+automáticas. Outras branches históricas não foram tocadas.
+[Fechamento consolidado](MYCT-DESKTOP-FECHAMENTO.md) ·
+[UX2 e aceite físico](MYCT-DESKTOP-UX2-RELATORIO.md) ·
+[Operação/rollback do helper](../ops/desktop/README.md).
