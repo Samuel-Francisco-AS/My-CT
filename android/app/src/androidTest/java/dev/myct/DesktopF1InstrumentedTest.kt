@@ -35,7 +35,7 @@ class DesktopF1InstrumentedTest {
     }
     private fun find(text: String, node: AccessibilityNodeInfo? = instrumentation.uiAutomation.rootInActiveWindow): AccessibilityNodeInfo? {
         node ?: return null
-        if (node.text?.toString() == text) return node
+        if (node.text?.toString() == text || node.contentDescription?.toString() == text) return node
         for (i in 0 until node.childCount) find(text, node.getChild(i))?.let { return it }
         return null
     }
@@ -139,6 +139,43 @@ class DesktopF1InstrumentedTest {
             back(); await("No exit after authentication failure") { find("Destino anterior") != null }
             assertFalse(activity.isFinishing)
         } finally { instrumentation.runOnMainSync { model.hide(); activity.finish() }; fixture.close(); scope.cancel() }
+    }
+
+    @Test fun ux1FullscreenControlsAndRealImeCanBeRecoveredWithoutLeavingDesktop() {
+        val activity = launch(); val fixture = RfbFixture()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val model = DesktopModel(scope, { DesktopTunnel(fixture.port) {} }, { _, _ -> SshExecResult("active", "", 0) })
+        val mounted = mutableStateOf(true)
+        fun imeVisible() = androidx.core.view.ViewCompat.getRootWindowInsets(activity.window.decorView)
+            ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+        try {
+            instrumentation.runOnMainSync {
+                model.attach(SshConnection())
+                activity.setContent { MyCtTheme { Surface(color = MaterialTheme.colorScheme.background) {
+                    if (mounted.value) DesktopScreen(model, {}, onExit = { mounted.value = false }) else Text("Destino anterior")
+                } } }
+            }
+            await("Desktop absent") { find("Voltar") != null }
+            instrumentation.runOnMainSync { model.connect("password".toCharArray()) }
+            await("Framebuffer absent") { model.presented }
+            click("Tela cheia"); await("Recovery handle absent") { find("Mostrar controles") != null }
+            assertNull(find("Voltar"))
+            click("Mostrar controles"); click("Teclado")
+            await("Real Android IME did not open") { imeVisible() }
+            back(); await("Back did not dismiss IME") { !imeVisible() }
+            assertTrue(mounted.value); assertNotNull(find("Sair da tela cheia"))
+            click("Recolher controles"); back()
+            await("Back did not leave immersive mode") { find("Tela cheia") != null }
+            assertTrue(mounted.value); assertEquals(DesktopLink.CONNECTED, model.link)
+            click("Opções do Desktop"); click("Teclas extras")
+            assertNotNull(find("Ctrl")); click("Recolher teclas extras")
+            assertNull(find("Ctrl"))
+            back(); await("No return after UX1 controls") { find("Destino anterior") != null }
+            assertFalse(activity.isFinishing)
+        } finally {
+            instrumentation.runOnMainSync { model.hide(); activity.finish() }
+            fixture.close(); scope.cancel()
+        }
     }
 
     private fun assertToolbarPainted(activity: MainActivity) {

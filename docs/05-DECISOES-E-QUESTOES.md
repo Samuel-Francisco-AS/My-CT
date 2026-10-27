@@ -693,3 +693,24 @@ readonly determina botões disponíveis sem bloquear Conectar. Helper C++ permit
 só status/start/stop da unidade fixa; instalação/reversão manual root-owned,
 regra exata sem SETENV, sem execução administrativa nesta entrega. Novo aceite
 físico dos botões continua pendente. [Relatório F2](MYCT-DESKTOP-F2-RELATORIO.md).
+
+
+## MYCT-DESKTOP-UX1 — conteúdo gráfico e controles sob demanda
+
+Infraestrutura e administração F2 aceitas pelo proprietário, inclusive helper
+instalado manualmente e start/stop pelo app. UX1 concentra-se no Android: toolbar
+48 dp com FlowRow, resumo estável, viewport com peso restante, painéis de opções
+e faixas opcionais. Imersivo intencional, acionador visível para recuperar barra,
+saída por Back e comando explícito. Manter transporte, gestos, autorização e
+confirmação F2 intactos; botões zoom/pan usam a transformação existente.
+Mensagens por quadro são lidas só no diagnóstico para evitar invalidar a tela
+inteira. Nenhuma dependência ou mudança de política global de rotação; recriação
+continua desconectando somente a visualização, com reconexão humana.
+Aceite visual físico UX1 informado pelo proprietário: barra/painéis, Iniciar,
+conexão, imagem real/Firefox, paisagem e tela cheia. Rotação confirma desconexão
+da visualização e nova solicitação da senha, preservando a sessão Fedora. UX2:
+avaliar retenção do cliente/túnel durante mudança de configuração e reanexar
+View/entrada, sem persistir credenciais. Não implementar essa proposta no
+fechamento Git UX1. Gestos avançados, Gboard com acentos e desempenho prolongado
+não receberam aceite físico integral nesta etapa.
+[Relatório e limites do aceite UX1](MYCT-DESKTOP-UX1-RELATORIO.md).

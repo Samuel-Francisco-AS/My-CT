@@ -53,4 +53,34 @@ class DesktopCanvasRegressionTest {
         } finally { image.close(); bitmap.recycle() }
     }
 
+    @Test fun zoomPanResizeAndFitKeepDrawAndInputTransformsIdentical() {
+        val image = DesktopImage()
+        val view = DesktopView(RuntimeEnvironment.getApplication(), DesktopModel(), image)
+        val frame = RfbFramebuffer(1280, 720).apply { fill(0, 0, 1280, 720, Color.BLUE) }
+        image.update(frame)
+        try {
+            listOf(360 to 700, 800 to 280, 800 to 140, 280 to 600).forEach { (w, h) ->
+                view.layout(0, 0, w, h)
+                view.resetZoom()
+                val fit = view.viewport()
+                assertEquals(minOf(w / 1280f, h / 720f), fit.scale, .0001f)
+                assertEquals(640 to 360, fit.remote(w / 2f, h / 2f))
+                view.zoomBy(4f); view.panBy(100f, -100f)
+                val vp = view.viewport()
+                val expectedX = 600f; val expectedY = 350f
+                val x = vp.left + expectedX * vp.scale; val y = vp.top + expectedY * vp.scale
+                assertEquals(600 to 350, vp.remote(x, y, clamp = true))
+                val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                view.draw(Canvas(bitmap))
+                val sampleX = (w / 2).toFloat(); val sampleY = (h / 2).toFloat()
+                assertNotNull(view.viewport().remote(sampleX, sampleY))
+                assertEquals(Color.BLUE, bitmap.getPixel(sampleX.toInt(), sampleY.toInt()))
+                bitmap.recycle()
+                view.panBy(-100f, 100f)
+                view.resetZoom()
+                assertEquals(fit, view.viewport())
+            }
+        } finally { view.release() }
+    }
+
 }

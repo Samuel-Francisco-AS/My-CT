@@ -485,3 +485,18 @@ serviço é reconsultado, ausência do helper é específica e comandos indispon
 ficam desabilitados sem bloquear Conectar. Candidata 0.14.2-desktop-fix2/code55,
 mesma assinatura. [Relatório e APK](../docs/MYCT-DESKTOP-F2-RELATORIO.md). Instalação
 manual do helper/autorização e novo aceite físico de gerenciamento pendentes.
+
+
+## Desktop UX1 — code 56 com aceite visual no Moto G06
+
+Barra de ícones compacta, resumo e framebuffer na área restante. Opções do Desktop
+agrupa Controles, Sessão e Diagnóstico. Teclas extras e zoom/pan em faixas opcionais.
+Tela cheia esconde a barra; Mostrar controles a recupera; Voltar fecha teclado,
+sai do imersivo e depois retorna à navegação. Administração F2 e túnel/RFB
+preservados. Infraestrutura e helper/start/stop aceitos pelo proprietário;
+**UX1 visual aprovada pelo proprietário**: barra, painéis, Iniciar/conexão VNC,
+imagem real/Firefox, paisagem e tela cheia. Rotação recria a Activity, desconecta
+VNC e solicita a senha novamente, sem encerrar programas Fedora. UX2 deverá
+avaliar preservar a conexão durante rotação sem persistir credenciais; nenhuma
+implementação dessa pendência neste fechamento. Não ampliar o aceite para todos
+os gestos avançados, Gboard com acentos ou desempenho prolongado. [Relatório UX1](../docs/MYCT-DESKTOP-UX1-RELATORIO.md).

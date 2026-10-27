@@ -175,3 +175,22 @@ autorização e prepara helper de status/start/stop restritos. **Não instalado*
 botões administrativos exigem procedimento manual autorizado; Conectar não.
 Code55/0.14.2-desktop-fix2 na mesma branch, sem merge/release. [Relatório F2 e
 novo aceite de gerenciamento](MYCT-DESKTOP-F2-RELATORIO.md).
+
+
+## MYCT-DESKTOP-UX1 — estado atual da branch Desktop
+
+Após d0b6d18 o proprietário confirmou infraestrutura VNC e administração F2,
+com helper instalado manualmente e Iniciar/Encerrar pelo My-CT. As pendências
+nos cortes históricos acima não representam esse novo aceite informado.
+UX1 entrega code56/0.14.3-desktop-ux1: imagem prioritária, barra compacta,
+Opções → Controles/Sessão/Diagnóstico e imersivo com recuperação visível.
+**Aceite visual UX1 confirmado pelo proprietário no Moto G06**: barra compacta,
+painéis, Iniciar, conexão VNC, imagem Fedora/Firefox, paisagem e tela cheia.
+O proprietário instalou code56; o agente não implantou Fedora nem instalou APK.
+Sem merge ou release. Rotação/recriação desconecta somente a visualização e
+solicita novamente a senha; sessão Fedora permanece ativa. Pendência UX2:
+avaliar sobrevivência da conexão à rotação e reanexar a View, sem persistir
+credenciais sensíveis. Não iniciar UX2 neste fechamento. Não ampliar o aceite
+para todos os gestos avançados, Gboard com acentos ou desempenho prolongado.
+Resultados anteriores de testes/build/lint preservados, sem novas execuções.
+[Relatório e roteiro complementar Moto](MYCT-DESKTOP-UX1-RELATORIO.md).

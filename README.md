@@ -1,12 +1,19 @@
 # My-CT
 
-**MYCT-DESKTOP-F2 candidata (26/10/2026):** gerenciamento separado da visualização;
-falha administrativa preserva o cliente, verifica estado real e distingue helper
-ausente de autorização. F1 recebeu **aceite físico parcial**: SSH/VNC, 1280×720,
-ponteiro, clique direito, menus Openbox e aplicação Fedora; tela preta corrigida.
-APK **0.14.2-desktop-fix2 / code 55**. Gerenciamento físico ainda pendente da
-instalação manual autorizada do helper; nada foi instalado no Fedora nesta F2.
-[Relatório e candidata](docs/MYCT-DESKTOP-F2-RELATORIO.md) ·
+**MYCT-DESKTOP-UX1 — aceite visual no Moto G06:** APK
+**0.14.3-desktop-ux1 / code 56** instalado e testado pelo proprietário. Barra
+compacta, painéis sob demanda, Iniciar, conexão VNC, imagem real/Firefox,
+paisagem e melhor uso da tela cheia confirmados. Rotação recria a Activity,
+desconecta a visualização e pede a senha novamente, preservando a sessão Fedora;
+continuidade sem persistir credenciais fica para UX2. Gestos avançados, Gboard
+com acentos e desempenho prolongado não têm aceite físico integral nesta etapa.
+[Relatório e limites do aceite](docs/MYCT-DESKTOP-UX1-RELATORIO.md).
+
+**MYCT-DESKTOP-F2 — aceite funcional informado pelo proprietário:** visualização
+VNC e gerenciamento restrito aprovados no escopo testado no Moto G06. Helper
+instalado manualmente; Iniciar e Encerrar confirmaram o estado real da unidade.
+APK anterior **0.14.2-desktop-fix2 / code 55**. O aceite visual UX1 está descrito acima.
+[Relatório histórico F2](docs/MYCT-DESKTOP-F2-RELATORIO.md) ·
 [Instalação manual/reversão](ops/desktop/README.md).
 
 **Armazenamento local — candidata code 51:** identidade de hardlinks resistente à

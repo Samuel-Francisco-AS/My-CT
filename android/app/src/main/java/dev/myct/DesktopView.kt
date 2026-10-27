@@ -68,6 +68,27 @@ internal class DesktopView(context: Context, private val model: DesktopModel, va
     }
     internal fun viewport() = DesktopViewport(width.toFloat(), height.toFloat(), frameWidth, frameHeight, zoom, panX, panY)
     fun resetZoom() { zoom = 1f; panX = 0f; panY = 0f; invalidate() }
+    // UI-only adjustments share the renderer/input viewport. Gesture interpretation is unchanged.
+    fun zoomBy(factor: Float) {
+        val old = zoom
+        zoom = (zoom * factor).coerceIn(1f, 4f)
+        panX *= zoom / old; panY *= zoom / old
+        clampPan(); invalidate()
+    }
+    fun panBy(horizontal: Float, vertical: Float) {
+        panX += width * horizontal; panY += height * vertical
+        clampPan(); invalidate()
+    }
+    private fun clampPan() {
+        val vp = viewport()
+        val x = maxOf(0f, (frameWidth * vp.scale - width) / 2)
+        val y = maxOf(0f, (frameHeight * vp.scale - height) / 2)
+        panX = panX.coerceIn(-x, x); panY = panY.coerceIn(-y, y)
+    }
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        clampPan()
+    }
     override fun onDraw(canvas: Canvas) {
         // drawColor fills the Canvas clip, NOT the View bounds. AndroidView does not
         // guarantee that clip: without this it painted over Compose's toolbar in rc1.

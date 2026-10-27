@@ -303,3 +303,21 @@ falha, reconsulta unidade, separa resultado administrativo e bloqueia comandos
 indisponíveis. Helper de três operações revisado e procedimento manual com
 backup/verificação/reversão; nenhuma instalação ou start/stop real. [Resultados
 e pendências](MYCT-DESKTOP-F2-RELATORIO.md). Aceite do gerenciamento pelo dono pendente.
+
+
+## MYCT-DESKTOP-UX1 — candidata visual Android
+
+Partida d0b6d18, branch Desktop limpa. Proprietário confirmou helper e administração
+F2 físicos; preservar backend e sessão. Nova hierarquia com framebuffer prioritário,
+barra compacta, diagnóstico/painéis sob demanda, controles recuperáveis no imersivo
+e teclas/zoom/pan em faixas opcionais. Testes usam pares e administração simulados;
+nenhum stop/start real, deploy Fedora ou instalação Android pelo agente na
+implementação. Posteriormente o proprietário instalou code56 no Moto G06 e
+aprovou o resultado visual: barra compacta, painéis, Iniciar, conexão VNC,
+Fedora/Firefox real, paisagem e tela cheia. Rotação recria Activity, desconecta
+VNC e pede a senha novamente; sessão Fedora fica ativa. Pendência UX2: preservar
+conexão durante rotação sem persistir credenciais, sem implementar agora.
+Fechamento Git somente de fontes/testes/docs UX1 e registros do aceite; sem
+nova execução de testes, merge ou release. Gestos avançados, Gboard com acentos
+e desempenho prolongado não foram integralmente confirmados fisicamente.
+[Relatório e roteiro complementar](MYCT-DESKTOP-UX1-RELATORIO.md).

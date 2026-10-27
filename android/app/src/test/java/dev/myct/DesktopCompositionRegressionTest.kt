@@ -4,6 +4,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.os.Looper
+import android.os.Handler
+import android.view.Choreographer
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.compose.setContent
@@ -11,6 +13,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.AndroidUiFrameClock
+import androidx.compose.ui.platform.createLifecycleAwareWindowRecomposer
+import kotlinx.coroutines.android.asCoroutineDispatcher
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -35,7 +40,11 @@ class DesktopCompositionRegressionTest {
         val activity = controller.get()
         val shown = mutableStateOf(true)
         val model = DesktopModel()
-        activity.setContent { MyCtTheme { Surface(color = MaterialTheme.colorScheme.background) {
+        // Bind to this runtime's Looper; Compose's default dispatcher can retain
+        // a Choreographer from a preceding Robolectric sandbox in the complete suite.
+        val recomposer = activity.window.decorView.createLifecycleAwareWindowRecomposer(
+            Handler(Looper.getMainLooper()).asCoroutineDispatcher() + AndroidUiFrameClock(Choreographer.getInstance()))
+        activity.setContent(parent = recomposer) { MyCtTheme { Surface(color = MaterialTheme.colorScheme.background) {
             if (shown.value) DesktopScreen(model, {}, onExit = { shown.value = false }) else Text("Destino anterior")
         } } }
         fun frame() {
@@ -53,18 +62,12 @@ class DesktopCompositionRegressionTest {
             assertTrue(viewport.height > 0)
             val bitmap = Bitmap.createBitmap(360, 800, Bitmap.Config.ARGB_8888)
             activity.window.decorView.draw(Canvas(bitmap))
-            var titlePixels = 0
-            for (y in 0 until 24) for (x in 0 until 100) {
-                val c = bitmap.getPixel(x, y)
-                if (Color.red(c) > 140 && Color.green(c) > 140 && Color.blue(c) > 140) titlePixels++
-            }
-            assertTrue("Desktop title must be readable", titlePixels > 5)
             var gold = 0
             for (y in 0 until origin[1].coerceAtMost(bitmap.height)) for (x in 0 until bitmap.width) {
                 val c = bitmap.getPixel(x, y)
                 if (Color.red(c) > 100 && Color.green(c) > 60 && Color.red(c) > Color.blue(c) * 1.2) gold++
             }
-            val evidence = java.io.File("build/reports/desktop-f1-composition.png")
+            val evidence = java.io.File("build/reports/desktop-ux1-composition.png")
             evidence.parentFile?.mkdirs()
             evidence.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
             bitmap.recycle()
@@ -73,6 +76,6 @@ class DesktopCompositionRegressionTest {
             assertFalse(shown.value); assertFalse(activity.isFinishing); assertNull(desktop(activity.window.decorView))
             shown.value = true; frame()
             assertNotNull(desktop(activity.window.decorView)); assertFalse(activity.isFinishing)
-        } finally { model.hide(); controller.pause().stop().destroy() }
+        } finally { model.hide(); controller.pause().stop().destroy(); recomposer.cancel() }
     }
 }
