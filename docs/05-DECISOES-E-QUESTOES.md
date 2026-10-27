@@ -714,3 +714,40 @@ View/entrada, sem persistir credenciais. Não implementar essa proposta no
 fechamento Git UX1. Gestos avançados, Gboard com acentos e desempenho prolongado
 não receberam aceite físico integral nesta etapa.
 [Relatório e limites do aceite UX1](MYCT-DESKTOP-UX1-RELATORIO.md).
+
+## MYCT-DESKTOP-UX2 — implementação candidata, aceite físico pendente
+
+UX2-A: TerminalModel/MyCtApplication já possuem DesktopModel estável no processo.
+Manter esse proprietário, sem serviço novo ou configChanges. Separar vínculo de
+superfície, protegido por identidade/lock, da conexão/túnel. Desvinculação de
+configuração preserva cliente autenticado por prazo limitado de 3 s; reattach
+cancela o prazo e copia o último framebuffer no worker. Nenhuma referência de
+Activity/View permanece no modelo após detach. Segundo plano/saída/SSH perdido
+fecham cliente; não preservar senha nem reconectar automaticamente. Riscos:
+callbacks tardios, corrida com resize/cópia, dupla superfície e espera de attach.
+Testar identidade e limpeza, inclusive ausência de reattach e SSH perdido.
+
+UX2-B/C/D: manter aparência UX1, administração F2 e RFB/encodings/autenticação.
+Trackpad será explícito e relativo; pan local será opção explícita de dois dedos
+para não disputar rolagem. Gestos cancelados liberam botões. IME mantém composição
+local e contexto limitado ao que este cliente digitou; não consulta texto remoto
+nem cria clipboard/injeção via shell. Medidas de fixtures não são FPS/PSS físicos.
+Candidata só será concluída após build/lint/regressões e entregue sem commit/push.
+
+
+UX2 candidata code57: implementados os quatro blocos. 409 casos JVM (407 PASS,
+2 SKIP), build/lint sem erros; AndroidTest compilado, não executado. Fixtures
+cobrem 20 vínculos e seis ciclos Activity, mesmos cliente/túnel, filas limitadas,
+gestos, editor local e acordes. Pressão de toque adiada até intenção reconhecida;
+dois dedos escolhem rolar ou pan explicitamente. Modelos de teste Android usam
+Handler UI como a produção. Nenhuma senha persistida, sem reautenticação para
+reattach e sem mudança administrativa/Fedora. Limites: grace3s, contexto IME de
+sufixo conhecido e interoperabilidade X11. Aceite físico pendente, sem commit/push.
+[Relatório UX2](MYCT-DESKTOP-UX2-RELATORIO.md).
+
+
+UX2 — autorização posterior de publicação: após receber a candidata, o
+proprietário solicitou commit e push de fontes/testes/docs na branch Desktop,
+sem merge/release. Essa autorização substitui a espera inicial pelo aceite
+apenas para versionamento das fontes. Aceite físico continua pendente; nenhuma
+nova implementação ou execução de testes neste fechamento.

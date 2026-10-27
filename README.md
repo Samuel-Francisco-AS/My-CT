@@ -1,5 +1,13 @@
 # My-CT
 
+**MYCT-DESKTOP-UX2 candidata — code 57:** sessão VNC separada da View para
+continuidade em rotação, trackpad explícito, pan/rolagem selecionáveis e editor
+IME local com correções/acentos. APK **0.14.4-desktop-ux2**, mesmo certificado UX1.
+409 testes JVM (407 PASS/2 SKIP), build e lint sem erros; **aceite físico UX2 no
+Moto pendente**. Publicação das fontes autorizada posteriormente pelo proprietário;
+sem merge, release ou mudança Fedora.
+[Relatório, limites e roteiro](docs/MYCT-DESKTOP-UX2-RELATORIO.md).
+
 **MYCT-DESKTOP-UX1 — aceite visual no Moto G06:** APK
 **0.14.3-desktop-ux1 / code 56** instalado e testado pelo proprietário. Barra
 compacta, painéis sob demanda, Iniciar, conexão VNC, imagem real/Firefox,

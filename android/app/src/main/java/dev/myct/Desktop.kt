@@ -91,14 +91,16 @@ internal class DesktopComposition(private val text: (String) -> Unit, private va
 }
 
 /** Delay two-finger interpretation until movement distinguishes pinch from scrolling. */
-internal class DesktopTwoFinger(private val initialSpan: Float, private val initialY: Float, private val slop: Float) {
-    enum class Mode { WAITING, ZOOM, SCROLL }
+internal class DesktopTwoFinger(private val initialSpan: Float, private val initialY: Float, private val slop: Float,
+    private val pan: Boolean = false, private val initialX: Float = 0f) {
+    enum class Mode { WAITING, ZOOM, SCROLL, PAN }
     var mode = Mode.WAITING; private set
-    fun update(span: Float, y: Float): Mode {
-        // Once a pinch is recognized it never emits remote wheel events, even while translating.
-        if (mode == Mode.ZOOM) return mode
+    fun update(span: Float, y: Float, x: Float = initialX): Mode {
+        // Decide once per two-finger contact: a scroll can never turn into a pinch mid-flight.
+        if (mode != Mode.WAITING) return mode
         if (kotlin.math.abs(span - initialSpan) > 2 * slop) mode = Mode.ZOOM
-        else if (mode == Mode.WAITING && kotlin.math.abs(y - initialY) > 2 * slop) mode = Mode.SCROLL
+        else if (pan && kotlin.math.hypot(x - initialX, y - initialY) > 2 * slop) mode = Mode.PAN
+        else if (!pan && kotlin.math.abs(y - initialY) > 2 * slop) mode = Mode.SCROLL
         return mode
     }
 }

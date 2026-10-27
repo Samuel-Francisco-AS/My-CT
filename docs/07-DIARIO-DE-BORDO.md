@@ -321,3 +321,26 @@ Fechamento Git somente de fontes/testes/docs UX1 e registros do aceite; sem
 nova execução de testes, merge ou release. Gestos avançados, Gboard com acentos
 e desempenho prolongado não foram integralmente confirmados fisicamente.
 [Relatório e roteiro complementar](MYCT-DESKTOP-UX1-RELATORIO.md).
+
+
+## MYCT-DESKTOP-UX2 — candidata para aceite, 27/10/2026
+
+Partida 0d1a39b, branch Desktop limpa. Causa da rotação isolada no hide do
+lifecycle e renderer capturado; proprietário de processo já existia. Separados
+vínculos, cache/ACK e conexão; introduzidos trackpad, escolha pan/scroll, FIFO de
+movimentos e editor Android local. Code57/0.14.4-desktop-ux2, certificado UX1.
+409 casos JVM:407 PASS/2 SKIP; helper4 PASS; build e lint sem erros (5 avisos e
+2 hints preexistentes). Instrumentação somente compilada. Nenhuma operação
+Fedora nem instalação no Moto; sem commit/push/merge/release. Valores físicos de
+recuperação/memória/Gboard/gestos pendentes do proprietário. Evidências, falhas de
+fixtures e limitações no [relatório UX2](MYCT-DESKTOP-UX2-RELATORIO.md).
+
+
+### UX2 — publicação de fontes autorizada posteriormente
+
+Proprietário solicitou commit e push da etapa UX2 na branch feat/myct-desktop-vnc,
+sem merge/release. Auditoria confirmou os 20 arquivos da entrega, code57 e APK
+íntegro; nenhum pendente não relacionado. Código/testes preservados; apenas
+registros da autorização atualizados. Resultados anteriores mantidos sem novas
+execuções. APK, logs, evidências e keystores fora do Git. **Aceite físico UX2
+continua pendente no Moto G06.**

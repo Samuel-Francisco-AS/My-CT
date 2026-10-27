@@ -178,6 +178,50 @@ class DesktopF1InstrumentedTest {
         }
     }
 
+    @Test fun ux2FrameworkRecreationKeepsAuthenticatedTcpAndReattachesNativeView() {
+        val fixture = RfbFixture()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val model = DesktopModel(scope, { DesktopTunnel(fixture.port) {} }, { _, _ -> SshExecResult("active", "", 0) })
+        val app = instrumentation.targetContext.applicationContext as android.app.Application
+        val active = java.util.concurrent.atomic.AtomicReference<MainActivity?>()
+        val callbacks = object : android.app.Application.ActivityLifecycleCallbacks {
+            override fun onActivityResumed(a: android.app.Activity) {
+                if (a is MainActivity && active.get() !== a) {
+                    a.setContent { MyCtTheme { Surface(color = MaterialTheme.colorScheme.background) { DesktopScreen(model, {}) } } }
+                    active.set(a)
+                }
+            }
+            override fun onActivityCreated(a: android.app.Activity, b: android.os.Bundle?) {}
+            override fun onActivityStarted(a: android.app.Activity) {}
+            override fun onActivityPaused(a: android.app.Activity) {}
+            override fun onActivityStopped(a: android.app.Activity) {}
+            override fun onActivitySaveInstanceState(a: android.app.Activity, b: android.os.Bundle) {}
+            override fun onActivityDestroyed(a: android.app.Activity) {}
+        }
+        try {
+            instrumentation.runOnMainSync { model.attach(SshConnection()); app.registerActivityLifecycleCallbacks(callbacks) }
+            launch(); await("Initial Desktop absent") { find("Voltar") != null }
+            instrumentation.runOnMainSync { model.connect("password".toCharArray()) }
+            await("Initial framebuffer absent") { model.presented }
+            repeat(6) {
+                val oldActivity = checkNotNull(active.get()); val oldView = checkNotNull(findView(oldActivity.window.decorView))
+                instrumentation.runOnMainSync { oldActivity.recreate() }
+                await("No reattached framebuffer after recreation") {
+                    val next = active.get()
+                    next != null && next !== oldActivity && model.presented && findView(next.window.decorView)?.let { model.ownsSurface(it.image) } == true
+                }
+                assertEquals("Recreation opened another TCP/RFB connection", 1, fixture.connections)
+                assertEquals(DesktopLink.CONNECTED, model.link); assertNull(oldView.image.changed)
+                assertNotNull(find("Voltar"))
+            }
+        } finally {
+            instrumentation.runOnMainSync {
+                app.unregisterActivityLifecycleCallbacks(callbacks); model.hide(); active.get()?.finish()
+            }
+            fixture.close(); scope.cancel()
+        }
+    }
+
     private fun assertToolbarPainted(activity: MainActivity) {
         // Own synthetic window only. PixelCopy checks actual on-screen painting, not just semantics.
         val bounds = Rect(); checkNotNull(find("Voltar")).getBoundsInScreen(bounds)

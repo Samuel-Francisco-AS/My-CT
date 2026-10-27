@@ -2,7 +2,6 @@ package dev.myct
 
 import androidx.compose.runtime.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
 import java.io.Closeable
 
 internal interface DesktopPeer : Closeable {
@@ -31,7 +30,8 @@ internal class DesktopModel(
     private val query: (SshConnection, DesktopOperation) -> SshExecResult = { c, op -> c.desktopService(op) },
     private val makePeer: () -> DesktopPeer = { SocketDesktopPeer() },
     private val pollDelayMs: Long = 750,
-    private val inspectAdministration: (SshConnection) -> DesktopAdministration = { it.desktopAdministration() }
+    private val inspectAdministration: (SshConnection) -> DesktopAdministration = { it.desktopAdministration() },
+    private val configurationGraceMs: Long = 3000
 ) {
     private var connection: SshConnection? = null
     @Volatile private var epoch = 0
@@ -39,11 +39,21 @@ internal class DesktopModel(
     private var serviceJob: Job? = null
     private var linkJob: Job? = null
     private var peer: DesktopPeer? = null
-    private var events: Channel<(DesktopPeer) -> Unit>? = null
-    private var visible = false
+    private var events: DesktopInputBuffer? = null
+    @Volatile private var visible = false
     private val renderLock = Any()
     private var render: ((RfbFramebuffer) -> Unit)? = null
     private var clearImage: (() -> Unit)? = null
+    @Volatile private var surfaceOwner: Any? = null
+    private var latestFrame: RfbFramebuffer? = null
+    private var handoffJob: Job? = null
+    private var surfaceStartedNs = 0L
+    private var connectionStartedNs = 0L
+    private var handoffStartedNs = 0L
+    var connectionFirstFrameMs by mutableStateOf<Long?>(null); private set
+    var configurationRecoveryMs by mutableStateOf<Long?>(null); private set
+    var surfaceRecoveryMs by mutableStateOf<Long?>(null); private set
+    var surfacePresentations by mutableIntStateOf(0); private set
     internal val attempt get() = epoch
     var diagnostics by mutableStateOf(DesktopTrace()); private set
     var presented by mutableStateOf(false); private set
@@ -65,6 +75,27 @@ internal class DesktopModel(
     var shift by mutableStateOf(false); private set
     var drag by mutableStateOf(false); private set
     private var pointerX = 0; private var pointerY = 0
+    internal val cursorX get() = pointerX
+    internal val cursorY get() = pointerY
+    internal var framebufferWidth = 1280; private set
+    internal var framebufferHeight = 720; private set
+    internal var transform = DesktopTransform()
+    var interaction by mutableStateOf(DesktopInteraction.DIRECT); private set
+    var localPan by mutableStateOf(false); private set
+    var trackpadGain by mutableFloatStateOf(1.5f); private set
+    internal var inputGeneration = 0; private set
+    private var pointerTouched = false
+    var inputFailures by mutableIntStateOf(0); private set
+    private var completedInputStats = 0 to 0L
+    fun inputStats() = events?.stats() ?: completedInputStats
+    fun changeInteraction(value: DesktopInteraction) {
+        releaseInput(); drag = false; interaction = value
+        if (value == DesktopInteraction.TRACKPAD && !pointerTouched) {
+            pointerX = framebufferWidth / 2; pointerY = framebufferHeight / 2
+        }
+    }
+    fun changePan(value: Boolean) { releaseInput(); localPan = value }
+    fun changeSensitivity(value: Float) { trackpadGain = value.coerceIn(.5f, 3f) }
 
     fun attach(value: SshConnection?) {
         if (connection === value) return
@@ -79,14 +110,56 @@ internal class DesktopModel(
         message = if (ssh) "Consulte a sessão gráfica ou conecte ao display :1." else "Conecte o SSH pelo Terminal."
         if (visible && ssh) refresh()
     }
-    fun show(renderer: (RfbFramebuffer) -> Unit, clear: () -> Unit) {
-        visible = true; render = renderer; clearImage = clear
+    /** Only the current surface may detach/acknowledge. No Activity is retained after detach. */
+    fun show(renderer: (RfbFramebuffer) -> Unit, clear: () -> Unit, owner: Any = renderer) {
+        handoffJob?.cancel(); handoffJob = null
+        val id = epoch
+        synchronized(renderLock) {
+            if (surfaceOwner !== owner) {
+                presented = false; surfaceRecoveryMs = null; surfaceStartedNs = System.nanoTime()
+            }
+            visible = true; surfaceOwner = owner; render = renderer; clearImage = clear
+        }
         diagnostics.step(DesktopStep.SCREEN, true)
         diagnostics.step(DesktopStep.SSH, ssh)
-        if (ssh) refresh()
+        // An idle VNC server need not send a new update after rotation. Reuse its current
+        // framebuffer under the same lock/owner checks; pixel copying stays on IO.
+        scope.launch(Dispatchers.IO) {
+            synchronized(renderLock) {
+                if (id == epoch && surfaceOwner === owner && link == DesktopLink.CONNECTED) {
+                    latestFrame?.let { frame ->
+                        try { render?.invoke(frame) }
+                        catch (_: Exception) { scope.launch { if (ownsSurface(owner)) renderingFailed(id, owner) } }
+                    }
+                }
+            }
+        }
+        if (ssh && link != DesktopLink.CONNECTED && link != DesktopLink.CONNECTING) refresh()
+    }
+    fun ownsSurface(owner: Any): Boolean = surfaceOwner === owner
+    fun detachSurface(owner: Any, changingConfiguration: Boolean) {
+        val detached = synchronized(renderLock) {
+            if (surfaceOwner !== owner) false else {
+                clearImage?.invoke()
+                render = null; clearImage = null; surfaceOwner = null; visible = false
+                presented = false; true
+            }
+        }
+        if (!detached) return
+        releaseInput()
+        if (!changingConfiguration) { hide(); return }
+        handoffJob?.cancel()
+        handoffStartedNs = System.nanoTime()
+        val id = epoch
+        handoffJob = scope.launch {
+            delay(configurationGraceMs)
+            if (id == epoch && !visible) hide()
+        }
     }
     fun hide() {
-        visible = false; disconnect(); render = null; clearImage = null
+        handoffJob?.cancel(); handoffJob = null
+        visible = false; disconnect()
+        synchronized(renderLock) { render = null; clearImage = null; surfaceOwner = null; latestFrame = null }
     }
     fun refresh() = operation(DesktopOperation.STATUS)
     fun start() = operation(DesktopOperation.START)
@@ -205,7 +278,9 @@ internal class DesktopModel(
         serviceEpoch++; serviceJob?.cancel(); serviceJob = null; busy = false
         diagnostics = DesktopTrace().also { it.step(DesktopStep.SCREEN, true); it.step(DesktopStep.SSH, true) }
         val trace = diagnostics
-        presented = false
+        presented = false; transform = DesktopTransform(); pointerTouched = false; pointerX = 0; pointerY = 0
+        connectionStartedNs = System.nanoTime(); surfaceStartedNs = connectionStartedNs
+        handoffStartedNs = 0; connectionFirstFrameMs = null; configurationRecoveryMs = null; surfacePresentations = 0
         link = DesktopLink.CONNECTING; frames = 0; resolution = ""; message = "Conectando por SSH ao display :1…"
         val client = try { makePeer() } catch (_: Exception) {
             password.fill('\u0000'); trace.fail(DesktopFailure.PROTOCOL)
@@ -214,8 +289,7 @@ internal class DesktopModel(
         }
         peer = client
         client.observeProgress(trace::step)
-        val queue = Channel<(DesktopPeer) -> Unit>(128); events = queue
-        val renderer = render
+        val queue = DesktopInputBuffer(); events = queue
         val began = java.util.concurrent.atomic.AtomicBoolean(false)
         val task = scope.launch(start = CoroutineStart.LAZY) {
             began.set(true)
@@ -235,7 +309,7 @@ internal class DesktopModel(
                 message = "VNC autenticado. Aguardando primeiro quadro…"
                 coroutineScope {
                     val writer = launch(Dispatchers.IO) {
-                        try { for (event in queue) event(client) } finally { client.close() }
+                        try { queue.consume(client) } finally { client.close() }
                     }
                     try {
                         withContext(Dispatchers.IO) {
@@ -244,11 +318,22 @@ internal class DesktopModel(
                                 trace.step(DesktopStep.FRAME_READY, true)
                                 trace.step(DesktopStep.RENDER, false)
                                 synchronized(renderLock) {
-                                    if (id == epoch) try { renderer?.invoke(frame) }
-                                    catch (_: Exception) { throw DesktopRenderFailure() }
+                                    if (id == epoch) {
+                                        latestFrame = frame
+                                        try { render?.invoke(frame) }
+                                        catch (_: Exception) { throw DesktopRenderFailure() }
+                                    }
                                 }
                                 scope.launch {
-                                    if (id == epoch) { frames++; resolution = "${frame.width}×${frame.height}"
+                                    if (id == epoch) {
+                                        frames++
+                                        synchronized(frame) { framebufferWidth = frame.width; framebufferHeight = frame.height }
+                                        if (!pointerTouched && interaction == DesktopInteraction.TRACKPAD) {
+                                            pointerX = framebufferWidth / 2; pointerY = framebufferHeight / 2
+                                        } else {
+                                            pointerX = pointerX.coerceIn(0, framebufferWidth - 1); pointerY = pointerY.coerceIn(0, framebufferHeight - 1)
+                                        }
+                                        resolution = "${framebufferWidth}×${framebufferHeight}"
                                         message = "Desktop conectado · $resolution · $frames atualizações" }
                                 }
                             }
@@ -273,7 +358,11 @@ internal class DesktopModel(
                 if (id == epoch) retiring = true
                 password.fill('\u0000'); queue.close(); client.close()
                 withContext(NonCancellable + Dispatchers.IO) { lease?.close(); client.dispose() }
-                if (id == epoch) { peer = null; events = null; clearModifiers(); clearImage?.invoke() }
+                if (id == epoch) {
+                    completedInputStats = queue.stats()
+                    peer = null; events = null; clearModifiers()
+                    synchronized(renderLock) { latestFrame = null; clearImage?.invoke() }
+                }
             }
         }
         linkJob = task
@@ -287,24 +376,30 @@ internal class DesktopModel(
         task.start()
     }
     fun disconnect() {
+        handoffJob?.cancel(); handoffJob = null; handoffStartedNs = 0
         epoch++
-        events?.close(); events = null
+        events?.let { completedInputStats = it.stats(); it.close() }; events = null
         peer?.close(); peer = null // Unblock reader/writer before cancelling their coroutine.
         if (linkJob != null) { retiring = true; linkJob?.cancel() }
         // A callback already copying pixels must finish before the image is discarded.
         // No network work is allowed in render callbacks.
-        synchronized(renderLock) { clearImage?.invoke() }
+        synchronized(renderLock) { latestFrame = null; clearImage?.invoke() }
         clearModifiers(); drag = false; presented = false
         link = DesktopLink.DISCONNECTED
         if (ssh) message = "Visualização desconectada. Aplicativos do Fedora permanecem abertos."
     }
-    fun framePresented(token: Int) {
-        if (token != epoch || link != DesktopLink.CONNECTED || presented) return
+    fun framePresented(token: Int, owner: Any? = null) {
+        if (token != epoch || link != DesktopLink.CONNECTED || presented || owner != null && !ownsSurface(owner)) return
         presented = true
+        surfacePresentations++
+        val now = System.nanoTime()
+        surfaceRecoveryMs = ((now - surfaceStartedNs) / 1_000_000).coerceAtLeast(0)
+        if (connectionFirstFrameMs == null && connectionStartedNs != 0L) connectionFirstFrameMs = (now - connectionStartedNs) / 1_000_000
+        if (handoffStartedNs != 0L) { configurationRecoveryMs = (now - handoffStartedNs) / 1_000_000; handoffStartedNs = 0 }
         diagnostics.step(DesktopStep.RENDER, true)
     }
-    fun renderingFailed(token: Int) {
-        if (token != epoch || link != DesktopLink.CONNECTED) return
+    fun renderingFailed(token: Int, owner: Any? = null) {
+        if (token != epoch || link != DesktopLink.CONNECTED || owner != null && !ownsSurface(owner)) return
         val trace = diagnostics
         disconnect()
         trace.fail(DesktopFailure.RENDER); link = DesktopLink.ERROR
@@ -312,12 +407,19 @@ internal class DesktopModel(
     }
     private fun enqueue(event: (DesktopPeer) -> Unit) {
         if (link != DesktopLink.CONNECTED) return
-        if (events?.trySend(event)?.isSuccess != true) {
-            disconnect(); link = DesktopLink.ERROR; message = "Fila de entrada cheia; reconecte para evitar teclas presas."
-        }
+        if (events?.action(event) != true) inputOverflow()
+    }
+    private fun inputOverflow() {
+        inputFailures++
+        disconnect(); link = DesktopLink.ERROR; message = "Fila de entrada cheia; reconecte para evitar teclas presas."
     }
     fun pointer(x: Int, y: Int, mask: Int = 0) {
-        pointerX = x; pointerY = y; enqueue { it.pointer(x, y, mask) }
+        pointerTouched = true; pointerX = x; pointerY = y; enqueue { it.pointer(x, y, mask) }
+    }
+    fun movePointer(x: Int, y: Int, mask: Int = 0) {
+        if (link != DesktopLink.CONNECTED || x == pointerX && y == pointerY) return
+        pointerTouched = true; pointerX = x; pointerY = y
+        if (events?.motion(x, y, mask) != true) inputOverflow()
     }
     fun click(button: Int = 1) { val x = pointerX; val y = pointerY; enqueue { it.pointer(x, y, button); it.pointer(x, y, 0) } }
     fun scroll(up: Boolean) = click(if (up) 8 else 16)
@@ -334,6 +436,20 @@ internal class DesktopModel(
         val mods = modifiers(control, alternate, shifted)
         enqueue { p -> chord(p, sym, mods) }
     }
+    /** One FIFO event keeps an IME correction atomic with respect to pointer/key events. */
+    fun replaceTypedTail(backspaces: Int, value: String) {
+        val keys = DesktopKeys.text(value.take(4096))
+        val mods = modifiers(ctrl, alt, shift)
+        enqueue { p ->
+            repeat(backspaces.coerceIn(0, 1024)) { chord(p, DesktopKeys.BACKSPACE, emptyList()) }
+            keys.forEach { chord(p, it, mods) }
+        }
+    }
+    fun releasePointer() {
+        inputGeneration++
+        val x = pointerX; val y = pointerY
+        enqueue { it.pointer(x, y, 0) }
+    }
     private fun modifiers(control: Boolean, alternate: Boolean, shifted: Boolean) =
         listOfNotNull(DesktopKeys.CTRL.takeIf { control }, DesktopKeys.ALT.takeIf { alternate }, DesktopKeys.SHIFT.takeIf { shifted })
     private fun chord(p: DesktopPeer, sym: Int, mods: List<Int>) {
@@ -341,6 +457,7 @@ internal class DesktopModel(
         finally { mods.asReversed().forEach { p.key(it, false) } }
     }
     fun releaseInput() {
+        inputGeneration++
         clearModifiers()
         val x = pointerX; val y = pointerY
         enqueue { p -> p.pointer(x, y, 0); listOf(DesktopKeys.CTRL, DesktopKeys.ALT, DesktopKeys.SHIFT).forEach { p.key(it, false) } }

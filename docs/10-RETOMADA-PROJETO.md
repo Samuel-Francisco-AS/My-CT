@@ -194,3 +194,20 @@ credenciais sensíveis. Não iniciar UX2 neste fechamento. Não ampliar o aceite
 para todos os gestos avançados, Gboard com acentos ou desempenho prolongado.
 Resultados anteriores de testes/build/lint preservados, sem novas execuções.
 [Relatório e roteiro complementar Moto](MYCT-DESKTOP-UX1-RELATORIO.md).
+
+
+## MYCT-DESKTOP-UX2 — candidata code57, publicação de fontes autorizada
+
+Candidata local 0.14.4-desktop-ux2 para atualizar dev.myct com certificado UX1.
+Sessão estável atravessa rotação por reanexação em até 3 s, sem armazenar senha;
+background/saída/perda SSH continuam encerrando visualização. Controles UX1
+incluem escolha explícita de trackpad e pan/scroll; editor local suporta acentos,
+correções e batches sem ler documento remoto. 407 testes JVM PASS/2 SKIP,
+build/lint sem erros; instrumentação compilada, não executada. **Aceite físico
+UX2 pendente no Moto G06.** O proprietário autorizou posteriormente commit e
+push das fontes/testes/docs na branch Desktop, sem merge ou release. Essa
+publicação não antecipa o aceite físico; implementação e resultados de testes
+permanecem os da candidata, sem novas execuções neste fechamento Git.
+Nenhuma alteração no Fedora, helper, sudoers ou demais telas. Seguir o
+[relatório e roteiro UX2](MYCT-DESKTOP-UX2-RELATORIO.md); o aceite UX1 anterior
+permanece limitado ao que o proprietário confirmou.

@@ -9,6 +9,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Alignment
@@ -49,8 +50,8 @@ internal fun DesktopScreen(model: DesktopModel, openMenu: () -> Unit, modifier: 
     var password by remember { mutableStateOf("") }
     var askPassword by remember { mutableStateOf(false) }
     var confirmStop by remember { mutableStateOf(false) }
-    var immersive by remember { mutableStateOf(false) }
-    var controls by remember { mutableStateOf(true) }
+    var immersive by rememberSaveable { mutableStateOf(false) }
+    var controls by rememberSaveable { mutableStateOf(true) }
     var extraKeys by remember { mutableStateOf(false) }
     var imageControls by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf<DesktopPanel?>(null) }
@@ -60,14 +61,21 @@ internal fun DesktopScreen(model: DesktopModel, openMenu: () -> Unit, modifier: 
     val bars = remember(activity) { WindowCompat.getInsetsController(activity.window, activity.window.decorView) }
 
     DisposableEffect(model, owner) {
-        fun show() = model.show({ frame -> image.update(frame, model.attempt) }, image::clear)
-        show()
+        fun show() = model.show({ frame -> image.update(frame, model.attempt) }, image::clear, image)
+        if (owner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) show()
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) { model.hide(); password = ""; askPassword = false }
+            if (event == Lifecycle.Event.ON_STOP) {
+                model.detachSurface(image, activity.isChangingConfigurations)
+                view?.cancelInput(); password = ""; askPassword = false
+            }
             if (event == Lifecycle.Event.ON_START) show()
         }
         owner.lifecycle.addObserver(observer)
-        onDispose { owner.lifecycle.removeObserver(observer); model.hide(); view?.release(); image.close(); password = "" }
+        onDispose {
+            owner.lifecycle.removeObserver(observer)
+            model.detachSurface(image, activity.isChangingConfigurations)
+            view?.release(); image.close(); password = ""
+        }
     }
     DisposableEffect(immersive) {
         val previousBehavior = bars.systemBarsBehavior
@@ -83,13 +91,14 @@ internal fun DesktopScreen(model: DesktopModel, openMenu: () -> Unit, modifier: 
     val imeVisible = WindowInsets.isImeVisible
     val goBack = {
         when (desktopBackAction(imeVisible, immersive)) {
-            DesktopBackAction.CLOSE_KEYBOARD -> bars.hide(WindowInsetsCompat.Type.ime())
+            DesktopBackAction.CLOSE_KEYBOARD -> { view?.finishEditorComposition(); bars.hide(WindowInsetsCompat.Type.ime()) }
             DesktopBackAction.RESTORE_CONTROLS -> { immersive = false; controls = true }
             DesktopBackAction.EXIT_SECTION -> onExit()
         }
     }
     BackHandler(enabled = backEnabled, onBack = goBack)
     val openOptions = {
+        view?.finishEditorComposition(); view?.cancelInput()
         bars.hide(WindowInsetsCompat.Type.ime())
         panel = if (connected) DesktopPanel.CONTROLS else DesktopPanel.SESSION
     }
@@ -98,7 +107,7 @@ internal fun DesktopScreen(model: DesktopModel, openMenu: () -> Unit, modifier: 
             connectEnabled = model.ssh && !model.retiring && !model.changing,
             immersive = immersive, back = goBack, menu = openMenu,
             connection = { if (connected || model.link == DesktopLink.CONNECTING) model.disconnect() else askPassword = true },
-            keyboard = { if (imeVisible) bars.hide(WindowInsetsCompat.Type.ime()) else view?.showKeyboard() },
+            keyboard = { if (imeVisible) { view?.finishEditorComposition(); bars.hide(WindowInsetsCompat.Type.ime()) } else view?.showKeyboard() },
             keyboardVisible = imeVisible, options = openOptions,
             fullscreen = {
                 immersive = !immersive; controls = !immersive
@@ -118,7 +127,7 @@ internal fun DesktopScreen(model: DesktopModel, openMenu: () -> Unit, modifier: 
                 DesktopPlaceholder(model, openOptions)
             }
             if (!immersive && connected) {
-                if (extraKeys) DesktopExtraKeys(model) { extraKeys = false; model.releaseInput() }
+                if (extraKeys) DesktopExtraKeys(model, view) { extraKeys = false; model.releaseInput() }
                 if (imageControls) DesktopImageControls(view) { imageControls = false }
             }
         }
@@ -141,7 +150,7 @@ internal fun DesktopScreen(model: DesktopModel, openMenu: () -> Unit, modifier: 
                     onClick = { controls = true; openOptions() }) { Text("Falha · toque para ver opções", Modifier.padding(12.dp)) }
             } else if (connected && (extraKeys || imageControls)) Surface(Modifier.align(Alignment.BottomCenter)) {
                 Column {
-                    if (extraKeys) DesktopExtraKeys(model) { extraKeys = false; model.releaseInput() }
+                    if (extraKeys) DesktopExtraKeys(model, view) { extraKeys = false; model.releaseInput() }
                     if (imageControls) DesktopImageControls(view) { imageControls = false }
                 }
             }
@@ -163,6 +172,24 @@ internal fun DesktopScreen(model: DesktopModel, openMenu: () -> Unit, modifier: 
             }
             when (panel) {
                 DesktopPanel.CONTROLS -> if (connected) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        DesktopInteraction.entries.forEach { mode ->
+                            FilterChip(model.interaction == mode, {
+                                view?.cancelInput(); model.changeInteraction(mode); view?.updateInteractionDescription()
+                            }, label = { Text(mode.label) })
+                        }
+                    }
+                    if (model.interaction == DesktopInteraction.TRACKPAD) {
+                        Text("Sensibilidade do trackpad · pixels remotos por dp", style = MaterialTheme.typography.bodySmall)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(.75f to "Precisa", 1.5f to "Normal", 2.25f to "Rápida").forEach { (gain, label) ->
+                                FilterChip(model.trackpadGain == gain, { model.changeSensitivity(gain) }, label = { Text(label) })
+                            }
+                        }
+                    }
+                    FilterChip(model.localPan, {
+                        view?.cancelInput(); model.changePan(!model.localPan); view?.updateInteractionDescription()
+                    }, label = { Text(if (model.localPan) "Dois dedos: pan local" else "Dois dedos: rolar Fedora") })
                     Text(if (model.drag) "Modo arrastar · botão esquerdo pressionado ao mover" else "Modo mover · toque clica, segurar abre clique direito",
                         style = MaterialTheme.typography.bodySmall)
                     FilterChip(model.drag, { model.changeDrag(!model.drag) }, label = { Text(if (model.drag) "Desativar arraste" else "Ativar arraste") })
@@ -176,7 +203,7 @@ internal fun DesktopScreen(model: DesktopModel, openMenu: () -> Unit, modifier: 
                         MyCtTextButton(onClick = { view?.resetZoom(); panel = null }) { Text("Ajustar à área") }
                         MyCtTextButton(onClick = { imageControls = true; extraKeys = false; model.releaseInput(); panel = null }) { Text("Zoom e pan") }
                     }
-                    Text("Pinça amplia até 4× o ajuste. Dois dedos rolam; movimento horizontal desloca a imagem ampliada. A faixa Zoom e pan oferece setas para qualquer direção.", style = MaterialTheme.typography.bodySmall)
+                    Text("Pinça amplia até 4× o ajuste. Escolha rolagem ou pan local para dois dedos. A faixa Zoom e pan oferece setas para qualquer direção.", style = MaterialTheme.typography.bodySmall)
                 } else Text("Conecte para usar mouse e teclado remotos.")
                 DesktopPanel.SESSION -> {
                     Text("Unidade Fedora: ${desktopServiceLabel(model.service)}", style = MaterialTheme.typography.labelLarge)
@@ -239,7 +266,7 @@ private fun DesktopSummary(model: DesktopModel) {
         }
     }
     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).semantics { liveRegion = LiveRegionMode.Polite }) {
-        Text("Desktop · $state${if (model.drag) " · Arraste ativo" else ""}", style = MaterialTheme.typography.labelMedium,
+        Text("Desktop · $state${if (model.link == DesktopLink.CONNECTED) " · ${model.interaction.label}" else ""}${if (model.drag) " · Arraste ativo" else ""}", style = MaterialTheme.typography.labelMedium,
             maxLines = 2, overflow = TextOverflow.Ellipsis,
             color = if (model.link == DesktopLink.ERROR) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
         if (model.adminOutcome in desktopAdminErrors || model.changing) Text(model.adminMessage,
@@ -294,17 +321,17 @@ private fun DesktopPlaceholder(model: DesktopModel, options: () -> Unit) {
 }
 
 @Composable
-private fun DesktopExtraKeys(model: DesktopModel, close: () -> Unit) {
+private fun DesktopExtraKeys(model: DesktopModel, view: DesktopView?, close: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         DesktopAction("Recolher teclas extras", DesktopIcons.close, onClick = close)
         Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             listOf("Ctrl" to DesktopKeys.CTRL, "Alt" to DesktopKeys.ALT, "Shift" to DesktopKeys.SHIFT).forEach { (name, sym) ->
                 FilterChip(selected = when (sym) { DesktopKeys.CTRL -> model.ctrl; DesktopKeys.ALT -> model.alt; else -> model.shift },
-                    onClick = { model.toggleModifier(sym) }, label = { Text(name) }, modifier = Modifier.heightIn(min = 48.dp))
+                    onClick = { view?.finishEditorComposition(); model.toggleModifier(sym) }, label = { Text(name) }, modifier = Modifier.heightIn(min = 48.dp))
             }
             listOf("Esc" to DesktopKeys.ESC, "Tab" to DesktopKeys.TAB, "Enter" to DesktopKeys.ENTER,
                 "⌫" to DesktopKeys.BACKSPACE, "←" to 0xff51, "↑" to 0xff52, "↓" to 0xff54, "→" to 0xff53).forEach { (name, sym) ->
-                MyCtTextButton(onClick = { model.press(sym) }, modifier = Modifier.heightIn(min = 48.dp).semantics {
+                MyCtTextButton(onClick = { view?.specialKey(sym) ?: model.press(sym) }, modifier = Modifier.heightIn(min = 48.dp).semantics {
                     contentDescription = when (name) { "⌫" -> "Backspace"; "←" -> "Seta esquerda"; "↑" -> "Seta cima"; "↓" -> "Seta baixo"; "→" -> "Seta direita"; else -> name }
                 }) { Text(name) }
             }
@@ -332,6 +359,12 @@ private fun DesktopImageControls(view: DesktopView?, close: () -> Unit) {
 private fun DesktopDiagnostics(model: DesktopModel) {
     val diagnostic = model.diagnostics.state
     Text(model.message, style = MaterialTheme.typography.bodySmall)
+    Text("Atualizações RFB: ${model.frames} · não são FPS", style = MaterialTheme.typography.bodySmall)
+    Text("Superfícies apresentadas: ${model.surfacePresentations}", style = MaterialTheme.typography.bodySmall)
+    Text("Conectar → primeiro desenho: ${model.connectionFirstFrameMs?.let { "$it ms" } ?: "—"}", style = MaterialTheme.typography.bodySmall)
+    Text("Configuração → primeiro desenho: ${model.configurationRecoveryMs?.let { "$it ms" } ?: "—"}", style = MaterialTheme.typography.bodySmall)
+    val input = model.inputStats()
+    Text("Fila: pico ${input.first}/128 · movimentos agrupados ${input.second} · falhas ${model.inputFailures}", style = MaterialTheme.typography.bodySmall)
     Text("Última concluída: ${diagnostic.lastCompleted?.label ?: "nenhuma"}", style = MaterialTheme.typography.labelMedium)
     DesktopStep.entries.forEach { step ->
         val mark = if (step in diagnostic.completed) "OK" else if (step == diagnostic.current) "AGUARDE" else "—"

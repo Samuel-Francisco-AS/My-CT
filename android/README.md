@@ -500,3 +500,18 @@ VNC e solicita a senha novamente, sem encerrar programas Fedora. UX2 deverá
 avaliar preservar a conexão durante rotação sem persistir credenciais; nenhuma
 implementação dessa pendência neste fechamento. Não ampliar o aceite para todos
 os gestos avançados, Gboard com acentos ou desempenho prolongado. [Relatório UX1](../docs/MYCT-DESKTOP-UX1-RELATORIO.md).
+
+
+## Desktop UX2 — candidata code 57, aceite físico pendente
+
+DesktopModel continua no proprietário de processo existente. Superfície/Activity
+podem ser descartadas e reanexadas sem reautenticar VNC, com prazo de 3 s para
+configuração; saída/background reais fecham cliente e túnel. Sem configChanges,
+serviço novo, senha salvável ou reconexão automática. Cache do framebuffer
+reapresenta imagem ociosa; bitmaps antigos são reciclados no detach.
+
+Controles UX1 acrescentam Toque direto/Trackpad e escolha de rolar/pan com dois
+dedos. Faixa de teclas e imersivo permanecem. Editor Android local suporta
+composição/correção do sufixo conhecido, NFC, batches e exclusão UTF-16/codepoints;
+sem clipboard/texto remoto. Diagnóstico mede recuperação e PSS sob demanda;
+atualizações RFB não são FPS. [Relatório, testes e roteiro](../docs/MYCT-DESKTOP-UX2-RELATORIO.md).

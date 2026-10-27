@@ -95,3 +95,17 @@ Cliente e túnel têm propriedade própria; sair/background interrompe somente
 visualização, preservando os programas remotos. Controle da unidade de sistema
 :1 usa helper C++20 de duas operações, com instalação/autorização manual
 separada e ainda pendente. [Contrato e evidências](MYCT-DESKTOP-1-RELATORIO.md).
+
+
+## MYCT-DESKTOP-UX2 — candidata, continuidade da superfície
+
+Mantido DesktopModel no TerminalModel/MyCtApplication de processo. Cliente RFB,
+túnel e fila pertencem ao modelo; Activity/View/IME/bitmap pertencem à superfície.
+Associação por identidade e lock, cache do framebuffer existente e reattach em
+IO permitem rotação sem reautenticação quando a nova superfície chega em 3 s.
+Detach de configuração retém temporariamente cliente; saída/background/SSH
+perdido encerram recursos. Sem configChanges, serviço ou credenciais persistidas.
+Entrada permanece RFB/SSH; fila limitada junta só movimentos adjacentes e o editor
+local conhece somente o sufixo digitado, sem clipboard/documento remoto. Fedora,
+helper/autorização F2 e demais funcionalidades não mudam. **Moto UX2 pendente**.
+[Contrato e evidências](MYCT-DESKTOP-UX2-RELATORIO.md).
