@@ -1,12 +1,15 @@
 # My-CT
 
-**MYCT-DESKTOP-UX2 candidata — code 57:** sessão VNC separada da View para
-continuidade em rotação, trackpad explícito, pan/rolagem selecionáveis e editor
-IME local com correções/acentos. APK **0.14.4-desktop-ux2**, mesmo certificado UX1.
-409 testes JVM (407 PASS/2 SKIP), build e lint sem erros; **aceite físico UX2 no
-Moto pendente**. Publicação das fontes autorizada posteriormente pelo proprietário;
-sem merge, release ou mudança Fedora.
-[Relatório, limites e roteiro](docs/MYCT-DESKTOP-UX2-RELATORIO.md).
+**MYCT-DESKTOP — fase aceita no Moto G06 e integração à main autorizada (27/10/2026):** Desktop-1/F1/F2 + UX1/UX2, `0.14.4-desktop-ux2` / code 57.
+Proprietário confirmou renderização e uso real do Fedora, gerenciamento restrito
+Iniciar/Encerrar, melhoria visual, rotação com conexão preservada, trackpad e
+teclado funcionais e estabilidade geral aceitável. Testes informados pelo Codex:
+407 JVM PASS/2 SKIP, 4 helper PASS; build/lint sem erros; instrumentação compilada,
+não executada. Limites de aceite e documentação consolidados em
+[fechamento Desktop](docs/MYCT-DESKTOP-FECHAMENTO.md) e
+[relatório UX2](docs/MYCT-DESKTOP-UX2-RELATORIO.md).
+Integração via [PR #64](https://github.com/Samuel-Francisco-AS/My-CT/pull/64);
+sem release nem implantação automática no Fedora.
 
 **MYCT-DESKTOP-UX1 — aceite visual no Moto G06:** APK
 **0.14.3-desktop-ux1 / code 56** instalado e testado pelo proprietário. Barra
