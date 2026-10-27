@@ -196,18 +196,25 @@ Resultados anteriores de testes/build/lint preservados, sem novas execuções.
 [Relatório e roteiro complementar Moto](MYCT-DESKTOP-UX1-RELATORIO.md).
 
 
-## MYCT-DESKTOP-UX2 — candidata code57, publicação de fontes autorizada
+## MYCT-DESKTOP — fechamento de Desktop-1/F1/F2/UX1/UX2 (27/10/2026)
 
-Candidata local 0.14.4-desktop-ux2 para atualizar dev.myct com certificado UX1.
-Sessão estável atravessa rotação por reanexação em até 3 s, sem armazenar senha;
-background/saída/perda SSH continuam encerrando visualização. Controles UX1
-incluem escolha explícita de trackpad e pan/scroll; editor local suporta acentos,
-correções e batches sem ler documento remoto. 407 testes JVM PASS/2 SKIP,
-build/lint sem erros; instrumentação compilada, não executada. **Aceite físico
-UX2 pendente no Moto G06.** O proprietário autorizou posteriormente commit e
-push das fontes/testes/docs na branch Desktop, sem merge ou release. Essa
-publicação não antecipa o aceite físico; implementação e resultados de testes
-permanecem os da candidata, sem novas execuções neste fechamento Git.
-Nenhuma alteração no Fedora, helper, sudoers ou demais telas. Seguir o
-[relatório e roteiro UX2](MYCT-DESKTOP-UX2-RELATORIO.md); o aceite UX1 anterior
-permanece limitado ao que o proprietário confirmou.
+O proprietário aceitou o conjunto Desktop no Moto G06, na extensão realmente
+comprovada: imagem e aplicações Fedora via VNC/SSH, clique/menus Openbox;
+gerenciamento Iniciar/Encerrar por helper instalado manualmente e status
+confirmado; UX1 compacta e imersiva; UX2 com rotação sem perda da sessão,
+trackpad e teclado funcionando e estabilidade geral satisfatória.
+
+Versão final candidata: `0.14.4-desktop-ux2` / code57 / `dev.myct`.
+Codex informou 407 JVM PASS/2 SKIP, 4 helper PASS, build e lint sem erros.
+Instrumentação Android compilada, não executada. Sem alegar benchmark físico
+ou regressão total das outras abas. Janela de rotação de 3 s e edição IME
+limitada ao sufixo conhecido permanecem como restrições documentadas.
+Não reinstalar helper nem alterar servidor por conta do merge.
+
+A integração da branch `feat/myct-desktop-vnc` na `main` foi autorizada e
+conduzida via [PR #64](https://github.com/Samuel-Francisco-AS/My-CT/pull/64).
+Consultá-la para o resultado final da integração; sem release/instalação APK
+automáticas. Outras branches históricas não foram tocadas.
+[Fechamento consolidado](MYCT-DESKTOP-FECHAMENTO.md) ·
+[UX2 e aceite físico](MYCT-DESKTOP-UX2-RELATORIO.md) ·
+[Operação/rollback do helper](../ops/desktop/README.md).
