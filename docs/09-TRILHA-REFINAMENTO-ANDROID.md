@@ -1,5 +1,8 @@
 # Trilha futura — refinamento do Android (não bloquear Core)
 
+> **Nota de navegação (reforma documental, 31/10/2026):** este documento conserva o **registro histórico** de decisões, hipóteses e testes de suas datas. Seu conteúdo pode ter sido superado por entregas posteriores. Para comportamento e versão atuais, consulte [STATUS.md](STATUS.md), [Arquitetura](ARCHITECTURE.md), [Instalação](INSTALLATION.md) e [índice histórico](HISTORY.md). Não execute procedimentos antigos em produção sem validação do ambiente.
+
+
 **Abertura:** 15/10/2026. **Atualização (16/10):** R-01/lag **suspenso como dívida** após teste físico negativo da 0.5.9; R-02/rolagem **melhorou e foi confirmado no Moto**; próxima trilha: **refinamento visual e ergonomia (UX-R03 + R-09)**.  
 [Issue de acompanhamento #9](https://github.com/Samuel-Francisco-AS/My-CT/issues/9) · [Fechamento do ciclo](08-FECHAMENTO-CICLO-ANDROID.md)
 
