@@ -1,0 +1,27 @@
+My-CT
+Copyright 2026 Samuel-Francisco-AS and contributors.
+
+Original My-CT code, documentation and assets are made available under the
+Apache License, Version 2.0, except where another license is expressly
+identified. See LICENSE at the repository root.
+
+This project also contains or integrates third-party work. The Apache-2.0
+license adopted for original My-CT material does not relicense those works
+or override their existing copyright and license notices.
+
+Included third-party code and notices:
+- Termux terminal-emulator / terminal-view (Apache-2.0 exception for the
+  selected modules): android/terminal/upstream/ and
+  android/app/src/main/assets/THIRD_PARTY_LICENSES.txt
+- Sora Editor (LGPL-2.1-or-later), embedded TM4E materials (EPL-2.0/MIT),
+  text grammars and other IDE dependencies:
+  android/IDE-LICENSES.md and android/app/src/main/assets/ide/
+- JSch (BSD-style), jBCrypt (ISC-style), Bouncy Castle (MIT),
+  AndroidX and other dependencies:
+  android/app/src/main/assets/THIRD_PARTY_LICENSES.txt
+
+Third-party services such as Jellyfin, Transmission, Prowlarr, Rclone and
+ClamAV run separately; their own licenses govern their distributions.
+
+See docs/LICENSING.md for the scope of this license and where to find
+corresponding third-party notices. This NOTICE does not modify any license.
