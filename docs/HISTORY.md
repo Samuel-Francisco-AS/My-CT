@@ -112,6 +112,16 @@ Para decisões e procedimentos atuais, comece por [STATUS.md](STATUS.md), [INSTA
 - [MYCT AUDITORIA CONSOLIDACAO 2026 10 18](MYCT-AUDITORIA-CONSOLIDACAO-2026-10-18.md)
 - [MYCT INFRA GOOGLE CLOUD DRIVE OAUTH PAGES](MYCT-INFRA-GOOGLE-CLOUD-DRIVE-OAUTH-PAGES.md)
 
+## Versões anteriores dos guias de entrada
+
+A reforma substituiu documentos que haviam acumulado uma longa cronologia. Para preservar **exatamente** a versão pré-reforma, o Git conserva os arquivos originais no commit `c302397`:
+
+- [README raiz antes da reforma](https://github.com/Samuel-Francisco-AS/My-CT/blob/c3023973800ba5a7dad907ccf6265d405c8f5523/README.md)
+- [README Android antes da reforma](https://github.com/Samuel-Francisco-AS/My-CT/blob/c3023973800ba5a7dad907ccf6265d405c8f5523/android/README.md)
+- [AGENTS.md antes da reforma](https://github.com/Samuel-Francisco-AS/My-CT/blob/c3023973800ba5a7dad907ccf6265d405c8f5523/AGENTS.md)
+
+Esses permalinks conservam inclusive o contexto de caminhos da revisão original.
+
 ## Evidências complementares
 
 Resultados em `docs/evidence/` são artefatos de fases específicas (JSON/patch), não logs vivos da instalação do usuário. Não os edite retroativamente para fazer uma validação parecer mais recente.
