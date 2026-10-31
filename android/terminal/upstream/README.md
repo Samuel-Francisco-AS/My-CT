@@ -1,3 +1,5 @@
+> **Proveniência vendorizada.** Este arquivo registra o upstream Termux, os patches e a exceção de licença aplicáveis; consulte [licenciamento geral](../../../docs/LICENSING.md), [arquitetura atual](../../../docs/ARCHITECTURE.md) e execute `python3 android/terminal/upstream/verify.py` da raiz para conferir os hashes. As descrições cronológicas das fases abaixo são históricas.
+
 # Fonte do terminal e licença
 
 Arquivos Java/res de `termux/termux-app` em `v0.118.3`, commit
