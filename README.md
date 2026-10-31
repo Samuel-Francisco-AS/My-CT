@@ -1,5 +1,11 @@
 # My-CT
 
+**Licença:** o código e a documentação originais do My-CT são disponibilizados
+sob a [Apache License 2.0](LICENSE), ressalvadas as licenças próprias dos
+componentes de terceiros (incluindo Termux e Sora Editor).
+Consulte [NOTICE](NOTICE) e [Licenciamento e terceiros](docs/LICENSING.md)
+para direitos, atribuições e condições de redistribuição.
+
 **MYCT-DESKTOP — fase aceita no Moto G06 e integração à main autorizada (27/10/2026):** Desktop-1/F1/F2 + UX1/UX2, `0.14.4-desktop-ux2` / code 57.
 Proprietário confirmou renderização e uso real do Fedora, gerenciamento restrito
 Iniciar/Encerrar, melhoria visual, rotação com conexão preservada, trackpad e
