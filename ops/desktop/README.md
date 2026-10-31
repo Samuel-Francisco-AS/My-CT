@@ -1,3 +1,5 @@
+> **Componente opcional e instalação exclusivamente manual.** Veja o [estado atual](../../docs/STATUS.md), a [arquitetura](../../docs/ARCHITECTURE.md) e o [fechamento UX2](../../docs/MYCT-DESKTOP-FECHAMENTO.md). Este documento descreve comandos administrativos que não devem ser executados sem revisão e autorização específicas.
+
 # Desktop :1 — gerenciamento F2, instalação exclusivamente manual
 
 **Não executar estes passos administrativos por um agente sem autorização do
