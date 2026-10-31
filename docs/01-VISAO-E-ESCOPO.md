@@ -1,4 +1,7 @@
 # My-CT — visão, contexto e escopo
+
+> **Nota de navegação (reforma documental, 31/10/2026):** este documento conserva o **registro histórico** de decisões, hipóteses e testes de suas datas. Seu conteúdo pode ter sido superado por entregas posteriores. Para comportamento e versão atuais, consulte [STATUS.md](STATUS.md), [Arquitetura](ARCHITECTURE.md), [Instalação](INSTALLATION.md) e [índice histórico](HISTORY.md). Não execute procedimentos antigos em produção sem validação do ambiente.
+
 **Versão:** 0.1-documental · **Registro:** 14/10/2026 · **Estado:** proposta evolutiva
 
 ## Enunciado

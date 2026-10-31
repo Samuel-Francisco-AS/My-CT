@@ -1,5 +1,8 @@
 # My-CT — fechamento do ciclo Android/SSH/SFTP (MYCT-0 a MYCT-2R)
 
+> **Nota de navegação (reforma documental, 31/10/2026):** este documento conserva o **registro histórico** de decisões, hipóteses e testes de suas datas. Seu conteúdo pode ter sido superado por entregas posteriores. Para comportamento e versão atuais, consulte [STATUS.md](STATUS.md), [Arquitetura](ARCHITECTURE.md), [Instalação](INSTALLATION.md) e [índice histórico](HISTORY.md). Não execute procedimentos antigos em produção sem validação do ambiente.
+
+
 **Data:** 15/10/2026 · **Status:** ciclo funcional concluído por decisão do proprietário, com dívida técnica/UX e validações parciais explicitamente pendentes.  
 **Produto:** My-CT, independente da Narys. **Fonte de verdade para novas conversas:** este documento, [retomada](10-RETOMADA-PROJETO.md) e [refinamento](09-TRILHA-REFINAMENTO-ANDROID.md).  
 **Integração:** PRs [#6](https://github.com/Samuel-Francisco-AS/My-CT/pull/6), [#7](https://github.com/Samuel-Francisco-AS/My-CT/pull/7) e [#8](https://github.com/Samuel-Francisco-AS/My-CT/pull/8) — implementados em cadeia, integrar em `main` por merges controlados no fechamento. O estado de merge definitivo é registrado ao fim deste documento após integração.

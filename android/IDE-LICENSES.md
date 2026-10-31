@@ -1,3 +1,5 @@
+> **Licenciamento de terceiros (vigente).** Este documento preserva a origem e reconstrução da IDE a partir da fase R4. O licenciamento do código original My-CT está em [LICENSE](../LICENSE), [NOTICE](../NOTICE) e [guia de licenças](../docs/LICENSING.md). A adoção de Apache-2.0 no projeto não substitui a LGPL do Sora ou as licenças de seus componentes.
+
 # IDE — dependencies, licenses and rebuilding
 
 My-CT R4 uses unmodified `io.github.Rosemoe.sora-editor:editor:0.23.6` and
