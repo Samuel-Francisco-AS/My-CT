@@ -1,3 +1,5 @@
+> **Guia técnico de Core e PostgreSQL.** Para a visão atual, leia [estado](../docs/STATUS.md), [arquitetura](../docs/ARCHITECTURE.md) e [operação](../docs/OPERATIONS.md). Os trechos por fase abaixo preservam procedimentos e validações do momento em que foram escritos. Compilar ou sincronizar o Git não instala nem atualiza o Core em execução no Fedora.
+
 # Core My-CT — saúde e persistência local (MYCT-3A/3B)
 
 C++20/Linux, Makefile e **libpq direta**, sem ORM/framework/CMake. Saúde usa
