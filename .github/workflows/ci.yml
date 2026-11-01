@@ -48,8 +48,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/gitleaks-cli"
           tar -xzf "$archive" -C "$RUNNER_TEMP/gitleaks-cli" gitleaks
           "$RUNNER_TEMP/gitleaks-cli/gitleaks" version
-          "$RUNNER_TEMP/gitleaks-cli/gitleaks" git --source . \
-            --log-opts="--all" --redact --no-banner
+          "$RUNNER_TEMP/gitleaks-cli/gitleaks" git \
+            --log-opts="--all" --redact --no-banner .
 
   python:
     name: Python / Tools and Setup
