@@ -32,6 +32,9 @@ class AddonTests(unittest.TestCase):
             return 'ID=fedora\nVERSION_ID=44\n' if str(path)=='/etc/os-release' else original(path)
         patches=[patch.object(self.m,'addon_service',return_value=service),patch.object(self.m,'addon_api',return_value={'ready':False}),
                  patch.object(self.m,'addon_processes',return_value=processes or []),patch.object(self.m,'read',side_effect=read),
+                 # Diagnose must see the Fedora tooling in this synthetic fixture,
+                 # even when unit tests run on a GitHub Ubuntu runner.
+                 patch.object(self.m.shutil,'which',side_effect=lambda command: '/usr/bin/'+command if command in ('dnf','sudo') else None),
                  patch.object(self.m,'ok',return_value=True),patch.object(self.m,'out',return_value='transmission-daemon 4.1.3'),
                  patch.object(self.m,'run',return_value=types.SimpleNamespace(stdout=b'',stderr=b'transmission-daemon 4.1.3')),
                  patch.object(self.m.socket,'socket')]
