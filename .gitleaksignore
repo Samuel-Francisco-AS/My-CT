@@ -1,0 +1,8 @@
+# Exceções individuais revisadas em 31/10/2026.
+# Triagem Gitleaks anterior: 438 commits, dois falsos positivos "generic-api-key"
+# em testes sintéticos do Prowlarr (sem credenciais operacionais).
+# Fingerprint = commit:path:rule:line; NAO ignorar arquivos inteiros, paths
+# globais ou novas ocorrências. A mudança da fixture requer nova revisão.
+# Referência: docs/SECURITY-REVIEW-2026-10-31.md
+371c9255389724a1f0b9549c22a8f83122aa137d:ops/tests/test_search.py:generic-api-key:20
+ad0261405bdc0f8eee8c8cebb3ad350de264ef0b:ops/tests/test_search.py:generic-api-key:216
